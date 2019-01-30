@@ -2,18 +2,35 @@ import logging
 import collections
 from typing import Any, Dict, List, Optional, Tuple, DefaultDict, Set
 import json
+import itertools
 
 from overrides import overrides
 
 from allennlp.common.file_utils import cached_path
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
-from allennlp.data.fields import Field, ListField, TextField, SpanField, MetadataField, SequenceLabelField
+from allennlp.data.fields import (Field, ListField, TextField, SpanField, MetadataField,
+                                  SequenceLabelField, AdjacencyField)
 from allennlp.data.instance import Instance
 from allennlp.data.tokenizers import Token
 from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
 from allennlp.data.dataset_readers.dataset_utils import Ontonotes, enumerate_spans
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+# TODO(dwadden) Add types, unit-test, clean up.
+
+
+class missingdict(dict):
+    """
+    If key isn't there, returns default value. Like defaultdict, but it doesn't store the missing
+    keys that were queried.
+    """
+    def __init__(self, missing_val):
+        super().__init__()
+        self._missing_val = missing_val
+
+    def __missing__(self, key):
+        return self._missing_val
 
 
 def make_cluster_dict(clusters):
@@ -46,9 +63,29 @@ def cluster_dict_sentence(cluster_dict, sentence_start, sentence_end):
     return cluster_sent, new_cluster_dict
 
 
-def adjust_offsets(ner, relations, cluster_sent, sentence_start):
-    new_ner = [[entry[0] + sentence_start, entry[1] + sentence_start, entry[2]] for entry in ner]
-    import ipdb; ipdb.set_trace()
+def format_label_fields(ner, relations, cluster_tmp, sentence_start):
+    """
+    Format the label fields, making the following changes:
+    1. Span indices should be with respect to sentence, not document.
+    2. Return dicts whose keys are spans (or span pairs) and whose values are labels.
+    """
+    ss = sentence_start
+    # NER
+    ner_dict = missingdict("")
+    for entry in ner:
+        new_key = (entry[0] + ss, entry[1] + ss)
+        ner_dict[new_key] = entry[2]
+    # Relations
+    relation_dict = missingdict("")
+    for entry in relations:
+        new_key = ((entry[0] + ss, entry[1] + ss), (entry[2] + ss, entry[3] + ss))
+        relation_dict[new_key] = entry[4]
+    # Coref
+    cluster_dict = missingdict(-1)
+    for k, v in cluster_tmp.items():
+        new_key = (k[0] + ss, k[1] + ss)
+        cluster_dict[new_key] = v
+    return ner_dict, relation_dict, cluster_dict
 
 
 @DatasetReader.register("ie_json")
@@ -89,76 +126,84 @@ class IEJsonReader(DatasetReader):
         file_path = cached_path(file_path)
 
         with open(file_path, "r") as f:
+            # Loop over the documents.
             for line in f:
                 sentence_start = 0
                 js = json.loads(line)
                 doc_key = js["doc_key"]
-                cluster_dict = make_cluster_dict(js["clusters"])
+                cluster_dict_doc = make_cluster_dict(js["clusters"])
                 zipped = zip(js["sentences"], js["ner"], js["relations"])
-                # Loop over the sentences and convert them to instances.
+
+                # Loop over the sentences.
                 for sentence_num, (sentence, ner, relations) in enumerate(zipped):
                     sentence_end = sentence_start + len(sentence) - 1
-                    cluster_sent, cluster_dict = cluster_dict_sentence(
-                        cluster_dict, sentence_start, sentence_end)
-                    yield self.text_to_instance(
-                        sentence, ner, relations, cluster_sent, doc_key, sentence_start, sentence_num)
+                    cluster_tmp, cluster_dict_doc = cluster_dict_sentence(
+                        cluster_dict_doc, sentence_start, sentence_end)
+                    # Make span indices relative to sentence instead of document.
+                    ner_dict, relation_dict, cluster_dict = format_label_fields(
+                        ner, relations, cluster_tmp, sentence_start)
+                    sentence_start += len(sentence)
+                    instance = self.text_to_instance(
+                        sentence, ner_dict, relation_dict, cluster_dict, doc_key, sentence_num)
+                    yield instance
 
     @overrides
-    def text_to_instance(self, sentence, ner, relations, cluster_sent, doc_key, sentence_start,
-                         sentence_num):
+    def text_to_instance(self, sentence, ner_dict, relation_dict, cluster_dict, doc_key, sentence_num):
         """
         TODO(dwadden) document me.
         """
+        text_field = TextField([Token(word) for word in sentence], self._token_indexers)
 
-        # Switch from indices in document to indices in sentence.
-        ner, relations, cluster_sent = adjust_offsets(
-            ner, relations, cluster_sent, sentence_start)
+        # Put together the metadata.
+        metadata = dict(sentence=sentence,
+                        ner_dict=ner_dict,
+                        relation_dict=relation_dict,
+                        cluster_dict=cluster_dict,
+                        doc_key=doc_key,
+                        sentence_num=sentence_num)
+        metadata_field = MetadataField(metadata)
 
-        # flattened_sentences = [self._normalize_word(word)
-        #                        for sentence in sentences
-        #                        for word in sentence]
+        # Generate fields for text spans, ner labels, coref labels.
+        spans = []
+        span_ner_labels = []
+        span_coref_labels = []
+        for start, end in enumerate_spans(sentence, max_span_width=self._max_span_width):
+            span_ix = (start, end)
+            span_ner_labels.append(ner_dict[span_ix])
+            span_coref_labels.append(cluster_dict[span_ix])
+            spans.append(SpanField(start, end, text_field))
 
-        # metadata: Dict[str, Any] = {"original_text": flattened_sentences}
-        # if gold_clusters is not None:
-        #     metadata["clusters"] = gold_clusters
+        span_field = ListField(spans)
+        ner_label_field = SequenceLabelField(span_ner_labels, span_field)
+        coref_label_field = SequenceLabelField(span_coref_labels, span_field)
 
-        # text_field = TextField([Token(word) for word in flattened_sentences], self._token_indexers)
+        # Generate fields for relations.
+        indices = []
+        relations = []
+        n_spans = len(spans)
+        for i in range(n_spans):
+            for j in range(n_spans):
+                span1 = spans[i]
+                span2 = spans[j]
+                span_ixs = ((span1.span_start, span1.span_end), (span2.span_start, span2.span_end))
+                indices.append((i, j))
+                relations.append(relation_dict[span_ixs])
 
-        # cluster_dict = {}
-        # if gold_clusters is not None:
-        #     for cluster_id, cluster in enumerate(gold_clusters):
-        #         for mention in cluster:
-        #             cluster_dict[tuple(mention)] = cluster_id
+        relation_label_field = AdjacencyField(
+            indices=indices, sequence_field=span_field, labels=relations)
 
-        # spans: List[Field] = []
-        # span_labels: Optional[List[int]] = [] if gold_clusters is not None else None
+        # Pull it  all together.
+        fields = dict(text=text_field,
+                      spans=span_field,
+                      ner=ner_label_field,
+                      coref=coref_label_field,
+                      relation=relation_label_field,
+                      metadata=metadata_field)
+        return Instance(fields)
 
-        # sentence_offset = 0
-        # for sentence in sentences:
-        #     for start, end in enumerate_spans(sentence,
-        #                                       offset=sentence_offset,
-        #                                       max_span_width=self._max_span_width):
-        #         if span_labels is not None:
-        #             if (start, end) in cluster_dict:
-        #                 span_labels.append(cluster_dict[(start, end)])
-        #             else:
-        #                 span_labels.append(-1)
-
-        #         spans.append(SpanField(start, end, text_field))
-        #     sentence_offset += len(sentence)
-
-        # span_field = ListField(spans)
-        # metadata_field = MetadataField(metadata)
-
-        # fields: Dict[str, Field] = {"text": text_field,
-        #                             "spans": span_field,
-        #                             "metadata": metadata_field}
-        # if span_labels is not None:
-        #     fields["span_labels"] = SequenceLabelField(span_labels, span_field)
-
-        # return Instance(fields)
 
     @staticmethod
+    # TODO(dwadden) do we need this?
     def _normalize_word(word):
         if word == "/." or word == "/?":
             return word[1:]

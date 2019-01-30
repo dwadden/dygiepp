@@ -80,19 +80,19 @@
   },
   "iterator": {
     "type": "basic",
-    "padding_noise": 0.0,
+    // "padding_noise": 0.0,
     "batch_size": 5
   },
   "validation_iterator": {
     "type": "basic",
-    "padding_noise": 0.0,
-    "batch_size": -1
+    // "padding_noise": 0.0,
+    "batch_size": 5
   },
   "trainer": {
     "num_epochs": 150,
     "grad_norm": 5.0,
     "patience" : 10,
-    "cuda_device" : [0, 1, 2],
+    // "cuda_device" : [0, 1, 2],
     "validation_metric": "+coref_f1",
     "learning_rate_scheduler": {
       "type": "reduce_on_plateau",
