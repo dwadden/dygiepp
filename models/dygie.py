@@ -109,12 +109,7 @@ class DyGIE(Model):
         initializer(self)
 
     @overrides
-    def forward(self,  # type: ignore
-                text: Dict[str, torch.LongTensor],
-                spans: torch.IntTensor,
-                span_labels: torch.IntTensor = None,
-                metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
-        # pylint: disable=arguments-differ
+    def forward(self, text, spans, ner, coref, relation, metadata):
         """
         TODO(dwadden) change this.
         Parameters
@@ -146,6 +141,7 @@ class DyGIE(Model):
         loss : ``torch.FloatTensor``, optional
             A scalar loss to be optimised.
         """
+        import ipdb; ipdb.set_trace()
         # Shape: (batch_size, document_length, embedding_size)
         text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
 
