@@ -68,6 +68,26 @@
         },
         "spans_per_word": 0.4,
         "max_antecedents": 100
+      },
+      "ner": {
+        "mention_feedforward": {
+          "input_dim": 1220,
+          "num_layers": 2,
+          "hidden_dims": 150,
+          "activations": "relu",
+          "dropout": 0.2
+        },
+        "spans_per_word": 0.4,
+      },
+      "relation": {
+        "relation_feedforward": {
+          "input_dim": 3680,
+          "num_layers": 2,
+          "hidden_dims": 150,
+          "activations": "relu",
+          "dropout": 0.2
+        },
+        "spans_per_word": 0.4,
       }
     },
     "initializer": [

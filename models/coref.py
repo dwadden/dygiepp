@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class CorefResolver(Model):
     """
+    TODO(dwadden) document correctly.
+
     Parameters
     ----------
     mention_feedforward : ``FeedForward``
@@ -30,8 +32,6 @@ class CorefResolver(Model):
         pairwise features, which is then scored by a linear layer.
     feature_size: ``int``
         The embedding size for all the embedded features, such as distances or span widths.
-    max_span_width: ``int``
-        The maximum width of candidate spans.
     spans_per_word: float, required.
         A multiplier between zero and one which controls what percentage of candidate mention
         spans we retain with respect to the number of words in the document.
@@ -44,16 +44,6 @@ class CorefResolver(Model):
     regularizer : ``RegularizerApplicator``, optional (default=``None``)
         If provided, will be used to calculate the regularization penalty during training.
     """
-    # def __init__(self,
-    #              mention_feedforward: FeedForward,
-    #              antecedent_feedforward: FeedForward,
-    #              feature_size: int,
-    #              max_span_width: int,
-    #              spans_per_word: float,
-    #              max_antecedents: int,
-    #              lexical_dropout: float = 0.2,
-    #              initializer: InitializerApplicator = InitializerApplicator(),
-    #              regularizer: Optional[RegularizerApplicator] = None) -> None:
     def __init__(self,
                  vocab: Vocabulary,
                  mention_feedforward: FeedForward,
@@ -64,7 +54,6 @@ class CorefResolver(Model):
                  # initializer: InitializerApplicator = InitializerApplicator(), # TODO(dwadden add this).
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(CorefResolver, self).__init__(vocab, regularizer)
-
 
         self._antecedent_feedforward = TimeDistributed(antecedent_feedforward)
         feedforward_scorer = torch.nn.Sequential(
@@ -89,41 +78,16 @@ class CorefResolver(Model):
     @overrides
     def forward(self,  # type: ignore
                 spans: torch.IntTensor,
-                span_labels: torch.IntTensor = None,
+                span_mask,
                 span_embeddings,  # TODO(dwadden) add type.
+                sentence_lengths,
+                coref_labels: torch.IntTensor = None,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
         # pylint: disable=arguments-differ
         """
         TODO(dwadden) Update documentation.
-        Parameters
-        ----------
-        spans : ``torch.IntTensor``, required.
-            A tensor of shape (batch_size, num_spans, 2), representing the inclusive start and end
-            indices of candidate spans for mentions. Comes from a ``ListField[SpanField]`` of
-            indices into the text of the document.
-        span_labels : ``torch.IntTensor``, optional (default = None)
-            A tensor of shape (batch_size, num_spans), representing the cluster ids
-            of each span, or -1 for those which do not appear in any clusters.
-
-        Returns
-        -------
-        An output dictionary consisting of:
-        top_spans : ``torch.IntTensor``
-            A tensor of shape ``(batch_size, num_spans_to_keep, 2)`` representing
-            the start and end word indices of the top spans that survived the pruning stage.
-        antecedent_indices : ``torch.IntTensor``
-            A tensor of shape ``(num_spans_to_keep, max_antecedents)`` representing for each top span
-            the index (with respect to top_spans) of the possible antecedents the model considered.
-        predicted_antecedents : ``torch.IntTensor``
-            A tensor of shape ``(batch_size, num_spans_to_keep)`` representing, for each top span, the
-            index (with respect to antecedent_indices) of the most likely antecedent. -1 means there
-            was no predicted link.
-        loss : ``torch.FloatTensor``, optional
-            A scalar loss to be optimised.
         """
-        # Shape: (batch_size, num_spans)
-        span_mask = (spans[:, :, 0] >= 0).squeeze(-1).float()
-
+        import ipdb; ipdb.set_trace()
         # TODO(dwadden) Compute these.
         # document_length = text_embeddings.size(1)
         # num_spans = spans.size(1)
@@ -205,9 +169,9 @@ class CorefResolver(Model):
         output_dict = {"top_spans": top_spans,
                        "antecedent_indices": valid_antecedent_indices,
                        "predicted_antecedents": predicted_antecedents}
-        if span_labels is not None:
+        if coref_labels is not None:
             # Find the gold labels for the spans which we kept.
-            pruned_gold_labels = util.batched_index_select(span_labels.unsqueeze(-1),
+            pruned_gold_labels = util.batched_index_select(coref_labels.unsqueeze(-1),
                                                            top_span_indices,
                                                            flat_top_span_indices)
 
@@ -449,7 +413,7 @@ class CorefResolver(Model):
         return span_pair_embeddings
 
     @staticmethod
-    def _compute_antecedent_gold_labels(top_span_labels: torch.IntTensor,
+    def _compute_antecedent_gold_labels(top_coref_labels: torch.IntTensor,
                                         antecedent_labels: torch.IntTensor):
         """
         Generates a binary indicator for every pair of spans. This label is one if and
@@ -459,7 +423,7 @@ class CorefResolver(Model):
 
         Parameters
         ----------
-        top_span_labels : ``torch.IntTensor``, required.
+        top_coref_labels : ``torch.IntTensor``, required.
             The cluster id label for every span. The id is arbitrary,
             as we just care about the clustering. Has shape (batch_size, num_spans_to_keep).
         antecedent_labels : ``torch.IntTensor``, required.
@@ -476,7 +440,7 @@ class CorefResolver(Model):
 
         """
         # Shape: (batch_size, num_spans_to_keep, max_antecedents)
-        target_labels = top_span_labels.expand_as(antecedent_labels)
+        target_labels = top_coref_labels.expand_as(antecedent_labels)
         same_cluster_indicator = (target_labels == antecedent_labels).float()
         non_dummy_indicator = (target_labels >= 0).float()
         pairwise_labels = same_cluster_indicator * non_dummy_indicator

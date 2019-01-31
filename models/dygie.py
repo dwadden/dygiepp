@@ -23,6 +23,7 @@ from dygie.models.relation import RelationExtractor
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
+
 @Model.register("dygie")
 class DyGIE(Model):
     """
@@ -68,8 +69,13 @@ class DyGIE(Model):
         self._coref = CorefResolver.from_params(vocab=vocab,
                                                 feature_size=feature_size,
                                                 params=modules.pop("coref"))
-        self._ner = NERTagger()
-        self._relation = RelationExtractor()
+        self._ner = NERTagger.from_params(vocab=vocab,
+                                          feature_size=feature_size,
+                                          params=modules.pop("ner"))
+        self._relation = RelationExtractor.from_params(vocab=vocab,
+                                                       ner_tagger=self._ner,
+                                                       feature_size=feature_size,
+                                                       params=modules.pop("relation"))
 
         self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
                                                               combination="x,y",
@@ -83,8 +89,6 @@ class DyGIE(Model):
         self._distance_embedding = Embedding(self._num_distance_buckets, feature_size)
 
         self._max_span_width = max_span_width
-        self._spans_per_word = spans_per_word
-        self._max_antecedents = max_antecedents
 
         if lexical_dropout > 0:
             self._lexical_dropout = torch.nn.Dropout(p=lexical_dropout)
@@ -93,47 +97,24 @@ class DyGIE(Model):
         initializer(self)
 
     @overrides
-    def forward(self, text, spans, ner, coref, relation, metadata):
+    def forward(self,
+                text,
+                spans,
+                ner_labels,
+                coref_labels,
+                relation_labels,
+                metadata):
         """
         TODO(dwadden) change this.
-        Parameters
-        ----------
-        text : ``Dict[str, torch.LongTensor]``, required.
-            The output of a ``TextField`` representing the text of
-            the document.
-        spans : ``torch.IntTensor``, required.
-            A tensor of shape (batch_size, num_spans, 2), representing the inclusive start and end
-            indices of candidate spans for mentions. Comes from a ``ListField[SpanField]`` of
-            indices into the text of the document.
-        span_labels : ``torch.IntTensor``, optional (default = None)
-            A tensor of shape (batch_size, num_spans), representing the cluster ids
-            of each span, or -1 for those which do not appear in any clusters.
-
-        Returns
-        -------
-        An output dictionary consisting of:
-        top_spans : ``torch.IntTensor``
-            A tensor of shape ``(batch_size, num_spans_to_keep, 2)`` representing
-            the start and end word indices of the top spans that survived the pruning stage.
-        antecedent_indices : ``torch.IntTensor``
-            A tensor of shape ``(num_spans_to_keep, max_antecedents)`` representing for each top span
-            the index (with respect to top_spans) of the possible antecedents the model considered.
-        predicted_antecedents : ``torch.IntTensor``
-            A tensor of shape ``(batch_size, num_spans_to_keep)`` representing, for each top span, the
-            index (with respect to antecedent_indices) of the most likely antecedent. -1 means there
-            was no predicted link.
-        loss : ``torch.FloatTensor``, optional
-            A scalar loss to be optimised.
         """
-        import ipdb; ipdb.set_trace()
         # Shape: (batch_size, document_length, embedding_size)
         text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
 
-        document_length = text_embeddings.size(1)
-        num_spans = spans.size(1)
 
         # Shape: (batch_size, document_length)
         text_mask = util.get_text_field_mask(text).float()
+
+        sentence_lengths = text_mask.sum(dim=1)
 
         # Shape: (batch_size, num_spans)
         span_mask = (spans[:, :, 0] >= 0).squeeze(-1).float()
@@ -157,11 +138,21 @@ class DyGIE(Model):
         # Shape: (batch_size, num_spans, emebedding_size + 2 * encoding_dim + feature_size)
         span_embeddings = torch.cat([endpoint_span_embeddings, attended_span_embeddings], -1)
 
-        # Make calls out to the modules to get results.
-        output_ner = self._ner()
-        output_coref = self._coref()
-        output_relation = self._relation()
+        import ipdb; ipdb.set_trace()
 
+        # Make calls out to the modules to get results.
+        # TODO(dwadden) Write the inputs as dicts instead? Lots of shared arguments.
+        input_dict = dict(spans=spans,
+                          span_mask=span_mask,
+                          span_embeddings=span_embeddings,
+                          sentence_lengths=sentence_lengths,
+                          metadata=metadata)
+        output_coref = self._coref(
+            spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
+        output_ner = self._ner(
+            spans, span_mask, span_embeddings, sentence_lengths, ner_labels, metadata)
+        output_relation = self._relation(
+            spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
     @overrides
     def decode(self, output_dict: Dict[str, torch.Tensor]):

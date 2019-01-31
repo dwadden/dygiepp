@@ -200,9 +200,9 @@ class IEJsonReader(DatasetReader):
         # Pull it  all together.
         fields = dict(text=text_field,
                       spans=span_field,
-                      ner=ner_label_field,
-                      coref=coref_label_field,
-                      relation=relation_label_field,
+                      ner_labels=ner_label_field,
+                      coref_labels=coref_label_field,
+                      relation_labels=relation_label_field,
                       metadata=metadata_field)
 
         return Instance(fields)
