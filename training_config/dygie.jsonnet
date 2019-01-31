@@ -50,19 +50,25 @@
         "num_layers": 1,
         "dropout": 0.2
     },
-    "mention_feedforward": {
-        "input_dim": 1220,
-        "num_layers": 2,
-        "hidden_dims": 150,
-        "activations": "relu",
-        "dropout": 0.2
-    },
-    "antecedent_feedforward": {
-        "input_dim": 3680,
-        "num_layers": 2,
-        "hidden_dims": 150,
-        "activations": "relu",
-        "dropout": 0.2
+    "modules": {
+      "coref": {
+        "mention_feedforward": {
+          "input_dim": 1220,
+          "num_layers": 2,
+          "hidden_dims": 150,
+          "activations": "relu",
+          "dropout": 0.2
+        },
+        "antecedent_feedforward": {
+          "input_dim": 3680,
+          "num_layers": 2,
+          "hidden_dims": 150,
+          "activations": "relu",
+          "dropout": 0.2
+        },
+        "spans_per_word": 0.4,
+        "max_antecedents": 100
+      }
     },
     "initializer": [
         [".*linear_layers.*weight", {"type": "xavier_normal"}],
@@ -75,8 +81,6 @@
     "lexical_dropout": 0.5,
     "feature_size": 20,
     "max_span_width": 10,
-    "spans_per_word": 0.4,
-    "max_antecedents": 100
   },
   "iterator": {
     "type": "basic",

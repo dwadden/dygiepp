@@ -15,22 +15,18 @@ from allennlp.modules.span_extractors import SelfAttentiveSpanExtractor, Endpoin
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from allennlp.training.metrics import MentionRecall, ConllCorefScores
 
+# Import submodules.
+from dygie.models.coref import CorefResolver
+from dygie.models.ner import NERTagger
+from dygie.models.relation import RelationExtractor
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 @Model.register("dygie")
 class DyGIE(Model):
     """
-    TODO(dwadden) update this.
-    This ``Model`` implements the coreference resolution model described "End-to-end Neural
-    Coreference Resolution"
-    <https://www.semanticscholar.org/paper/End-to-end-Neural-Coreference-Resolution-Lee-He/3f2114893dc44eacac951f148fbff142ca200e83>
-    by Lee et al., 2017.
-    The basic outline of this model is to get an embedded representation of each span in the
-    document. These span representations are scored and used to prune away spans that are unlikely
-    to occur in a coreference cluster. For the remaining spans, the model decides which antecedent
-    span (if any) they are coreferent with. The resulting coreference links, after applying
-    transitivity, imply a clustering of the spans in the document.
+    TODO(dwadden) document me.
 
     Parameters
     ----------
@@ -39,21 +35,12 @@ class DyGIE(Model):
         Used to embed the ``text`` ``TextField`` we get as input to the model.
     context_layer : ``Seq2SeqEncoder``
         This layer incorporates contextual information for each word in the document.
-    mention_feedforward : ``FeedForward``
-        This feedforward network is applied to the span representations which is then scored
-        by a linear layer.
-    antecedent_feedforward: ``FeedForward``
-        This feedforward network is applied to pairs of span representation, along with any
-        pairwise features, which is then scored by a linear layer.
     feature_size: ``int``
         The embedding size for all the embedded features, such as distances or span widths.
+    submodule_params: ``TODO(dwadden)``
+        A nested dictionary specifying parameters to be passed on to initialize submodules.
     max_span_width: ``int``
         The maximum width of candidate spans.
-    spans_per_word: float, required.
-        A multiplier between zero and one which controls what percentage of candidate mention
-        spans we retain with respect to the number of words in the document.
-    max_antecedents: int, required.
-        For each mention which survives the pruning stage, we consider this many antecedents.
     lexical_dropout: ``int``
         The probability of dropping out dimensions of the embedded text.
     initializer : ``InitializerApplicator``, optional (default=``InitializerApplicator()``)
@@ -65,10 +52,9 @@ class DyGIE(Model):
                  vocab: Vocabulary,
                  text_field_embedder: TextFieldEmbedder,
                  context_layer: Seq2SeqEncoder,
+                 modules,  # TODO(dwadden) Add type.
                  feature_size: int,
                  max_span_width: int,
-                 spans_per_word: float,
-                 max_antecedents: int,
                  lexical_dropout: float = 0.2,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
@@ -77,8 +63,11 @@ class DyGIE(Model):
         self._text_field_embedder = text_field_embedder
         self._context_layer = context_layer
 
+
         # TODO(dwadden) Figure out the parameters that need to get passed in.
-        self._coref = CorefResolver()
+        self._coref = CorefResolver.from_params(vocab=vocab,
+                                                feature_size=feature_size,
+                                                params=modules.pop("coref"))
         self._ner = NERTagger()
         self._relation = RelationExtractor()
 

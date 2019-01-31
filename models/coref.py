@@ -22,11 +22,6 @@ class CorefResolver(Model):
     """
     Parameters
     ----------
-    vocab : ``Vocabulary``
-    text_field_embedder : ``TextFieldEmbedder``
-        Used to embed the ``text`` ``TextField`` we get as input to the model.
-    context_layer : ``Seq2SeqEncoder``
-        This layer incorporates contextual information for each word in the document.
     mention_feedforward : ``FeedForward``
         This feedforward network is applied to the span representations which is then scored
         by a linear layer.
@@ -49,66 +44,59 @@ class CorefResolver(Model):
     regularizer : ``RegularizerApplicator``, optional (default=``None``)
         If provided, will be used to calculate the regularization penalty during training.
     """
+    # def __init__(self,
+    #              mention_feedforward: FeedForward,
+    #              antecedent_feedforward: FeedForward,
+    #              feature_size: int,
+    #              max_span_width: int,
+    #              spans_per_word: float,
+    #              max_antecedents: int,
+    #              lexical_dropout: float = 0.2,
+    #              initializer: InitializerApplicator = InitializerApplicator(),
+    #              regularizer: Optional[RegularizerApplicator] = None) -> None:
     def __init__(self,
                  vocab: Vocabulary,
-                 text_field_embedder: TextFieldEmbedder,
-                 context_layer: Seq2SeqEncoder,
                  mention_feedforward: FeedForward,
                  antecedent_feedforward: FeedForward,
                  feature_size: int,
-                 max_span_width: int,
                  spans_per_word: float,
                  max_antecedents: int,
-                 lexical_dropout: float = 0.2,
-                 initializer: InitializerApplicator = InitializerApplicator(),
+                 # initializer: InitializerApplicator = InitializerApplicator(), # TODO(dwadden add this).
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
-        super(CoreferenceResolver, self).__init__(vocab, regularizer)
+        super(CorefResolver, self).__init__(vocab, regularizer)
 
-        self._text_field_embedder = text_field_embedder
-        self._context_layer = context_layer
+
         self._antecedent_feedforward = TimeDistributed(antecedent_feedforward)
         feedforward_scorer = torch.nn.Sequential(
-                TimeDistributed(mention_feedforward),
-                TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1)))
+            TimeDistributed(mention_feedforward),
+            TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1)))
         self._mention_pruner = Pruner(feedforward_scorer)
         self._antecedent_scorer = TimeDistributed(torch.nn.Linear(antecedent_feedforward.get_output_dim(), 1))
-
-        self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
-                                                              combination="x,y",
-                                                              num_width_embeddings=max_span_width,
-                                                              span_width_embedding_dim=feature_size,
-                                                              bucket_widths=False)
-        self._attentive_span_extractor = SelfAttentiveSpanExtractor(input_dim=text_field_embedder.get_output_dim())
 
         # 10 possible distance buckets.
         self._num_distance_buckets = 10
         self._distance_embedding = Embedding(self._num_distance_buckets, feature_size)
 
-        self._max_span_width = max_span_width
         self._spans_per_word = spans_per_word
         self._max_antecedents = max_antecedents
 
         self._mention_recall = MentionRecall()
         self._conll_coref_scores = ConllCorefScores()
-        if lexical_dropout > 0:
-            self._lexical_dropout = torch.nn.Dropout(p=lexical_dropout)
-        else:
-            self._lexical_dropout = lambda x: x
-        initializer(self)
+
+        # TODO(dwadden) Add this.
+        # initializer(self)
 
     @overrides
     def forward(self,  # type: ignore
-                text: Dict[str, torch.LongTensor],
                 spans: torch.IntTensor,
                 span_labels: torch.IntTensor = None,
+                span_embeddings,  # TODO(dwadden) add type.
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
         # pylint: disable=arguments-differ
         """
+        TODO(dwadden) Update documentation.
         Parameters
         ----------
-        text : ``Dict[str, torch.LongTensor]``, required.
-            The output of a ``TextField`` representing the text of
-            the document.
         spans : ``torch.IntTensor``, required.
             A tensor of shape (batch_size, num_spans, 2), representing the inclusive start and end
             indices of candidate spans for mentions. Comes from a ``ListField[SpanField]`` of
@@ -133,36 +121,12 @@ class CorefResolver(Model):
         loss : ``torch.FloatTensor``, optional
             A scalar loss to be optimised.
         """
-        # Shape: (batch_size, document_length, embedding_size)
-        text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
-
-        document_length = text_embeddings.size(1)
-        num_spans = spans.size(1)
-
-        # Shape: (batch_size, document_length)
-        text_mask = util.get_text_field_mask(text).float()
-
         # Shape: (batch_size, num_spans)
         span_mask = (spans[:, :, 0] >= 0).squeeze(-1).float()
-        # SpanFields return -1 when they are used as padding. As we do
-        # some comparisons based on span widths when we attend over the
-        # span representations that we generate from these indices, we
-        # need them to be <= 0. This is only relevant in edge cases where
-        # the number of spans we consider after the pruning stage is >= the
-        # total number of spans, because in this case, it is possible we might
-        # consider a masked span.
-        # Shape: (batch_size, num_spans, 2)
-        spans = F.relu(spans.float()).long()
 
-        # Shape: (batch_size, document_length, encoding_dim)
-        contextualized_embeddings = self._context_layer(text_embeddings, text_mask)
-        # Shape: (batch_size, num_spans, 2 * encoding_dim + feature_size)
-        endpoint_span_embeddings = self._endpoint_span_extractor(contextualized_embeddings, spans)
-        # Shape: (batch_size, num_spans, emebedding_size)
-        attended_span_embeddings = self._attentive_span_extractor(text_embeddings, spans)
-
-        # Shape: (batch_size, num_spans, emebedding_size + 2 * encoding_dim + feature_size)
-        span_embeddings = torch.cat([endpoint_span_embeddings, attended_span_embeddings], -1)
+        # TODO(dwadden) Compute these.
+        # document_length = text_embeddings.size(1)
+        # num_spans = spans.size(1)
 
         # Prune based on mention scores.
         num_spans_to_keep = int(math.floor(self._spans_per_word * document_length))
