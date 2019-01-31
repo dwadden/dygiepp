@@ -15,35 +15,31 @@ from allennlp.data.tokenizers import Token
 from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
 from allennlp.data.dataset_readers.dataset_utils import Ontonotes, enumerate_spans
 
+
+from allennlp.data.fields.span_field import SpanField
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 # TODO(dwadden) Add types, unit-test, clean up.
-
 
 class missingdict(dict):
     """
     If key isn't there, returns default value. Like defaultdict, but it doesn't store the missing
     keys that were queried.
     """
-    def __init__(self, missing_val):
+    def __init__(self, missing_val) -> None:
         super().__init__()
         self._missing_val = missing_val
 
     def __missing__(self, key):
         return self._missing_val
 
-
-def make_cluster_dict(clusters):
+def make_cluster_dict(clusters) -> Dict[SpanField, int]:
     """
     Returns a dict whose keys are spans, and values are the ID of the cluster of which the span is a
     member.
     """
-    res = {}
-    for i, spans in enumerate(clusters):
-        for span in spans:
-            res[tuple(span)] = i
-    return res
-
+    return {tuple(span): cluster_id for cluster_id, spans in enumerate(clusters) for span in spans}
 
 def cluster_dict_sentence(cluster_dict, sentence_start, sentence_end):
     """
@@ -53,17 +49,16 @@ def cluster_dict_sentence(cluster_dict, sentence_start, sentence_end):
         return span[0] >= sentence_start and span[1] <= sentence_end
 
     # Get the within-sentence spans.
-    cluster_sent = {}
-    for span, cluster in cluster_dict.items():
-        if within_sentence(span):
-            cluster_sent[span] = cluster
-    # Create new cluster dict with the within-sentence clusters removed.
+    cluster_sent = {span: cluster for span, cluster in cluster_dict.items() if within_sentence(span)}
+
+    ## Create new cluster dict with the within-sentence clusters removed.
     new_cluster_dict = {span: cluster for span, cluster in cluster_dict.items()
                         if span not in cluster_sent}
+    
     return cluster_sent, new_cluster_dict
 
 
-def format_label_fields(ner, relations, cluster_tmp, sentence_start):
+def format_label_fields(ner: [], relations: [], cluster_tmp: {}, sentence_start: int):# -> Dict[,int], Dict[,int], Dict[,str]:
     """
     Format the label fields, making the following changes:
     1. Span indices should be with respect to sentence, not document.
@@ -75,27 +70,33 @@ def format_label_fields(ner, relations, cluster_tmp, sentence_start):
     for entry in ner:
         new_key = (entry[0] + ss, entry[1] + ss)
         ner_dict[new_key] = entry[2]
+
     # Relations
     relation_dict = missingdict("")
     for entry in relations:
         new_key = ((entry[0] + ss, entry[1] + ss), (entry[2] + ss, entry[3] + ss))
         relation_dict[new_key] = entry[4]
+
     # Coref
     cluster_dict = missingdict(-1)
     for k, v in cluster_tmp.items():
         new_key = (k[0] + ss, k[1] + ss)
         cluster_dict[new_key] = v
+
     return ner_dict, relation_dict, cluster_dict
 
 
 @DatasetReader.register("ie_json")
 class IEJsonReader(DatasetReader):
     """
-    Reads a single CoNLL-formatted file. This is the same file format as used in the
-    :class:`~allennlp.data.dataset_readers.semantic_role_labelling.SrlReader`, but is preprocessed
-    to dump all documents into a single file per train, dev and test split. See
-    scripts/compile_coref_data.sh for more details of how to pre-process the Ontonotes 5.0 data
-    into the correct format.
+    Reads a single JSON-formatted file. This is the same file format as used in the
+    scierc, but is preprocessed
+
+    ##############################OLD COMMENTS#####################################
+
+    #to dump all documents into a single file per train, dev and test split. See
+    #scripts/compile_coref_data.sh for more details of how to pre-process the Ontonotes 5.0 data
+    #into the correct format.
 
     Returns a ``Dataset`` where the ``Instances`` have four fields: ``text``, a ``TextField``
     containing the full document text, ``spans``, a ``ListField[SpanField]`` of inclusive start and
@@ -136,9 +137,11 @@ class IEJsonReader(DatasetReader):
 
                 # Loop over the sentences.
                 for sentence_num, (sentence, ner, relations) in enumerate(zipped):
+
                     sentence_end = sentence_start + len(sentence) - 1
                     cluster_tmp, cluster_dict_doc = cluster_dict_sentence(
                         cluster_dict_doc, sentence_start, sentence_end)
+
                     # Make span indices relative to sentence instead of document.
                     ner_dict, relation_dict, cluster_dict = format_label_fields(
                         ner, relations, cluster_tmp, sentence_start)
@@ -148,10 +151,13 @@ class IEJsonReader(DatasetReader):
                     yield instance
 
     @overrides
-    def text_to_instance(self, sentence, ner_dict, relation_dict, cluster_dict, doc_key, sentence_num):
+    def text_to_instance(self, sentence: List[str], ner_dict, relation_dict, cluster_dict, doc_key, sentence_num: int):
         """
         TODO(dwadden) document me.
         """
+
+        sentence = [self._normalize_word(word) for word in sentence]
+
         text_field = TextField([Token(word) for word in sentence], self._token_indexers)
 
         # Put together the metadata.
@@ -173,21 +179,20 @@ class IEJsonReader(DatasetReader):
             span_coref_labels.append(cluster_dict[span_ix])
             spans.append(SpanField(start, end, text_field))
 
+        #all_spans = enumerate_spans(sentence, max_span_width=self._max_span_width)
+        #nspan_ner_labels = [ner_dict[(start, end)] for start, end in all_spans]
+        #nspan_coref_labels = [cluster_dict[(start, end)] for start, end in all_spans]
+        #nspans = [SpanField(start, end, text_field) for start, end in all_spans] 
+        
         span_field = ListField(spans)
         ner_label_field = SequenceLabelField(span_ner_labels, span_field)
         coref_label_field = SequenceLabelField(span_coref_labels, span_field)
 
         # Generate fields for relations.
-        indices = []
-        relations = []
         n_spans = len(spans)
-        for i in range(n_spans):
-            for j in range(n_spans):
-                span1 = spans[i]
-                span2 = spans[j]
-                span_ixs = ((span1.span_start, span1.span_end), (span2.span_start, span2.span_end))
-                indices.append((i, j))
-                relations.append(relation_dict[span_ixs])
+        indices = [(i, j) for i in range(n_spans) for j in range(n_spans)]
+        span_tuples = [(span.span_start, span.span_end) for span in spans]
+        relations = [relation_dict[(span_tuples[i], span_tuples[j])] for (i,j) in indices]
 
         relation_label_field = AdjacencyField(
             indices=indices, sequence_field=span_field, labels=relations)
@@ -199,13 +204,14 @@ class IEJsonReader(DatasetReader):
                       coref=coref_label_field,
                       relation=relation_label_field,
                       metadata=metadata_field)
+
         return Instance(fields)
 
-
     @staticmethod
-    # TODO(dwadden) do we need this?
     def _normalize_word(word):
         if word == "/." or word == "/?":
+            print('it was used')
+            exit()
             return word[1:]
         else:
             return word
