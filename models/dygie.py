@@ -82,11 +82,8 @@ class DyGIE(Model):
                                                               num_width_embeddings=max_span_width,
                                                               span_width_embedding_dim=feature_size,
                                                               bucket_widths=False)
-        self._attentive_span_extractor = SelfAttentiveSpanExtractor(input_dim=text_field_embedder.get_output_dim())
-
-        # 10 possible distance buckets.
-        self._num_distance_buckets = 10
-        self._distance_embedding = Embedding(self._num_distance_buckets, feature_size)
+        self._attentive_span_extractor = SelfAttentiveSpanExtractor(
+            input_dim=text_field_embedder.get_output_dim())
 
         self._max_span_width = max_span_width
 
@@ -138,15 +135,7 @@ class DyGIE(Model):
         # Shape: (batch_size, num_spans, emebedding_size + 2 * encoding_dim + feature_size)
         span_embeddings = torch.cat([endpoint_span_embeddings, attended_span_embeddings], -1)
 
-        import ipdb; ipdb.set_trace()
-
         # Make calls out to the modules to get results.
-        # TODO(dwadden) Write the inputs as dicts instead? Lots of shared arguments.
-        input_dict = dict(spans=spans,
-                          span_mask=span_mask,
-                          span_embeddings=span_embeddings,
-                          sentence_lengths=sentence_lengths,
-                          metadata=metadata)
         output_coref = self._coref(
             spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
         output_ner = self._ner(
