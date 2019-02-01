@@ -71,9 +71,9 @@ class NERTagger(Model):
     @overrides
     def forward(self,  # type: ignore
                 spans: torch.IntTensor,
-                span_mask,
-                span_embeddings,  # TODO(dwadden) add type.
-                sentence_lengths,
+                span_mask: torch.IntTensor,
+                span_embeddings: torch.IntTensor,
+                sentence_lengths: torch.Tensor,
                 ner_labels: torch.IntTensor = None,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
         """
@@ -84,9 +84,8 @@ class NERTagger(Model):
         #Spans: Shape(5, 255, 2)
 
 
-
-        # document_length = text_embeddings.size(1)
-        # num_spans = spans.size(1)
+        document_length = text_embeddings.size(1)
+        num_spans = spans.size(1)
 
         # Prune based on mention scores.
         num_spans_to_keep = int(math.floor(self._spans_per_word * document_length))

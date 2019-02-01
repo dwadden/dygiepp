@@ -22,13 +22,16 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 # TODO(dwadden) Add types, unit-test, clean up.
 
-class missingdict(dict):
+class MissingDict(dict):
     """
     If key isn't there, returns default value. Like defaultdict, but it doesn't store the missing
     keys that were queried.
     """
-    def __init__(self, missing_val) -> None:
-        super().__init__()
+    def __init__(self, missing_val, generator=None) -> None:
+        if generator:
+            super().__init__(generator)
+        else:
+            super().__init__()
         self._missing_val = missing_val
 
     def __missing__(self, key):
@@ -66,24 +69,29 @@ def format_label_fields(ner: List[List[Union[int,str]]], relations: List[List[Un
     2. Return dicts whose keys are spans (or span pairs) and whose values are labels.
     """
     ss = sentence_start
-
     # NER
-    ner_dict = missingdict("")
-    for entry in ner:
-        new_key = (entry[0] + ss, entry[1] + ss)
-        ner_dict[new_key] = entry[2]
+    ner_dict = MissingDict("",
+        (
+            ((span_start+ss, span_end+ss), named_entity)
+            for (span_start, span_end, named_entity) in ner
+        )
+    )
 
     # Relations
-    relation_dict = missingdict("")
-    for entry in relations:
-        new_key = ((entry[0] + ss, entry[1] + ss), (entry[2] + ss, entry[3] + ss))
-        relation_dict[new_key] = entry[4]
+    relation_dict = MissingDict("",
+        (
+            ((  (span1_start+ss, span1_end+ss),  (span2_start+ss, span2_end+ss)   ), relation)
+            for (span1_start, span1_end, span2_start, span2_end, relation) in relations
+        )
+    )
 
     # Coref
-    cluster_dict = missingdict(-1)
-    for k, v in cluster_tmp.items():
-        new_key = (k[0] + ss, k[1] + ss)
-        cluster_dict[new_key] = v
+    cluster_dict = MissingDict(-1,
+        (
+            (   (span_start+ss, span_end+ss), cluster_id)
+            for ((span_start, span_end), cluster_id) in cluster_tmp.items()
+        )
+    )
 
     return ner_dict, relation_dict, cluster_dict
 
