@@ -1,6 +1,6 @@
 import logging
 import collections
-from typing import Any, Dict, List, Optional, Tuple, DefaultDict, Set
+from typing import Any, Dict, List, Optional, Tuple, DefaultDict, Set, Union
 import json
 import itertools
 
@@ -34,17 +34,18 @@ class missingdict(dict):
     def __missing__(self, key):
         return self._missing_val
 
-def make_cluster_dict(clusters) -> Dict[SpanField, int]:
+def make_cluster_dict(clusters: List[List[List[int]]]) -> Dict[SpanField, int]:
     """
     Returns a dict whose keys are spans, and values are the ID of the cluster of which the span is a
     member.
     """
     return {tuple(span): cluster_id for cluster_id, spans in enumerate(clusters) for span in spans}
 
-def cluster_dict_sentence(cluster_dict, sentence_start, sentence_end):
+def cluster_dict_sentence(cluster_dict: Dict[Tuple[int, int], int], sentence_start: int, sentence_end: int):
     """
     Split cluster dict into clusters in current sentence, and clusters that come later.
     """
+    
     def within_sentence(span):
         return span[0] >= sentence_start and span[1] <= sentence_end
 
@@ -58,13 +59,14 @@ def cluster_dict_sentence(cluster_dict, sentence_start, sentence_end):
     return cluster_sent, new_cluster_dict
 
 
-def format_label_fields(ner: [], relations: [], cluster_tmp: {}, sentence_start: int):# -> Dict[,int], Dict[,int], Dict[,str]:
+def format_label_fields(ner: List[List[Union[int,str]]], relations: List[List[Union[int,str]]], cluster_tmp: Dict[Tuple[int,int], int], sentence_start: int) -> Tuple[Dict[Tuple[int,int],str], Dict[Tuple[Tuple[int,int],Tuple[int,int]],str], Dict[Tuple[int,int],int]]:
     """
     Format the label fields, making the following changes:
     1. Span indices should be with respect to sentence, not document.
     2. Return dicts whose keys are spans (or span pairs) and whose values are labels.
     """
     ss = sentence_start
+
     # NER
     ner_dict = missingdict("")
     for entry in ner:
@@ -151,7 +153,7 @@ class IEJsonReader(DatasetReader):
                     yield instance
 
     @overrides
-    def text_to_instance(self, sentence: List[str], ner_dict, relation_dict, cluster_dict, doc_key, sentence_num: int):
+    def text_to_instance(self, sentence: List[str], ner_dict: Dict[Tuple[int, int], str], relation_dict, cluster_dict, doc_key: str, sentence_num: int):
         """
         TODO(dwadden) document me.
         """
