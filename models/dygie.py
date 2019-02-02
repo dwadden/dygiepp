@@ -104,6 +104,8 @@ class DyGIE(Model):
         """
         TODO(dwadden) change this.
         """
+        # TODO(dwadden) Is there some smarter way to do the batching within a document?
+
         # Shape: (batch_size, document_length, embedding_size)
         text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
 
@@ -111,7 +113,7 @@ class DyGIE(Model):
         # Shape: (batch_size, document_length)
         text_mask = util.get_text_field_mask(text).float()
 
-        sentence_lengths = text_mask.sum(dim=1)
+        sentence_lengths = text_mask.sum(dim=1).long()
 
         # Shape: (batch_size, num_spans)
         span_mask = (spans[:, :, 0] >= 0).squeeze(-1).float()
@@ -142,6 +144,9 @@ class DyGIE(Model):
             spans, span_mask, span_embeddings, sentence_lengths, ner_labels, metadata)
         output_relation = self._relation(
             spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
+
+        # TODO(dwadden) ... and now what?
+
 
     @overrides
     def decode(self, output_dict: Dict[str, torch.Tensor]):
@@ -219,3 +224,9 @@ class DyGIE(Model):
                                           antecedent_distance_embeddings], -1)
         return span_pair_embeddings
 
+
+    def get_metrics(self, reset: bool = False) -> Dict[str, float]:
+        metrics_coref = self._coref.get_metrics()
+        # TODO(dwadden) add the metrics for the other tasks.
+
+        return metrics_coref

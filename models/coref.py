@@ -15,6 +15,8 @@ from allennlp.modules.span_extractors import SelfAttentiveSpanExtractor, Endpoin
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from allennlp.training.metrics import MentionRecall, ConllCorefScores
 
+from dygie.models import shared
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
@@ -77,24 +79,36 @@ class CorefResolver(Model):
 
     @overrides
     def forward(self,  # type: ignore
-                spans: torch.IntTensor,
-                span_mask,
-                span_embeddings,  # TODO(dwadden) add type.
+                spans_batched: torch.IntTensor,
+                span_mask_batched,
+                span_embeddings_batched,  # TODO(dwadden) add type.
                 sentence_lengths,
-                coref_labels: torch.IntTensor = None,
+                coref_labels_batched: torch.IntTensor = None,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
         # pylint: disable=arguments-differ
         """
         TODO(dwadden) Update documentation.
+
+        Important: This function assumes that sentences are going to be passed in in sorted order,
+        from the same document.
         """
-        import ipdb; ipdb.set_trace()
-        # TODO(dwadden) Compute these.
-        # document_length = text_embeddings.size(1)
-        # num_spans = spans.size(1)
+        # TODO(dwadden) How to handle case where only one span from a cluster makes it into the
+        # minibatch? Should I get rid of the cluster?
+        # TODO(dwadden) Write quick unit tests for correctness, time permitting.
+        span_ix = span_mask_batched.view(-1).nonzero().squeeze()  # Indices of the spans to keep.
+        spans, span_embeddings = self._flatten_spans(
+            spans_batched, span_ix, span_embeddings_batched, sentence_lengths)
+        coref_labels = self._flatten_coref_labels(coref_labels_batched, span_ix)
+
+        document_length = sentence_lengths.sum().item()
+        num_spans = spans.size(1)
 
         # Prune based on mention scores.
         num_spans_to_keep = int(math.floor(self._spans_per_word * document_length))
 
+        # Since there's only one minibatch, there aren't any masked spans for us. The span mask is
+        # always 1.
+        span_mask = torch.ones(num_spans).unsqueeze(0)
         (top_span_embeddings, top_span_mask,
          top_span_indices, top_span_mention_scores) = self._mention_pruner(span_embeddings,
                                                                            span_mask,
@@ -136,7 +150,7 @@ class CorefResolver(Model):
         # (1, max_antecedents),
         # (1, num_spans_to_keep, max_antecedents)
         valid_antecedent_indices, valid_antecedent_offsets, valid_antecedent_log_mask = \
-            self._generate_valid_antecedents(num_spans_to_keep, max_antecedents, util.get_device_of(text_mask))
+            self._generate_valid_antecedents(num_spans_to_keep, max_antecedents, util.get_device_of(span_embeddings))
         # Select tensors relating to the antecedent spans.
         # Shape: (batch_size, num_spans_to_keep, max_antecedents, embedding_size)
         candidate_antecedent_embeddings = util.flattened_index_select(top_span_embeddings,
@@ -197,13 +211,18 @@ class CorefResolver(Model):
             correct_antecedent_log_probs = coreference_log_probs + gold_antecedent_labels.log()
             negative_marginal_log_likelihood = -util.logsumexp(correct_antecedent_log_probs).sum()
 
-            self._mention_recall(top_spans, metadata)
-            self._conll_coref_scores(top_spans, valid_antecedent_indices, predicted_antecedents, metadata)
+            # Need to get cluster data in same form as for original AllenNLP coref code so that the
+            # evaluation code works.
+            evaluation_metadata = self._make_evaluation_metadata(metadata)
+
+            self._mention_recall(top_spans, evaluation_metadata)
+            self._conll_coref_scores(
+                top_spans, valid_antecedent_indices, predicted_antecedents, evaluation_metadata)
 
             output_dict["loss"] = negative_marginal_log_likelihood
 
         if metadata is not None:
-            output_dict["document"] = [x["original_text"] for x in metadata]
+            output_dict["document"] = [x["sentence"] for x in metadata]
         return output_dict
 
     @overrides
@@ -500,3 +519,49 @@ class CorefResolver(Model):
         # Shape: (batch_size, num_spans_to_keep, max_antecedents + 1)
         coreference_scores = torch.cat([dummy_scores, antecedent_scores], -1)
         return coreference_scores
+
+    def _flatten_spans(self, spans_batched, span_ix, span_embeddings_batched, sentence_lengths):
+        """
+        Spans are input with each minibatch as a sentence. For coref, it's easier to flatten them out
+        and consider all sentences together as a document.
+        """
+        # Get feature size and indices of good spans
+        feature_size = self._mention_pruner._scorer[0]._module.input_dim
+
+        # Change the span offsets to document-level, flatten, and keep good ones.
+        sentence_offset = shared.cumsum_shifted(sentence_lengths).unsqueeze(1).unsqueeze(2)
+        spans_offset = spans_batched + sentence_offset
+        spans_flat = spans_offset.view(-1, 2)
+        spans_flat = spans_flat[span_ix].unsqueeze(0)
+
+        # Flatten the span embeddings and keep the good ones.
+        emb_flat = span_embeddings_batched.view(-1, feature_size)
+        span_embeddings_flat = emb_flat[span_ix].unsqueeze(0)
+
+        return spans_flat, span_embeddings_flat
+
+    @staticmethod
+    def _flatten_coref_labels(coref_labels_batched, span_ix):
+        "Flatten the coref labels."
+        labels_flat = coref_labels_batched.view(-1)[span_ix]
+        labels_flat = labels_flat.unsqueeze(0)
+        return labels_flat
+
+    @staticmethod
+    def _make_evaluation_metadata(metadata):
+        """
+        Get cluster metadata in form to feed into evaluation scripts. For each entry in minibatch,
+        return a dict with a metadata field, which is a list whose entries are lists specifying the
+        spans involved in a given cluster.
+        """
+        # As elsewhere, we assume the batch size will always be 1.
+        cluster_dict = {}
+        for entry in metadata:
+            for span, cluster_id in entry["cluster_dict"].items():
+                if cluster_id in cluster_dict:
+                    cluster_dict[cluster_id].append(span)
+                else:
+                    cluster_dict[cluster_id] = [span]
+        # The `values` method returns an iterator, and I need a list.
+        clusters = [val for val in cluster_dict.values()]
+        return [dict(clusters=clusters)]
