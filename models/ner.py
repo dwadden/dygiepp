@@ -59,14 +59,8 @@ class NERTagger(Model):
         # TODO(dwadden) Add this.
         #initializer(self)
 
-        # TODO(ulme) Are we using distance buckts for NER?
-        # 10 possible distance buckets.
-        #self._num_distance_buckets = 10
-        #self._distance_embedding = embedding(self._num_distance_buckets, feature_size)
-
         #self._mention_recall = mentionrecall()
         #self._conll_coref_scores = conllcorefscores()
-
 
     @overrides
     def forward(self,  # type: ignore
@@ -75,17 +69,20 @@ class NERTagger(Model):
                 span_embeddings: torch.IntTensor,
                 sentence_lengths: torch.Tensor,
                 ner_labels: torch.IntTensor = None,
+                document_length: int = 0,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
+
         """
         TODO(dwadden) Write documentation.
         """
         import ipdb; ipdb.set_trace()
 
-        #Spans: Shape(5, 255, 2)
+        #spans: Shape(5, 255, 2)
+        #span_embeddings: Shape(5, 255, 1220)
 
-
-        document_length = text_embeddings.size(1)
         num_spans = spans.size(1)
+
+        #document_length = text_embeddings.size(1)
 
         # Prune based on mention scores.
         num_spans_to_keep = int(math.floor(self._spans_per_word * document_length))
@@ -110,7 +107,7 @@ class NERTagger(Model):
                                               flat_top_span_indices)
 
         # Compute indices for antecedent spans to consider.
-        max_antecedents = min(self._max_antecedents, num_spans_to_keep)
+        #max_antecedents = min(self._max_antecedents, num_spans_to_keep)
 
         # Now that we have our variables in terms of num_spans_to_keep, we need to
         # compare span pairs to decide each span's antecedent. Each span can only
@@ -130,54 +127,59 @@ class NERTagger(Model):
         # (num_spans_to_keep, max_antecedents),
         # (1, max_antecedents),
         # (1, num_spans_to_keep, max_antecedents)
-        valid_antecedent_indices, valid_antecedent_offsets, valid_antecedent_log_mask = \
-            self._generate_valid_antecedents(num_spans_to_keep, max_antecedents, util.get_device_of(text_mask))
+
+        #valid_antecedent_indices, valid_antecedent_offsets, valid_antecedent_log_mask = \
+        #    self._generate_valid_antecedents(num_spans_to_keep, max_antecedents, util.get_device_of(text_mask))
         # Select tensors relating to the antecedent spans.
         # Shape: (batch_size, num_spans_to_keep, max_antecedents, embedding_size)
-        candidate_antecedent_embeddings = util.flattened_index_select(top_span_embeddings,
-                                                                      valid_antecedent_indices)
+        #candidate_antecedent_embeddings = util.flattened_index_select(top_span_embeddings,
+        #                                                              valid_antecedent_indices)
 
         # Shape: (batch_size, num_spans_to_keep, max_antecedents)
-        candidate_antecedent_mention_scores = util.flattened_index_select(top_span_mention_scores,
-                                                                          valid_antecedent_indices).squeeze(-1)
+        #candidate_antecedent_mention_scores = util.flattened_index_select(top_span_mention_scores,
+        #                                                                  valid_antecedent_indices).squeeze(-1)
         # Compute antecedent scores.
         # Shape: (batch_size, num_spans_to_keep, max_antecedents, embedding_size)
-        span_pair_embeddings = self._compute_span_pair_embeddings(top_span_embeddings,
-                                                                  candidate_antecedent_embeddings,
-                                                                  valid_antecedent_offsets)
+        #span_pair_embeddings = self._compute_span_pair_embeddings(top_span_embeddings,
+        #                                                          candidate_antecedent_embeddings,
+        #                                                          valid_antecedent_offsets)
         # Shape: (batch_size, num_spans_to_keep, 1 + max_antecedents)
-        coreference_scores = self._compute_coreference_scores(span_pair_embeddings,
-                                                              top_span_mention_scores,
-                                                              candidate_antecedent_mention_scores,
-                                                              valid_antecedent_log_mask)
+        #coreference_scores = self._compute_coreference_scores(span_pair_embeddings,
+        #                                                      top_span_mention_scores,
+        #                                                      candidate_antecedent_mention_scores,
+        #                                                      valid_antecedent_log_mask)
+
+        ner_scores = top_span_mention_scores
+        #ner_scores = self._compute_ner_scores(span_embeddings,
+        #                                      top_span_mention_scores)
 
         # We now have, for each span which survived the pruning stage,
         # a predicted antecedent. This implies a clustering if we group
         # mentions which refer to each other in a chain.
         # Shape: (batch_size, num_spans_to_keep)
-        _, predicted_antecedents = coreference_scores.max(2)
+        _, predicted_ner = ner_scores.max(1)
         # Subtract one here because index 0 is the "no antecedent" class,
         # so this makes the indices line up with actual spans if the prediction
         # is greater than -1.
-        predicted_antecedents -= 1
+        predicted_ner -= 1
 
         output_dict = {"top_spans": top_spans,
-                       "antecedent_indices": valid_antecedent_indices,
-                       "predicted_antecedents": predicted_antecedents}
-        if coref_labels is not None:
-            # Find the gold labels for the spans which we kept.
-            pruned_gold_labels = util.batched_index_select(coref_labels.unsqueeze(-1),
-                                                           top_span_indices,
-                                                           flat_top_span_indices)
+                       "predicted_ner": predicted_ner}
 
-            antecedent_labels = util.flattened_index_select(pruned_gold_labels,
-                                                            valid_antecedent_indices).squeeze(-1)
-            antecedent_labels += valid_antecedent_log_mask.long()
+        if ner_labels is not None:
+            # Find the gold labels for the spans which we kept.
+            #pruned_gold_labels = util.batched_index_select(ner_labels.unsqueeze(-1),
+            #                                               top_span_indices,
+            #                                               flat_top_span_indices)
+
+            #antecedent_labels = util.flattened_index_select(pruned_gold_labels,
+            #                                                valid_antecedent_indices).squeeze(-1)
+            #antecedent_labels += valid_antecedent_log_mask.long()
 
             # Compute labels.
             # Shape: (batch_size, num_spans_to_keep, max_antecedents + 1)
-            gold_antecedent_labels = self._compute_antecedent_gold_labels(pruned_gold_labels,
-                                                                          antecedent_labels)
+            #gold_antecedent_labels = self._compute_antecedent_gold_labels(pruned_gold_labels,
+            #                                                              antecedent_labels)
             # Now, compute the loss using the negative marginal log-likelihood.
             # This is equal to the log of the sum of the probabilities of all antecedent predictions
             # that would be consistent with the data, in the sense that we are minimising, for a
@@ -188,7 +190,7 @@ class NERTagger(Model):
             # probability assigned to all valid antecedents. This is a valid objective for
             # clustering as we don't mind which antecedent is predicted, so long as they are in
             #  the same coreference cluster.
-            coreference_log_probs = util.masked_log_softmax(coreference_scores, top_span_mask)
+            ner_log_probs = util.masked_log_softmax(ner_scores, top_span_mask)
             correct_antecedent_log_probs = coreference_log_probs + gold_antecedent_labels.log()
             negative_marginal_log_likelihood = -util.logsumexp(correct_antecedent_log_probs).sum()
 
@@ -408,7 +410,7 @@ class NERTagger(Model):
         return span_pair_embeddings
 
     @staticmethod
-    def _compute_antecedent_gold_labels(top_coref_labels: torch.IntTensor,
+    def _compute_antecedent_gold_labels(top_ner_labels: torch.IntTensor,
                                         antecedent_labels: torch.IntTensor):
         """
         Generates a binary indicator for every pair of spans. This label is one if and
@@ -447,11 +449,9 @@ class NERTagger(Model):
         pairwise_labels_with_dummy_label = torch.cat([dummy_labels, pairwise_labels], -1)
         return pairwise_labels_with_dummy_label
 
-    def _compute_coreference_scores(self,
-                                    pairwise_embeddings: torch.FloatTensor,
-                                    top_span_mention_scores: torch.FloatTensor,
-                                    antecedent_mention_scores: torch.FloatTensor,
-                                    antecedent_log_mask: torch.FloatTensor) -> torch.FloatTensor:
+    def _compute_ner_scores(self,
+                            span_embeddings: torch.FloatTensor,
+                            top_span_mention_scores: torch.FloatTensor) -> torch.FloatTensor:
         """
         Computes scores for every pair of spans. Additionally, a dummy label is included,
         representing the decision that the span is not coreferent with anything. For the dummy
@@ -483,15 +483,14 @@ class NERTagger(Model):
 
         """
         # Shape: (batch_size, num_spans_to_keep, max_antecedents)
-        antecedent_scores = self._antecedent_scorer(
-                self._antecedent_feedforward(pairwise_embeddings)).squeeze(-1)
-        antecedent_scores += top_span_mention_scores + antecedent_mention_scores
-        antecedent_scores += antecedent_log_mask
+        #antecedent_scores = self._antecedent_scorer(
+        #        self._antecedent_feedforward(span_embeddings)).squeeze(-1)
+        #antecedent_scores += top_span_mention_scores + antecedent_mention_scores
 
         # Shape: (batch_size, num_spans_to_keep, 1)
-        shape = [antecedent_scores.size(0), antecedent_scores.size(1), 1]
-        dummy_scores = antecedent_scores.new_zeros(*shape)
+        shape = [top_span_mention_scores.size(0), top_span_mention_scores.size(1), 1]
+        dummy_scores = top_span_mention_scores.new_zeros(*shape)
 
         # Shape: (batch_size, num_spans_to_keep, max_antecedents + 1)
-        coreference_scores = torch.cat([dummy_scores, antecedent_scores], -1)
-        return coreference_scores
+        ner_scores = torch.cat([dummy_scores, top_span_mention_scores], -1)
+        return ner_scores
