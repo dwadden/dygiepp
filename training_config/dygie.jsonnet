@@ -103,14 +103,12 @@
     "max_span_width": 10,
   },
   "iterator": {
-    "type": "basic",
-    // "padding_noise": 0.0,
-    "batch_size": 5
+    "type": "document",
+    "batch_size": 10,
   },
   "validation_iterator": {
-    "type": "basic",
-    // "padding_noise": 0.0,
-    "batch_size": 5
+    "type": "document",
+    "batch_size": -1,
   },
   "trainer": {
     "num_epochs": 150,
@@ -126,6 +124,7 @@
     },
     "optimizer": {
       "type": "adam"
-    }
+    },
+    "shuffle": false
   }
 }
