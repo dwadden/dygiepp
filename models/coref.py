@@ -213,7 +213,7 @@ class CorefResolver(Model):
 
             # Need to get cluster data in same form as for original AllenNLP coref code so that the
             # evaluation code works.
-            evaluation_metadata = self._make_evaluation_metadata(metadata)
+            evaluation_metadata = self._make_evaluation_metadata(metadata, sentence_lengths)
 
             self._mention_recall(top_spans, evaluation_metadata)
             self._conll_coref_scores(
@@ -548,20 +548,27 @@ class CorefResolver(Model):
         return labels_flat
 
     @staticmethod
-    def _make_evaluation_metadata(metadata):
+    def _make_evaluation_metadata(metadata, sentence_lengths):
         """
         Get cluster metadata in form to feed into evaluation scripts. For each entry in minibatch,
         return a dict with a metadata field, which is a list whose entries are lists specifying the
         spans involved in a given cluster.
+        For coreference evaluation, we need to make the span indices with respect to the entire
+        "document" (i.e. all sentences in minibatch), rather than with respect to each sentence.
         """
+        # TODO(dwadden) Write tests to make sure sentence starts match lengths of sentences in
+        # metadata.
         # As elsewhere, we assume the batch size will always be 1.
         cluster_dict = {}
-        for entry in metadata:
+        sentence_offset = shared.cumsum_shifted(sentence_lengths).tolist()
+        for entry, sentence_start in zip(metadata, sentence_offset):
             for span, cluster_id in entry["cluster_dict"].items():
+                span_offset = (span[0] + sentence_start, span[1] + sentence_start)
                 if cluster_id in cluster_dict:
-                    cluster_dict[cluster_id].append(span)
+                    cluster_dict[cluster_id].append(span_offset)
                 else:
-                    cluster_dict[cluster_id] = [span]
+                    cluster_dict[cluster_id] = [span_offset]
+
         # The `values` method returns an iterator, and I need a list.
         clusters = [val for val in cluster_dict.values()]
         return [dict(clusters=clusters)]
