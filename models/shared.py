@@ -12,5 +12,5 @@ def cumsum_shifted(xs):
     [0, x[1], x[1] + x[2], ...]. Useful for calculating sentence offsets.
     """
     cs = xs.cumsum(dim=0)
-    shift = torch.zeros(1, dtype=torch.long)
+    shift = torch.zeros(1, dtype=torch.long, device=cs.device)  # Put on correct device.
     return torch.cat([shift, cs[:-1]], dim=0)

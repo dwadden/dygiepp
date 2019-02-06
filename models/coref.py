@@ -108,7 +108,7 @@ class CorefResolver(Model):
 
         # Since there's only one minibatch, there aren't any masked spans for us. The span mask is
         # always 1.
-        span_mask = torch.ones(num_spans).unsqueeze(0)
+        span_mask = torch.ones(num_spans, device=spans_batched.device).unsqueeze(0)
         (top_span_embeddings, top_span_mask,
          top_span_indices, top_span_mention_scores) = self._mention_pruner(span_embeddings,
                                                                            span_mask,
