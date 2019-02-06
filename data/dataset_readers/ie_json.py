@@ -72,7 +72,7 @@ def format_label_fields(ner: List[List[Union[int,str]]], relations: List[List[Un
     # NER
     ner_dict = MissingDict("",
         (
-            ((span_start+ss, span_end+ss), named_entity)
+            ((span_start-ss, span_end-ss), named_entity)
             for (span_start, span_end, named_entity) in ner
         )
     )
@@ -80,7 +80,7 @@ def format_label_fields(ner: List[List[Union[int,str]]], relations: List[List[Un
     # Relations
     relation_dict = MissingDict("",
         (
-            ((  (span1_start+ss, span1_end+ss),  (span2_start+ss, span2_end+ss)   ), relation)
+            ((  (span1_start-ss, span1_end-ss),  (span2_start-ss, span2_end-ss)   ), relation)
             for (span1_start, span1_end, span2_start, span2_end, relation) in relations
         )
     )
@@ -88,7 +88,7 @@ def format_label_fields(ner: List[List[Union[int,str]]], relations: List[List[Un
     # Coref
     cluster_dict = MissingDict(-1,
         (
-            (   (span_start+ss, span_end+ss), cluster_id)
+            (   (span_start-ss, span_end-ss), cluster_id)
             for ((span_start, span_end), cluster_id) in cluster_tmp.items()
         )
     )
