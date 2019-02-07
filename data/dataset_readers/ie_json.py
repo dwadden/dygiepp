@@ -48,7 +48,7 @@ def cluster_dict_sentence(cluster_dict: Dict[Tuple[int, int], int], sentence_sta
     """
     Split cluster dict into clusters in current sentence, and clusters that come later.
     """
-    
+
     def within_sentence(span):
         return span[0] >= sentence_start and span[1] <= sentence_end
 
@@ -58,7 +58,7 @@ def cluster_dict_sentence(cluster_dict: Dict[Tuple[int, int], int], sentence_sta
     ## Create new cluster dict with the within-sentence clusters removed.
     new_cluster_dict = {span: cluster for span, cluster in cluster_dict.items()
                         if span not in cluster_sent}
-    
+
     return cluster_sent, new_cluster_dict
 
 
@@ -192,8 +192,8 @@ class IEJsonReader(DatasetReader):
         #all_spans = enumerate_spans(sentence, max_span_width=self._max_span_width)
         #nspan_ner_labels = [ner_dict[(start, end)] for start, end in all_spans]
         #nspan_coref_labels = [cluster_dict[(start, end)] for start, end in all_spans]
-        #nspans = [SpanField(start, end, text_field) for start, end in all_spans] 
-        
+        #nspans = [SpanField(start, end, text_field) for start, end in all_spans]
+
         span_field = ListField(spans)
         ner_label_field = SequenceLabelField(span_ner_labels, span_field)
         coref_label_field = SequenceLabelField(span_coref_labels, span_field)

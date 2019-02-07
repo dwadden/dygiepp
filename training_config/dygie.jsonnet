@@ -67,7 +67,12 @@
           "dropout": 0.2
         },
         "spans_per_word": 0.4,
-        "max_antecedents": 100
+        "max_antecedents": 100,
+        "initializer": [
+          [".*linear_layers.*weight", {"type": "xavier_normal"}],
+          [".*scorer._module.weight", {"type": "xavier_normal"}],
+          ["_distance_embedding.weight", {"type": "xavier_normal"}]
+        ]
       },
       "ner": {
         "mention_feedforward": {
@@ -91,9 +96,6 @@
       }
     },
     "initializer": [
-        [".*linear_layers.*weight", {"type": "xavier_normal"}],
-        [".*scorer._module.weight", {"type": "xavier_normal"}],
-        ["_distance_embedding.weight", {"type": "xavier_normal"}],
         ["_span_width_embedding.weight", {"type": "xavier_normal"}],
         ["_context_layer._module.weight_ih.*", {"type": "xavier_normal"}],
         ["_context_layer._module.weight_hh.*", {"type": "orthogonal"}]

@@ -27,13 +27,15 @@ class DocumentIterator(DataIterator):
 
         total_length = 0
 
-        for instance in instances:
+        for i, instance in enumerate(instances):
             # If this sentence is from the current document, append to instance list.
             if instance["metadata"]["doc_key"] == doc_key:
                 this_batch.append(instance)
                 # If we've got a full batch, yield it and reset the batch.
                 # If batch_size is -1, then just do entire documents at a time. For evaluation.
-                if self._batch_size >= 0 and len(this_batch) == self._batch_size:
+                # Also, if we're on the final instance in the batch, yield.
+                if ((self._batch_size >= 0 and len(this_batch) == self._batch_size) or
+                    (i == len(instances) - 1)):
                     full_batch = this_batch
                     this_batch = []
                     total_length += len(full_batch)

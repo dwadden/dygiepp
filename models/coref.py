@@ -53,7 +53,7 @@ class CorefResolver(Model):
                  feature_size: int,
                  spans_per_word: float,
                  max_antecedents: int,
-                 # initializer: InitializerApplicator = InitializerApplicator(), # TODO(dwadden add this).
+                 initializer: InitializerApplicator = InitializerApplicator(), # TODO(dwadden add this).
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(CorefResolver, self).__init__(vocab, regularizer)
 
@@ -74,8 +74,7 @@ class CorefResolver(Model):
         self._mention_recall = MentionRecall()
         self._conll_coref_scores = ConllCorefScores()
 
-        # TODO(dwadden) Add this.
-        # initializer(self)
+        initializer(self)
 
     @overrides
     def forward(self,  # type: ignore
