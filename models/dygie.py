@@ -143,7 +143,7 @@ class DyGIE(Model):
         output_ner = self._ner(
             spans, span_mask, span_embeddings, sentence_lengths, ner_labels, document_length, metadata)
         output_relation = self._relation(
-            spans, span_mask, span_embeddings, sentence_lengths, relation_labels, document_length, metadata)
+            spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
         # TODO(dwadden) ... and now what?
 

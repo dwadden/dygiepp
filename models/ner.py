@@ -47,14 +47,29 @@ class NERTagger(Model):
                  # initializer: InitializerApplicator = InitializerApplicator(), # TODO(dwadden add this).
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(NERTagger, self).__init__(vocab, regularizer)
-
-        # TODO(dwadden) Do we want TimeDistributed for this one?
-        feedforward_scorer = torch.nn.Sequential(
-            TimeDistributed(mention_feedforward),
-            TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1)))
-        self._mention_pruner = Pruner(feedforward_scorer)
+        print(vocab.get_vocab_size('labels')) # This says 14 right now, I guess we have to split the different kind of labels
 
         self._spans_per_word = spans_per_word
+
+        #This should be passed as one of the parameters
+        self.number_of_ner_classes = 7
+
+        # TODO(dwadden) Do we want TimeDistributed for this one?
+        #feedforward_scorer = torch.nn.Sequential(
+        #    TimeDistributed(mention_feedforward),
+        #    TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1))
+        #)
+        #self._mention_pruner = Pruner(feedforward_scorer)
+
+        self.final_network = torch.nn.Sequential(
+            TimeDistributed(mention_feedforward),
+            TimeDistributed(torch.nn.Linear(
+                                mention_feedforward.get_output_dim(),
+                                self.number_of_ner_classes)
+            )
+        )
+
+        self.loss_function = torch.nn.CrossEntropyLoss()
 
         # TODO(dwadden) Add this.
         #initializer(self)
@@ -75,36 +90,42 @@ class NERTagger(Model):
         """
         TODO(dwadden) Write documentation.
         """
-        import ipdb; ipdb.set_trace()
+
 
         #spans: Shape(5, 255, 2)
         #span_embeddings: Shape(5, 255, 1220)
 
         num_spans = spans.size(1)
 
-        #document_length = text_embeddings.size(1)
-
-        # Prune based on mention scores.
         num_spans_to_keep = int(math.floor(self._spans_per_word * document_length))
 
-        (top_span_embeddings, top_span_mask,
-         top_span_indices, top_span_mention_scores) = self._mention_pruner(span_embeddings,
-                                                                           span_mask,
-                                                                           num_spans_to_keep)
-        top_span_mask = top_span_mask.unsqueeze(-1)
+        # Prune based on mention scores.
+
+        #PRUNE
+        #(top_span_embeddings, top_span_mask,
+        # top_span_indices, top_span_mention_scores) = self._mention_pruner(span_embeddings,
+        #                                                                   span_mask,
+        #                                                                   num_spans_to_keep)
+        #PRUNE
+        #top_span_mask = top_span_mask.unsqueeze(-1)
+
         # Shape: (batch_size * num_spans_to_keep)
         # torch.index_select only accepts 1D indices, but here
         # we need to select spans for each element in the batch.
         # This reformats the indices to take into account their
         # index into the batch. We precompute this here to make
         # the multiple calls to util.batched_index_select below more efficient.
-        flat_top_span_indices = util.flatten_and_batch_shift_indices(top_span_indices, num_spans)
+
+        #PRUNE
+        #flat_top_span_indices = util.flatten_and_batch_shift_indices(top_span_indices, num_spans)
 
         # Compute final predictions for which spans to consider as mentions.
         # Shape: (batch_size, num_spans_to_keep, 2)
-        top_spans = util.batched_index_select(spans,
-                                              top_span_indices,
-                                              flat_top_span_indices)
+
+        #PRUNE
+        #top_spans = util.batched_index_select(spans,
+        #                                      top_span_indices,
+        #                                      flat_top_span_indices)
 
         # Compute indices for antecedent spans to consider.
         #max_antecedents = min(self._max_antecedents, num_spans_to_keep)
@@ -149,7 +170,8 @@ class NERTagger(Model):
         #                                                      candidate_antecedent_mention_scores,
         #                                                      valid_antecedent_log_mask)
 
-        ner_scores = top_span_mention_scores
+        ner_scores = self.final_network(span_embeddings)#.resize(2415, 6)
+
         #ner_scores = self._compute_ner_scores(span_embeddings,
         #                                      top_span_mention_scores)
 
@@ -157,16 +179,20 @@ class NERTagger(Model):
         # a predicted antecedent. This implies a clustering if we group
         # mentions which refer to each other in a chain.
         # Shape: (batch_size, num_spans_to_keep)
-        _, predicted_ner = ner_scores.max(1)
+        _, predicted_ner = ner_scores.max(2)
         # Subtract one here because index 0 is the "no antecedent" class,
         # so this makes the indices line up with actual spans if the prediction
         # is greater than -1.
         predicted_ner -= 1
 
+        top_spans = spans
         output_dict = {"top_spans": top_spans,
                        "predicted_ner": predicted_ner}
 
         if ner_labels is not None:
+            #ner_labels = ner_labels.resize(2415)
+
+
             # Find the gold labels for the spans which we kept.
             #pruned_gold_labels = util.batched_index_select(ner_labels.unsqueeze(-1),
             #                                               top_span_indices,
@@ -190,18 +216,34 @@ class NERTagger(Model):
             # probability assigned to all valid antecedents. This is a valid objective for
             # clustering as we don't mind which antecedent is predicted, so long as they are in
             #  the same coreference cluster.
-            ner_log_probs = util.masked_log_softmax(ner_scores, top_span_mask)
-            correct_antecedent_log_probs = coreference_log_probs + gold_antecedent_labels.log()
-            negative_marginal_log_likelihood = -util.logsumexp(correct_antecedent_log_probs).sum()
+           
+            #import ipdb; ipdb.set_trace()
+            #ner_log_probs = util.masked_log_softmax(ner_scores, top_span_mask)
+            #correct_antecedent_log_probs = ner_log_probs# + gold_antecedent_labels.log()
+            #negative_marginal_log_likelihood = -util.logsumexp(correct_antecedent_log_probs).sum()
 
-            self._mention_recall(top_spans, metadata)
-            self._conll_coref_scores(top_spans, valid_antecedent_indices, predicted_antecedents, metadata)
+            #self._mention_recall(top_spans, metadata)
+            #self._conll_coref_scores(top_spans, valid_antecedent_indices, predicted_antecedents, metadata)
 
-            output_dict["loss"] = negative_marginal_log_likelihood
+            loss = util.sequence_cross_entropy_with_logits(ner_scores, ner_labels, span_mask)
+            output_dict["loss"] = loss
+            #output_dict["loss"] = negative_marginal_log_likelihood
 
         if metadata is not None:
-            output_dict["document"] = [x["original_text"] for x in metadata]
+            output_dict["document"] = [x["sentence"] for x in metadata]
         return output_dict
+
+
+#        if tags is not None:
+#            loss = sequence_cross_entropy_with_logits(logits, tags, mask)
+#            for metric in self.metrics.values():
+#                metric(logits, tags, mask.float())
+#            output_dict["loss"] = loss
+#
+#        if metadata is not None:
+#            output_dict["words"] = [x["words"] for x in metadata]
+#        return output_dict
+
 
     @overrides
     def decode(self, output_dict: Dict[str, torch.Tensor]):
@@ -284,13 +326,14 @@ class NERTagger(Model):
 
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        mention_recall = self._mention_recall.get_metric(reset)
-        coref_precision, coref_recall, coref_f1 = self._conll_coref_scores.get_metric(reset)
+        pass
+        #mention_recall = self._mention_recall.get_metric(reset)
+        #coref_precision, coref_recall, coref_f1 = self._conll_coref_scores.get_metric(reset)
 
-        return {"coref_precision": coref_precision,
-                "coref_recall": coref_recall,
-                "coref_f1": coref_f1,
-                "mention_recall": mention_recall}
+        #return {"coref_precision": coref_precision,
+        #        "coref_recall": coref_recall,
+        #        "coref_f1": coref_f1}
+                #"mention_recall": mention_recall}
 
     @staticmethod
     def _generate_valid_antecedents(num_spans_to_keep: int,
@@ -494,3 +537,4 @@ class NERTagger(Model):
         # Shape: (batch_size, num_spans_to_keep, max_antecedents + 1)
         ner_scores = torch.cat([dummy_scores, top_span_mention_scores], -1)
         return ner_scores
+
