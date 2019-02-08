@@ -146,6 +146,7 @@ class DyGIE(Model):
             spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
         # TODO(dwadden) ... and now what?
+        return output_coref
 
 
     @overrides
@@ -226,7 +227,7 @@ class DyGIE(Model):
 
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        metrics_coref = self._coref.get_metrics()
+        metrics_coref = self._coref.get_metrics(reset=reset)
         # TODO(dwadden) add the metrics for the other tasks.
 
         return metrics_coref

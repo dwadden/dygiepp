@@ -190,6 +190,8 @@ class CorefResolver(Model):
 
             antecedent_labels = util.flattened_index_select(pruned_gold_labels,
                                                             valid_antecedent_indices).squeeze(-1)
+            # TODO(dwadden) There's an integer wrap-around happening here. It occurs in the original
+            # code. May be worth coming back and looking at this.
             antecedent_labels += valid_antecedent_log_mask.long()
 
             # Compute labels.
