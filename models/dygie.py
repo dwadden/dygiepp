@@ -138,10 +138,10 @@ class DyGIE(Model):
         span_embeddings = torch.cat([endpoint_span_embeddings, attended_span_embeddings], -1)
 
         # Make calls out to the modules to get results.
-        output_coref = self._coref(
-            spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
-        output_ner = self._ner(
-            spans, span_mask, span_embeddings, sentence_lengths, ner_labels, document_length, metadata)
+        # output_coref = self._coref(
+        #     spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
+        # output_ner = self._ner(
+        #     spans, span_mask, span_embeddings, sentence_lengths, ner_labels, document_length, metadata)
         output_relation = self._relation(
             spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 

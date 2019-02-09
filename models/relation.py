@@ -15,27 +15,32 @@ class RelationExtractor(Model):
     """
     Named entity recognition module of DyGIE model.
     """
+    # TODO(dwadden) add option to make `mention_feedforward` be the NER tagger.
     def __init__(self,
                  vocab: Vocabulary,
-                 ner_tagger,    # Use the NER tagger to get mention scores.
+                 mention_feedforward: FeedForward,
                  relation_feedforward: FeedForward,
                  feature_size: int,
                  spans_per_word: float,
-                 # initializer: InitializerApplicator = InitializerApplicator(), # TODO(dwadden add this).
+                 initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(RelationExtractor, self).__init__(vocab, regularizer)
 
-        self._ner = ner_tagger
-
         # TODO(dwadden) Do we want TimeDistributed for this one?
-        # TOOD(dwadden) make sure I've got hte input dim right on this one.
+        # TODO(dwadden) make sure I've got the input dim right on this one.
         self._relation_feedforward = TimeDistributed(relation_feedforward)
+        feedforward_scorer = torch.nn.Sequential(
+            TimeDistributed(mention_feedforward),
+            TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1)))
+        self._mention_pruner = Pruner(feedforward_scorer)
+        self._relation_scorer = TimeDistributed(torch.nn.Linear(relation_feedforward.get_output_dim(), 1))
 
         self._spans_per_word = spans_per_word
 
-        # TODO(dwadden) Add this.
-        # initializer(self)
+        # TODO(dwadden) Add code to compute relation F1.
+        self._relation_scores = None
 
+        initializer(self)
 
     @overrides
     def forward(self,  # type: ignore
