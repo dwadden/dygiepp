@@ -105,10 +105,11 @@ class DyGIE(Model):
         TODO(dwadden) change this.
         """
         # TODO(dwadden) Is there some smarter way to do the batching within a document?
+        # TODO(dwadden) Shape comments should have `max_sentence_length` rather than `document_length`.
 
         # Shape: (batch_size, document_length, embedding_size)
         text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
-        document_length = text_embeddings.size(1)
+        max_sentence_length = text_embeddings.size(1)
 
         # Shape: (batch_size, document_length)
         text_mask = util.get_text_field_mask(text).float()
@@ -138,12 +139,12 @@ class DyGIE(Model):
         span_embeddings = torch.cat([endpoint_span_embeddings, attended_span_embeddings], -1)
 
         # Make calls out to the modules to get results.
-        # output_coref = self._coref(
-        #     spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
-        # output_ner = self._ner(
-        #     spans, span_mask, span_embeddings, sentence_lengths, ner_labels, document_length, metadata)
+        output_coref = self._coref(
+            spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
+        output_ner = self._ner(
+            spans, span_mask, span_embeddings, sentence_lengths, max_sentence_length, ner_labels, metadata)
         output_relation = self._relation(
-            spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
+            spans, span_mask, span_embeddings, sentence_lengths, max_sentence_length, relation_labels, metadata)
 
         # TODO(dwadden) ... and now what?
         return output_coref
