@@ -1,3 +1,5 @@
+import logging
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
@@ -10,6 +12,7 @@ from allennlp.modules import FeedForward
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from allennlp.modules import Seq2SeqEncoder, TimeDistributed, TextFieldEmbedder, Pruner
 
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class RelationExtractor(Model):
     """
@@ -48,9 +51,19 @@ class RelationExtractor(Model):
                 span_mask,
                 span_embeddings,  # TODO(dwadden) add type.
                 sentence_lengths,
+                max_sentence_length,
                 relation_labels: torch.IntTensor = None,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
         """
         TODO(dwadden) Write documentation.
         """
+        num_spans_to_keep = int(math.floor(self._spans_per_word * max_sentence_length))
+        (top_span_embeddings, top_span_mask,
+         top_span_indices, top_span_mention_scores) = self._mention_pruner(span_embeddings,
+                                                                           span_mask,
+                                                                           num_spans_to_keep)
+
+        top_span_mask = top_span_mask.unsqueeze(-1)
+
+
         import ipdb; ipdb.set_trace()
