@@ -6,6 +6,7 @@ import itertools
 
 from allennlp.common.testing import AllenNlpTestCase
 from allennlp.common.util import ensure_list
+from allennlp.data.vocabulary import Vocabulary
 
 from dygie.data import IEJsonReader
 
@@ -72,3 +73,12 @@ class TestIEJsonReader(AllenNlpTestCase):
                 assert label == "USED-FOR"
             else:
                 assert label == ""
+
+    def test_vocab_size_correct(self):
+        vocab = Vocabulary.from_instances(self.instances)
+        # There are 4 unique NER labels and 6 relation labels in the text fixture doc. Need to add 1
+        # for the null label.
+        assert vocab.get_vocab_size("ner_labels") == 5
+        assert vocab.get_vocab_size("relation_labels") == 7
+        # For numeric labels, vocab size is 0.
+        assert vocab.get_vocab_size("coref_labels") == 0
