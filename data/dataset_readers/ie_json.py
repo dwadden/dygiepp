@@ -195,8 +195,10 @@ class IEJsonReader(DatasetReader):
         #nspans = [SpanField(start, end, text_field) for start, end in all_spans]
 
         span_field = ListField(spans)
-        ner_label_field = SequenceLabelField(span_ner_labels, span_field)
-        coref_label_field = SequenceLabelField(span_coref_labels, span_field)
+        ner_label_field = SequenceLabelField(span_ner_labels, span_field,
+                                             label_namespace="ner_labels")
+        coref_label_field = SequenceLabelField(span_coref_labels, span_field,
+                                               label_namespace="coref_labels")
 
         # Generate fields for relations.
         n_spans = len(spans)
@@ -205,7 +207,8 @@ class IEJsonReader(DatasetReader):
         relations = [relation_dict[(span_tuples[i], span_tuples[j])] for (i,j) in indices]
 
         relation_label_field = AdjacencyField(
-            indices=indices, sequence_field=span_field, labels=relations)
+            indices=indices, sequence_field=span_field, labels=relations,
+            label_namespace="relation_labels")
 
         # Pull it  all together.
         fields = dict(text=text_field,
