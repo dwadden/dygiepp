@@ -83,8 +83,8 @@ class NERTagger(Model):
                 span_mask: torch.IntTensor,
                 span_embeddings: torch.IntTensor,
                 sentence_lengths: torch.Tensor,
+                document_length: int,
                 ner_labels: torch.IntTensor = None,
-                document_length: int = 0,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
 
         """
@@ -216,7 +216,7 @@ class NERTagger(Model):
             # probability assigned to all valid antecedents. This is a valid objective for
             # clustering as we don't mind which antecedent is predicted, so long as they are in
             #  the same coreference cluster.
-           
+
             #import ipdb; ipdb.set_trace()
             #ner_log_probs = util.masked_log_softmax(ner_scores, top_span_mask)
             #correct_antecedent_log_probs = ner_log_probs# + gold_antecedent_labels.log()
@@ -537,4 +537,3 @@ class NERTagger(Model):
         # Shape: (batch_size, num_spans_to_keep, max_antecedents + 1)
         ner_scores = torch.cat([dummy_scores, top_span_mention_scores], -1)
         return ner_scores
-
