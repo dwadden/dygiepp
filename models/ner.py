@@ -47,14 +47,11 @@ class NERTagger(Model):
                  # initializer: InitializerApplicator = InitializerApplicator(), # TODO(dwadden add this).
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(NERTagger, self).__init__(vocab, regularizer)
-        print(vocab.get_vocab_size('labels')) # This says 14 right now, I guess we have to split the different kind of labels
-
-        self._spans_per_word = spans_per_word
 
         #This should be passed as one of the parameters
-        self.number_of_ner_classes = 7
+        self.number_of_ner_classes = vocab.get_vocab_size('ner_labels')
 
-        # TODO(dwadden) Do we want TimeDistributed for this one?
+        # TODO(dwadden) Do we want TimeDistributed for this one? Ulme - Yes, I think we do 
         #feedforward_scorer = torch.nn.Sequential(
         #    TimeDistributed(mention_feedforward),
         #    TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1))
@@ -83,7 +80,7 @@ class NERTagger(Model):
                 span_mask: torch.IntTensor,
                 span_embeddings: torch.IntTensor,
                 sentence_lengths: torch.Tensor,
-                document_length: int,
+                max_sentence_length: int,
                 ner_labels: torch.IntTensor = None,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
 
@@ -91,13 +88,12 @@ class NERTagger(Model):
         TODO(dwadden) Write documentation.
         """
 
-
-        #spans: Shape(5, 255, 2)
-        #span_embeddings: Shape(5, 255, 1220)
+        #Shape: (Batch size, Number of Spans, Span Embedding Size)
+        #span_embeddings
 
         num_spans = spans.size(1)
 
-        num_spans_to_keep = int(math.floor(self._spans_per_word * document_length))
+        #num_spans_to_keep = int(math.floor(self._spans_per_word * max_sentence_length))
 
         # Prune based on mention scores.
 
@@ -170,7 +166,7 @@ class NERTagger(Model):
         #                                                      candidate_antecedent_mention_scores,
         #                                                      valid_antecedent_log_mask)
 
-        ner_scores = self.final_network(span_embeddings)#.resize(2415, 6)
+        ner_scores = self.final_network(span_embeddings)
 
         #ner_scores = self._compute_ner_scores(span_embeddings,
         #                                      top_span_mention_scores)
