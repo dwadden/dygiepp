@@ -18,11 +18,6 @@ from dygie.training.relation_metrics import RelationMetrics
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-import sys
-from IPython.core import ultratb
-sys.excepthook = ultratb.FormattedTB(mode='Verbose',
-                                     color_scheme='Linux', call_pdb=1)
-
 
 # TODO(dwadden) add tensor dimension comments.
 # TODO(dwadden) Different sentences should have different number of relation candidates depending on
