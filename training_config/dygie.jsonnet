@@ -93,7 +93,7 @@
           "dropout": 0.2
         },
         "relation_feedforward": {
-          "input_dim": 3680,
+          "input_dim": 3660, // 3660 rather than 3680 like for coref, because no distance embedding.
           "num_layers": 2,
           "hidden_dims": 150,
           "activations": "relu",
@@ -117,18 +117,18 @@
   },
   "iterator": {
     "type": "document",
-    "batch_size": -1,
+    "batch_size": 10,
   },
   "validation_iterator": {
     "type": "document",
-    "batch_size": -1,
+    "batch_size": 10,
   },
   "trainer": {
     "num_epochs": 150,
     "grad_norm": 5.0,
     "patience" : 10,
-    "cuda_device" : 0,
-    "validation_metric": "+coref_f1",
+    "cuda_device" : 1,
+    "validation_metric": "+relation_f1",
     "learning_rate_scheduler": {
       "type": "reduce_on_plateau",
       "factor": 0.5,

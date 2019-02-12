@@ -228,7 +228,7 @@ class DyGIE(Model):
 
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        metrics_coref = self._coref.get_metrics(reset=reset)
+        metrics_relation = self._relation.get_metrics(reset=reset)
         # TODO(dwadden) add the metrics for the other tasks.
 
-        return metrics_coref
+        return metrics_relation
