@@ -85,17 +85,28 @@
         "spans_per_word": 0.4,
       },
       "relation": {
+        "mention_feedforward": {
+          "input_dim": 1220,
+          "num_layers": 2,
+          "hidden_dims": 150,
+          "activations": "relu",
+          "dropout": 0.2
+        },
         "relation_feedforward": {
-          "input_dim": 3680,
+          "input_dim": 3660, // 3660 rather than 3680 like for coref, because no distance embedding.
           "num_layers": 2,
           "hidden_dims": 150,
           "activations": "relu",
           "dropout": 0.2
         },
         "spans_per_word": 0.4,
+          "initializer": [
+              [".*linear_layers.*weight", {"type": "xavier_normal"}],
+              [".*scorer._module.weight", {"type": "xavier_normal"}],
+          ]
       }
     },
-    "initializer": [
+      "initializer": [
         ["_span_width_embedding.weight", {"type": "xavier_normal"}],
         ["_context_layer._module.weight_ih.*", {"type": "xavier_normal"}],
         ["_context_layer._module.weight_hh.*", {"type": "orthogonal"}]
