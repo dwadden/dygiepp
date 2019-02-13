@@ -23,7 +23,7 @@
       "token_embedders": {
         "tokens": {
           "type": "embedding",
-          "pretrained_file": "https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.300d.txt.gz",
+          // "pretrained_file": "https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.300d.txt.gz",
           "embedding_dim": 300,
           "trainable": false
         },
@@ -128,7 +128,7 @@
     "grad_norm": 5.0,
     "patience" : 10,
     "cuda_device" : 3,
-    "validation_metric": "+relation_f1",
+    "validation_metric": "+coref_f1",
     "learning_rate_scheduler": {
       "type": "reduce_on_plateau",
       "factor": 0.5,

@@ -48,15 +48,12 @@ class RelationExtractor(Model):
         self._mention_pruner = Pruner(feedforward_scorer)
         # Output dim is num labels - 1 since we set the score on the null label to 0.
         self._relation_scorer = TimeDistributed(torch.nn.Linear(
-            relation_feedforward.get_output_dim(), self._n_labels - 1))
+            relation_feedforward.get_output_dim(), self._n_labels))
 
         self._spans_per_word = spans_per_word
 
         # TODO(dwadden) Add code to compute relation F1.
         self._relation_metrics = RelationMetrics()
-
-        # TODO(dwadden) It needs to be enforced that this is 0. Should this be in the config file?
-        self._null_label = ""
 
         initializer(self)
 
@@ -91,7 +88,9 @@ class RelationExtractor(Model):
         span_pair_embeddings = self._compute_span_pair_embeddings(top_span_embeddings)
         relation_scores = self._compute_relation_scores(span_pair_embeddings,
                                                         top_span_mention_scores)
+        # Subtract 1 so that the "null" relation corresponds to -1.
         _, predicted_relations = relation_scores.max(3)
+        predicted_relations -= 1
         output_dict = {"top_spans": top_spans,
                        "predicted_relations": predicted_relations}
 
@@ -147,13 +146,13 @@ class RelationExtractor(Model):
         top_spans = [tuple(x) for x in top_spans.tolist()]
         predicted_label_ixs = predicted_relations.view(-1).tolist()
         predicted_labels = [self.vocab.get_token_from_index(x, namespace="relation_labels")
-                            for x in predicted_label_ixs]
+                            if x >= 0 else None for x in predicted_label_ixs]
 
         # Iterate over all span pairs and labels. Record the span if the label isn't null.
         res = {}
         for (span_1, span_2), predicted_label in zip(itertools.product(top_spans, top_spans),
                                                      predicted_labels):
-            if predicted_label != self._null_label:
+            if predicted_label is not None:
                 res[(span_1, span_2)] = predicted_label
 
         return res
@@ -225,8 +224,10 @@ class RelationExtractor(Model):
         identity_mask = shared.batch_identity(
             batch_size, mat_size, dtype=torch.uint8, device=relation_mask.device)
         mask = (~identity_mask & relation_mask).view(-1)
-        scores_flat = relation_scores.view(-1, self._n_labels)[mask]
-        labels_flat = relation_labels.view(-1)[mask]
+        # Need to add one for the null class.
+        scores_flat = relation_scores.view(-1, self._n_labels + 1)[mask]
+        # Need to add 1 so that the null label is 0, to line up with indices into prediction matrix.
+        labels_flat = relation_labels.view(-1)[mask] + 1
         # Compute cross-entropy loss.
         loss = F.cross_entropy(scores_flat, labels_flat)
         return loss
