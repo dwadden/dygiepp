@@ -200,11 +200,19 @@ class IEJsonReader(DatasetReader):
         coref_label_field = SequenceLabelField(span_coref_labels, span_field,
                                                label_namespace="coref_labels")
 
-        # Generate fields for relations.
+        # Generate fields for relations. Only record the non-null relations.
         n_spans = len(spans)
-        indices = [(i, j) for i in range(n_spans) for j in range(n_spans)]
         span_tuples = [(span.span_start, span.span_end) for span in spans]
-        relations = [relation_dict[(span_tuples[i], span_tuples[j])] for (i,j) in indices]
+        candidate_indices = [(i, j) for i in range(n_spans) for j in range(n_spans)]
+
+        relations = []
+        indices = []
+        for i, j in candidate_indices:
+            span_pair = (span_tuples[i], span_tuples[j])
+            label = relation_dict[span_pair]
+            if label:
+                indices.append((i, j))
+                relations.append(label)
 
         relation_label_field = AdjacencyField(
             indices=indices, sequence_field=span_field, labels=relations,
