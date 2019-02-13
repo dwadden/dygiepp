@@ -13,7 +13,7 @@ from allennlp.modules import FeedForward
 from allennlp.modules import Seq2SeqEncoder, TimeDistributed, TextFieldEmbedder, Pruner
 from allennlp.modules.span_extractors import SelfAttentiveSpanExtractor, EndpointSpanExtractor
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
-from allennlp.training.metrics import MentionRecall, ConllCorefScores
+from allennlp.training.metrics import ConllCorefScores, F1Measure
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -62,7 +62,7 @@ class NERTagger(Model):
             TimeDistributed(mention_feedforward),
             TimeDistributed(torch.nn.Linear(
                                 mention_feedforward.get_output_dim(),
-                                self.number_of_ner_classes)
+                                self.number_of_ner_classes - 1)
             )
         )
 
@@ -71,8 +71,8 @@ class NERTagger(Model):
         # TODO(dwadden) Add this.
         #initializer(self)
 
-        #self._mention_recall = mentionrecall()
         #self._conll_coref_scores = conllcorefscores()
+        self._ner_metrics = [F1Measure(i) for i in range(self.number_of_ner_classes)]
 
     @overrides
     def forward(self,  # type: ignore
@@ -167,6 +167,9 @@ class NERTagger(Model):
         #                                                      valid_antecedent_log_mask)
 
         ner_scores = self.final_network(span_embeddings)
+        dummy_dims = [el for el in ner_scores.size()]  
+        dummy_dims[-1] = 1
+        ner_scores = torch.cat((torch.zeros(dummy_dims), ner_scores), -1)
 
         #ner_scores = self._compute_ner_scores(span_embeddings,
         #                                      top_span_mention_scores)
@@ -179,13 +182,18 @@ class NERTagger(Model):
         # Subtract one here because index 0 is the "no antecedent" class,
         # so this makes the indices line up with actual spans if the prediction
         # is greater than -1.
-        predicted_ner -= 1
+        #predicted_ner -= 1
 
         top_spans = spans
         output_dict = {"top_spans": top_spans,
                        "predicted_ner": predicted_ner}
 
         if ner_labels is not None:
+            print('----------------ner labels----------')
+            print(ner_labels.min())
+            print(ner_labels.max())
+            print('----------------ner labels----------')
+            #import ipdb; ipdb.set_trace()
             #ner_labels = ner_labels.resize(2415)
 
 
@@ -193,10 +201,6 @@ class NERTagger(Model):
             #pruned_gold_labels = util.batched_index_select(ner_labels.unsqueeze(-1),
             #                                               top_span_indices,
             #                                               flat_top_span_indices)
-
-            #antecedent_labels = util.flattened_index_select(pruned_gold_labels,
-            #                                                valid_antecedent_indices).squeeze(-1)
-            #antecedent_labels += valid_antecedent_log_mask.long()
 
             # Compute labels.
             # Shape: (batch_size, num_spans_to_keep, max_antecedents + 1)
@@ -213,36 +217,25 @@ class NERTagger(Model):
             # clustering as we don't mind which antecedent is predicted, so long as they are in
             #  the same coreference cluster.
 
-            #import ipdb; ipdb.set_trace()
             #ner_log_probs = util.masked_log_softmax(ner_scores, top_span_mask)
             #correct_antecedent_log_probs = ner_log_probs# + gold_antecedent_labels.log()
             #negative_marginal_log_likelihood = -util.logsumexp(correct_antecedent_log_probs).sum()
 
-            #self._mention_recall(top_spans, metadata)
             #self._conll_coref_scores(top_spans, valid_antecedent_indices, predicted_antecedents, metadata)
 
+            for metric in self._ner_metrics:
+                metric(ner_scores, ner_labels, span_mask)
             loss = util.sequence_cross_entropy_with_logits(ner_scores, ner_labels, span_mask)
             output_dict["loss"] = loss
-            #output_dict["loss"] = negative_marginal_log_likelihood
 
         if metadata is not None:
             output_dict["document"] = [x["sentence"] for x in metadata]
         return output_dict
 
 
-#        if tags is not None:
-#            loss = sequence_cross_entropy_with_logits(logits, tags, mask)
-#            for metric in self.metrics.values():
-#                metric(logits, tags, mask.float())
-#            output_dict["loss"] = loss
-#
-#        if metadata is not None:
-#            output_dict["words"] = [x["words"] for x in metadata]
-#        return output_dict
-
-
     @overrides
     def decode(self, output_dict: Dict[str, torch.Tensor]):
+        pass
         """
         Converts the list of spans and predicted antecedent indices into clusters
         of spans for each element in the batch.
@@ -322,214 +315,10 @@ class NERTagger(Model):
 
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        pass
-        #mention_recall = self._mention_recall.get_metric(reset)
-        #coref_precision, coref_recall, coref_f1 = self._conll_coref_scores.get_metric(reset)
-
-        #return {"coref_precision": coref_precision,
-        #        "coref_recall": coref_recall,
-        #        "coref_f1": coref_f1}
-                #"mention_recall": mention_recall}
-
-    @staticmethod
-    def _generate_valid_antecedents(num_spans_to_keep: int,
-                                    max_antecedents: int,
-                                    device: int) -> Tuple[torch.IntTensor,
-                                                          torch.IntTensor,
-                                                          torch.FloatTensor]:
-        """
-        This method generates possible antecedents per span which survived the pruning
-        stage. This procedure is `generic across the batch`. The reason this is the case is
-        that each span in a batch can be coreferent with any previous span, but here we
-        are computing the possible `indices` of these spans. So, regardless of the batch,
-        the 1st span _cannot_ have any antecedents, because there are none to select from.
-        Similarly, each element can only predict previous spans, so this returns a matrix
-        of shape (num_spans_to_keep, max_antecedents), where the (i,j)-th index is equal to
-        (i - 1) - j if j <= i, or zero otherwise.
-
-        Parameters
-        ----------
-        num_spans_to_keep : ``int``, required.
-            The number of spans that were kept while pruning.
-        max_antecedents : ``int``, required.
-            The maximum number of antecedent spans to consider for every span.
-        device: ``int``, required.
-            The CUDA device to use.
-
-        Returns
-        -------
-        valid_antecedent_indices : ``torch.IntTensor``
-            The indices of every antecedent to consider with respect to the top k spans.
-            Has shape ``(num_spans_to_keep, max_antecedents)``.
-        valid_antecedent_offsets : ``torch.IntTensor``
-            The distance between the span and each of its antecedents in terms of the number
-            of considered spans (i.e not the word distance between the spans).
-            Has shape ``(1, max_antecedents)``.
-        valid_antecedent_log_mask : ``torch.FloatTensor``
-            The logged mask representing whether each antecedent span is valid. Required since
-            different spans have different numbers of valid antecedents. For example, the first
-            span in the document should have no valid antecedents.
-            Has shape ``(1, num_spans_to_keep, max_antecedents)``.
-        """
-        # Shape: (num_spans_to_keep, 1)
-        target_indices = util.get_range_vector(num_spans_to_keep, device).unsqueeze(1)
-
-        # Shape: (1, max_antecedents)
-        valid_antecedent_offsets = (util.get_range_vector(max_antecedents, device) + 1).unsqueeze(0)
-
-        # This is a broadcasted subtraction.
-        # Shape: (num_spans_to_keep, max_antecedents)
-        raw_antecedent_indices = target_indices - valid_antecedent_offsets
-
-        # In our matrix of indices, the upper triangular part will be negative
-        # because the offsets will be > the target indices. We want to mask these,
-        # because these are exactly the indices which we don't want to predict, per span.
-        # We're generating a logspace mask here because we will eventually create a
-        # distribution over these indices, so we need the 0 elements of the mask to be -inf
-        # in order to not mess up the normalisation of the distribution.
-        # Shape: (1, num_spans_to_keep, max_antecedents)
-        valid_antecedent_log_mask = (raw_antecedent_indices >= 0).float().unsqueeze(0).log()
-
-        # Shape: (num_spans_to_keep, max_antecedents)
-        valid_antecedent_indices = F.relu(raw_antecedent_indices.float()).long()
-        return valid_antecedent_indices, valid_antecedent_offsets, valid_antecedent_log_mask
-
-    def _compute_span_pair_embeddings(self,
-                                      top_span_embeddings: torch.FloatTensor,
-                                      antecedent_embeddings: torch.FloatTensor,
-                                      antecedent_offsets: torch.FloatTensor):
-        """
-        Computes an embedding representation of pairs of spans for the pairwise scoring function
-        to consider. This includes both the original span representations, the element-wise
-        similarity of the span representations, and an embedding representation of the distance
-        between the two spans.
-
-        Parameters
-        ----------
-        top_span_embeddings : ``torch.FloatTensor``, required.
-            Embedding representations of the top spans. Has shape
-            (batch_size, num_spans_to_keep, embedding_size).
-        antecedent_embeddings : ``torch.FloatTensor``, required.
-            Embedding representations of the antecedent spans we are considering
-            for each top span. Has shape
-            (batch_size, num_spans_to_keep, max_antecedents, embedding_size).
-        antecedent_offsets : ``torch.IntTensor``, required.
-            The offsets between each top span and its antecedent spans in terms
-            of spans we are considering. Has shape (1, max_antecedents).
-
-        Returns
-        -------
-        span_pair_embeddings : ``torch.FloatTensor``
-            Embedding representation of the pair of spans to consider. Has shape
-            (batch_size, num_spans_to_keep, max_antecedents, embedding_size)
-        """
-        # Shape: (batch_size, num_spans_to_keep, max_antecedents, embedding_size)
-        target_embeddings = top_span_embeddings.unsqueeze(2).expand_as(antecedent_embeddings)
-
-        # Shape: (1, max_antecedents, embedding_size)
-        antecedent_distance_embeddings = self._distance_embedding(
-                util.bucket_values(antecedent_offsets,
-                                   num_total_buckets=self._num_distance_buckets))
-
-        # Shape: (1, 1, max_antecedents, embedding_size)
-        antecedent_distance_embeddings = antecedent_distance_embeddings.unsqueeze(0)
-
-        expanded_distance_embeddings_shape = (antecedent_embeddings.size(0),
-                                              antecedent_embeddings.size(1),
-                                              antecedent_embeddings.size(2),
-                                              antecedent_distance_embeddings.size(-1))
-        # Shape: (batch_size, num_spans_to_keep, max_antecedents, embedding_size)
-        antecedent_distance_embeddings = antecedent_distance_embeddings.expand(*expanded_distance_embeddings_shape)
-
-        # Shape: (batch_size, num_spans_to_keep, max_antecedents, embedding_size)
-        span_pair_embeddings = torch.cat([target_embeddings,
-                                          antecedent_embeddings,
-                                          antecedent_embeddings * target_embeddings,
-                                          antecedent_distance_embeddings], -1)
-        return span_pair_embeddings
-
-    @staticmethod
-    def _compute_antecedent_gold_labels(top_ner_labels: torch.IntTensor,
-                                        antecedent_labels: torch.IntTensor):
-        """
-        Generates a binary indicator for every pair of spans. This label is one if and
-        only if the pair of spans belong to the same cluster. The labels are augmented
-        with a dummy antecedent at the zeroth position, which represents the prediction
-        that a span does not have any antecedent.
-
-        Parameters
-        ----------
-        top_coref_labels : ``torch.IntTensor``, required.
-            The cluster id label for every span. The id is arbitrary,
-            as we just care about the clustering. Has shape (batch_size, num_spans_to_keep).
-        antecedent_labels : ``torch.IntTensor``, required.
-            The cluster id label for every antecedent span. The id is arbitrary,
-            as we just care about the clustering. Has shape
-            (batch_size, num_spans_to_keep, max_antecedents).
-
-        Returns
-        -------
-        pairwise_labels_with_dummy_label : ``torch.FloatTensor``
-            A binary tensor representing whether a given pair of spans belong to
-            the same cluster in the gold clustering.
-            Has shape (batch_size, num_spans_to_keep, max_antecedents + 1).
-
-        """
-        # Shape: (batch_size, num_spans_to_keep, max_antecedents)
-        target_labels = top_coref_labels.expand_as(antecedent_labels)
-        same_cluster_indicator = (target_labels == antecedent_labels).float()
-        non_dummy_indicator = (target_labels >= 0).float()
-        pairwise_labels = same_cluster_indicator * non_dummy_indicator
-
-        # Shape: (batch_size, num_spans_to_keep, 1)
-        dummy_labels = (1 - pairwise_labels).prod(-1, keepdim=True)
-
-        # Shape: (batch_size, num_spans_to_keep, max_antecedents + 1)
-        pairwise_labels_with_dummy_label = torch.cat([dummy_labels, pairwise_labels], -1)
-        return pairwise_labels_with_dummy_label
-
-    def _compute_ner_scores(self,
-                            span_embeddings: torch.FloatTensor,
-                            top_span_mention_scores: torch.FloatTensor) -> torch.FloatTensor:
-        """
-        Computes scores for every pair of spans. Additionally, a dummy label is included,
-        representing the decision that the span is not coreferent with anything. For the dummy
-        label, the score is always zero. For the true antecedent spans, the score consists of
-        the pairwise antecedent score and the unary mention scores for the span and its
-        antecedent. The factoring allows the model to blame many of the absent links on bad
-        spans, enabling the pruning strategy used in the forward pass.
-
-        Parameters
-        ----------
-        pairwise_embeddings: ``torch.FloatTensor``, required.
-            Embedding representations of pairs of spans. Has shape
-            (batch_size, num_spans_to_keep, max_antecedents, encoding_dim)
-        top_span_mention_scores: ``torch.FloatTensor``, required.
-            Mention scores for every span. Has shape
-            (batch_size, num_spans_to_keep, max_antecedents).
-        antecedent_mention_scores: ``torch.FloatTensor``, required.
-            Mention scores for every antecedent. Has shape
-            (batch_size, num_spans_to_keep, max_antecedents).
-        antecedent_log_mask: ``torch.FloatTensor``, required.
-            The log of the mask for valid antecedents.
-
-        Returns
-        -------
-        coreference_scores: ``torch.FloatTensor``
-            A tensor of shape (batch_size, num_spans_to_keep, max_antecedents + 1),
-            representing the unormalised score for each (span, antecedent) pair
-            we considered.
-
-        """
-        # Shape: (batch_size, num_spans_to_keep, max_antecedents)
-        #antecedent_scores = self._antecedent_scorer(
-        #        self._antecedent_feedforward(span_embeddings)).squeeze(-1)
-        #antecedent_scores += top_span_mention_scores + antecedent_mention_scores
-
-        # Shape: (batch_size, num_spans_to_keep, 1)
-        shape = [top_span_mention_scores.size(0), top_span_mention_scores.size(1), 1]
-        dummy_scores = top_span_mention_scores.new_zeros(*shape)
-
-        # Shape: (batch_size, num_spans_to_keep, max_antecedents + 1)
-        ner_scores = torch.cat([dummy_scores, top_span_mention_scores], -1)
-        return ner_scores
+        metrics = [metric.get_metric(reset) for metric in self._ner_metrics]
+        print('---------metrics---------')
+        print(metrics)
+        print('---------metrics---------')
+        return {"ner_precision": sum(el[0] for el in metrics)/len(metrics),
+                "ner_recall": sum(el[1] for el in metrics)/len(metrics),
+                "ner_f1": sum(el[2] for el in metrics)/len(metrics)}

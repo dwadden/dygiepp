@@ -56,6 +56,9 @@ class DyGIE(Model):
                  modules,  # TODO(dwadden) Add type.
                  feature_size: int,
                  max_span_width: int,
+                 loss_weights_coref: float,
+                 loss_weights_ner: float,
+                 loss_weights_relation: float,
                  lexical_dropout: float = 0.2,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
@@ -64,6 +67,11 @@ class DyGIE(Model):
         self._text_field_embedder = text_field_embedder
         self._context_layer = context_layer
 
+        self.loss_weights = {
+                'coref': loss_weights_coref,
+                'ner': loss_weights_ner,
+                'relation': loss_weights_relation,
+        }
 
         # TODO(dwadden) Figure out the parameters that need to get passed in.
         self._coref = CorefResolver.from_params(vocab=vocab,
@@ -92,6 +100,7 @@ class DyGIE(Model):
         else:
             self._lexical_dropout = lambda x: x
         initializer(self)
+        #import ipdb; ipdb.set_trace()
 
     @overrides
     def forward(self,
@@ -138,17 +147,44 @@ class DyGIE(Model):
         # Shape: (batch_size, num_spans, emebedding_size + 2 * encoding_dim + feature_size)
         span_embeddings = torch.cat([endpoint_span_embeddings, attended_span_embeddings], -1)
 
+        #import ipdb; ipdb.set_trace()
         # Make calls out to the modules to get results.
-        output_coref = self._coref(
-            spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
-        output_ner = self._ner(
-            spans, span_mask, span_embeddings, sentence_lengths, max_sentence_length, ner_labels, metadata)
-        output_relation = self._relation(
-            spans, span_mask, span_embeddings, sentence_lengths, max_sentence_length, relation_labels, metadata)
+
+
+
+        output_coref = {'loss': 0}
+        output_ner = {'loss': 0}
+        output_relation = {'loss': 0}
+
+        if self.loss_weights['coref']>0:
+            output_coref = self._coref(
+                spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
+
+        if self.loss_weights['ner']>0:
+            output_ner = self._ner(
+                spans, span_mask, span_embeddings, sentence_lengths, max_sentence_length, ner_labels, metadata)
+
+        if self.loss_weights['relation']>0:
+            output_relation = self._relation(
+                spans, span_mask, span_embeddings, sentence_lengths, max_sentence_length, relation_labels, metadata)
 
         # TODO(dwadden) ... and now what?
-        return output_coref
 
+        loss = (
+                self.loss_weights['coref'] * output_coref['loss']
+              + self.loss_weights['ner'] * output_ner['loss']
+              + self.loss_weights['relation'] * output_relation['loss']
+        )
+
+        output_dict = dict(
+                    list(output_coref.items())
+                  + list(output_ner.items())
+                  + list(output_relation.items())
+        )
+
+        output_dict['loss'] = loss
+
+        return output_dict
 
     @overrides
     def decode(self, output_dict: Dict[str, torch.Tensor]):
@@ -229,6 +265,8 @@ class DyGIE(Model):
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         metrics_coref = self._coref.get_metrics(reset=reset)
-        # TODO(dwadden) add the metrics for the other tasks.
-
-        return metrics_coref
+        metrics_ner = self._ner.get_metrics(reset=reset)
+        metrics_relation = self._relation.get_metrics(reset=reset)
+        #import ipdb; ipdb.set_trace()
+        #return dict(list(metrics_coref.items()) + list(metrics_ner.items()))
+        return dict(list(metrics_coref.items()) + list(metrics_ner.items()) + list(metrics_relation.items()))
