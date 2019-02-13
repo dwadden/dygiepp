@@ -66,19 +66,26 @@ class TestIEJsonReader(AllenNlpTestCase):
         instance = self.instances[5]
         relation_field = instance["relation_labels"]
         span_list = relation_field.sequence_field.field_list
-        for label, (span1, span2) in zip(relation_field.labels,
-                                         itertools.product(span_list, span_list)):
-            if (span1.span_start == 19 and span1.span_end == 20 and
-                span2.span_start == 22 and span2.span_end == 24):
-                assert label == "USED-FOR"
-            else:
-                assert label == ""
+        # There should be one relation in this sentence,
+        indices = relation_field.indices
+        labels = relation_field.labels
+        assert len(indices) == len(labels) == 1
+        ix = indices[0]
+        label = labels[0]
+        # Check that the relation refers to the correct spans
+        span1 = span_list[ix[0]]
+        span2 = span_list[ix[1]]
+        assert ((span1.span_start == 19 and span1.span_end == 20 and
+                 span2.span_start == 22 and span2.span_end == 24))
+        # Check that the label's correct.
+        assert label == "USED-FOR"
 
     def test_vocab_size_correct(self):
         vocab = Vocabulary.from_instances(self.instances)
-        # There are 4 unique NER labels and 6 relation labels in the text fixture doc. Need to add 1
-        # for the null label.
+        # There are 4 unique NER labels and 6 relation labels in the text fixture doc. For the ner
+        # labels, there is an extra category for the null label. For the relation labels, there
+        # isn't. This is due to the way their respective `Field`s represent labels.
         assert vocab.get_vocab_size("ner_labels") == 5
-        assert vocab.get_vocab_size("relation_labels") == 7
+        assert vocab.get_vocab_size("relation_labels") == 6
         # For numeric labels, vocab size is 0.
         assert vocab.get_vocab_size("coref_labels") == 0

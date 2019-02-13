@@ -22,33 +22,33 @@
     "text_field_embedder": {
       "token_embedders": {
         "tokens": {
-            "type": "embedding",
-            # "pretrained_file": "https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.300d.txt.gz",
-            "embedding_dim": 300,
-            "trainable": false
+          "type": "embedding",
+          // "pretrained_file": "https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.300d.txt.gz",
+          "embedding_dim": 300,
+          "trainable": false
         },
         "token_characters": {
-            "type": "character_encoding",
-            "embedding": {
+          "type": "character_encoding",
+          "embedding": {
             "num_embeddings": 262,
             "embedding_dim": 16
-            },
-            "encoder": {
+          },
+          "encoder": {
             "type": "cnn",
             "embedding_dim": 16,
             "num_filters": 100,
             "ngram_filter_sizes": [5]
-            }
+          }
         }
       }
     },
     "context_layer": {
-        "type": "lstm",
-        "bidirectional": true,
-        "input_size": 400,
-        "hidden_size": 200,
-        "num_layers": 1,
-        "dropout": 0.2
+      "type": "lstm",
+      "bidirectional": true,
+      "input_size": 400,
+      "hidden_size": 200,
+      "num_layers": 1,
+      "dropout": 0.2
     },
     "modules": {
       "coref": {
@@ -85,20 +85,31 @@
         "spans_per_word": 0.4,
       },
       "relation": {
+        "mention_feedforward": {
+          "input_dim": 1220,
+          "num_layers": 2,
+          "hidden_dims": 150,
+          "activations": "relu",
+          "dropout": 0.2
+        },
         "relation_feedforward": {
-          "input_dim": 3680,
+          "input_dim": 3660, // 3660 rather than 3680 like for coref, because no distance embedding.
           "num_layers": 2,
           "hidden_dims": 150,
           "activations": "relu",
           "dropout": 0.2
         },
         "spans_per_word": 0.4,
+        "initializer": [
+          [".*linear_layers.*weight", {"type": "xavier_normal"}],
+          [".*scorer._module.weight", {"type": "xavier_normal"}],
+        ]
       }
     },
     "initializer": [
-        ["_span_width_embedding.weight", {"type": "xavier_normal"}],
-        ["_context_layer._module.weight_ih.*", {"type": "xavier_normal"}],
-        ["_context_layer._module.weight_hh.*", {"type": "orthogonal"}]
+      ["_span_width_embedding.weight", {"type": "xavier_normal"}],
+      ["_context_layer._module.weight_ih.*", {"type": "xavier_normal"}],
+      ["_context_layer._module.weight_hh.*", {"type": "orthogonal"}]
     ],
     "lexical_dropout": 0.5,
     "feature_size": 20,
@@ -110,13 +121,13 @@
   },
   "validation_iterator": {
     "type": "document",
-    "batch_size": -1,
+    "batch_size": 10,
   },
   "trainer": {
-    "num_epochs": 150,
+    "num_epochs": 25,
     "grad_norm": 5.0,
     "patience" : 10,
-    // "cuda_device" : [0, 1, 2],
+    "cuda_device" : 3,
     "validation_metric": "+coref_f1",
     "learning_rate_scheduler": {
       "type": "reduce_on_plateau",
