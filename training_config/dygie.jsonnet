@@ -111,6 +111,11 @@
       ["_context_layer._module.weight_ih.*", {"type": "xavier_normal"}],
       ["_context_layer._module.weight_hh.*", {"type": "orthogonal"}]
     ],
+    "loss_weights": {           // TODO(dwadden) These are getting passed in as ints.
+      "ner": 1.0,
+      "coref": 1.0,
+      "relation": 1.0
+    },
     "lexical_dropout": 0.5,
     "feature_size": 20,
     "max_span_width": 10,

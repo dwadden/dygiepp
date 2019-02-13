@@ -56,9 +56,7 @@ class DyGIE(Model):
                  modules,  # TODO(dwadden) Add type.
                  feature_size: int,
                  max_span_width: int,
-                 loss_weights_coref: float,
-                 loss_weights_ner: float,
-                 loss_weights_relation: float,
+                 loss_weights,  # TOOD(dwadden) Add type.
                  lexical_dropout: float = 0.2,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
@@ -67,11 +65,7 @@ class DyGIE(Model):
         self._text_field_embedder = text_field_embedder
         self._context_layer = context_layer
 
-        self.loss_weights = {
-                'coref': loss_weights_coref,
-                'ner': loss_weights_ner,
-                'relation': loss_weights_relation,
-        }
+        self._loss_weights = loss_weights.as_dict()
 
         # TODO(dwadden) Figure out the parameters that need to get passed in.
         self._coref = CorefResolver.from_params(vocab=vocab,
@@ -156,24 +150,24 @@ class DyGIE(Model):
         output_ner = {'loss': 0}
         output_relation = {'loss': 0}
 
-        if self.loss_weights['coref']>0:
+        if self._loss_weights['coref']>0:
             output_coref = self._coref(
                 spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
 
-        if self.loss_weights['ner']>0:
+        if self._loss_weights['ner']>0:
             output_ner = self._ner(
                 spans, span_mask, span_embeddings, sentence_lengths, max_sentence_length, ner_labels, metadata)
 
-        if self.loss_weights['relation']>0:
+        if self._loss_weights['relation']>0:
             output_relation = self._relation(
                 spans, span_mask, span_embeddings, sentence_lengths, max_sentence_length, relation_labels, metadata)
 
         # TODO(dwadden) ... and now what?
 
         loss = (
-                self.loss_weights['coref'] * output_coref['loss']
-              + self.loss_weights['ner'] * output_ner['loss']
-              + self.loss_weights['relation'] * output_relation['loss']
+                self._loss_weights['coref'] * output_coref['loss']
+              + self._loss_weights['ner'] * output_ner['loss']
+              + self._loss_weights['relation'] * output_relation['loss']
         )
 
         output_dict = dict(
@@ -183,6 +177,8 @@ class DyGIE(Model):
         )
 
         output_dict['loss'] = loss
+
+        import ipdb; ipdb.set_trace()
 
         return output_dict
 
