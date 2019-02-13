@@ -51,7 +51,7 @@ class NERTagger(Model):
         #This should be passed as one of the parameters
         self.number_of_ner_classes = vocab.get_vocab_size('ner_labels')
 
-        # TODO(dwadden) Do we want TimeDistributed for this one? Ulme - Yes, I think we do 
+        # TODO(dwadden) Do we want TimeDistributed for this one? Ulme - Yes, I think we do
         #feedforward_scorer = torch.nn.Sequential(
         #    TimeDistributed(mention_feedforward),
         #    TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1))
@@ -167,9 +167,9 @@ class NERTagger(Model):
         #                                                      valid_antecedent_log_mask)
 
         ner_scores = self.final_network(span_embeddings)
-        dummy_dims = [el for el in ner_scores.size()]  
-        dummy_dims[-1] = 1
-        ner_scores = torch.cat((torch.zeros(dummy_dims), ner_scores), -1)
+        dummy_dims = [ner_scores.size(0), ner_scores.size(1), 1]
+        dummy_scores = ner_scores.new_zeros(*dummy_dims)
+        ner_scores = torch.cat((dummy_scores, ner_scores), -1)
 
         #ner_scores = self._compute_ner_scores(span_embeddings,
         #                                      top_span_mention_scores)
