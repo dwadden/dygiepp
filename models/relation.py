@@ -71,7 +71,9 @@ class RelationExtractor(Model):
         """
         num_spans = spans.size(1)  # Max number of spans for the minibatch.
 
-        num_spans_to_keep = int(math.floor(self._spans_per_word * max_sentence_length))
+        # Keep different number of spans for each minibatch entry.
+        num_spans_to_keep = torch.floor(sentence_lengths.float() * self._spans_per_word).long()
+
         (top_span_embeddings, top_span_mask,
          top_span_indices, top_span_mention_scores) = self._mention_pruner(span_embeddings,
                                                                            span_mask,
@@ -89,8 +91,9 @@ class RelationExtractor(Model):
         relation_scores = self._compute_relation_scores(span_pair_embeddings,
                                                         top_span_mention_scores)
         # Subtract 1 so that the "null" relation corresponds to -1.
-        _, predicted_relations = relation_scores.max(3)
+        _, predicted_relations = relation_scores.max(-1)
         predicted_relations -= 1
+
         output_dict = {"top_spans": top_spans,
                        "predicted_relations": predicted_relations}
 
@@ -107,9 +110,9 @@ class RelationExtractor(Model):
                 relation_scores, gold_relations, relation_mask)
 
             # Compute F1.
-            predicted_relations = self.decode(output_dict)
-            assert len(predicted_relations) == len(metadata)  # Make sure length of predictions is right.
-            self._relation_metrics(predicted_relations, metadata)
+            predictions = self.decode(output_dict)
+            assert len(predictions) == len(metadata)  # Make sure length of predictions is right.
+            self._relation_metrics(predictions, metadata)
 
             output_dict["loss"] = cross_entropy
 
