@@ -50,12 +50,6 @@ class NERTagger(Model):
 
         self.number_of_ner_classes = vocab.get_vocab_size('ner_labels')
 
-        #feedforward_scorer = torch.nn.Sequential(
-        #    TimeDistributed(mention_feedforward),
-        #    TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1))
-        #)
-        #self._mention_pruner = Pruner(feedforward_scorer)
-
         self.final_network = torch.nn.Sequential(
             TimeDistributed(mention_feedforward),
             TimeDistributed(torch.nn.Linear(
@@ -136,15 +130,10 @@ class NERTagger(Model):
         self._ner_avg_metrics._true_negatives = sum(metric._true_negatives for metric in self._ner_metrics)
         self._ner_avg_metrics._false_negatives = sum(metric._false_negatives for metric in self._ner_metrics)
         ner_precision, ner_recall, ner_f1 = self._ner_avg_metrics.get_metric(reset)
-        print('---------metrics---------')
-        print(metrics)
-        print('---------metrics---------')
-        print(ner_precision, ner_recall, ner_f1)
-        print('-------XXMetricsXX-------')
         
         return {"ner_precision": ner_precision,
                 "ner_recall": ner_recall,
                 "ner_f1": ner_f1}
-        return {"ner_precision": sum(el[0] for el in metrics)/len(metrics),
-                "ner_recall": sum(el[1] for el in metrics)/len(metrics),
-                "ner_f1": sum(el[2] for el in metrics)/len(metrics)}
+        #return {"ner_precision": sum(el[0] for el in metrics)/len(metrics),
+        #        "ner_recall": sum(el[1] for el in metrics)/len(metrics),
+        #        "ner_f1": sum(el[2] for el in metrics)/len(metrics)}
