@@ -178,8 +178,6 @@ class DyGIE(Model):
 
         output_dict['loss'] = loss
 
-        import ipdb; ipdb.set_trace()
-
         return output_dict
 
     @overrides
