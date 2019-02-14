@@ -202,60 +202,6 @@ class DyGIE(Model):
         """
         pass
 
-    def _compute_span_pair_embeddings(self,
-                                      top_span_embeddings: torch.FloatTensor,
-                                      antecedent_embeddings: torch.FloatTensor,
-                                      antecedent_offsets: torch.FloatTensor):
-        """
-        Computes an embedding representation of pairs of spans for the pairwise scoring function
-        to consider. This includes both the original span representations, the element-wise
-        similarity of the span representations, and an embedding representation of the distance
-        between the two spans.
-
-        Parameters
-        ----------
-        top_span_embeddings : ``torch.FloatTensor``, required.
-            Embedding representations of the top spans. Has shape
-            (batch_size, num_spans_to_keep, embedding_size).
-        antecedent_embeddings : ``torch.FloatTensor``, required.
-            Embedding representations of the antecedent spans we are considering
-            for each top span. Has shape
-            (batch_size, num_spans_to_keep, max_antecedents, embedding_size).
-        antecedent_offsets : ``torch.IntTensor``, required.
-            The offsets between each top span and its antecedent spans in terms
-            of spans we are considering. Has shape (1, max_antecedents).
-
-        Returns
-        -------
-        span_pair_embeddings : ``torch.FloatTensor``
-            Embedding representation of the pair of spans to consider. Has shape
-            (batch_size, num_spans_to_keep, max_antecedents, embedding_size)
-        """
-        # Shape: (batch_size, num_spans_to_keep, max_antecedents, embedding_size)
-        target_embeddings = top_span_embeddings.unsqueeze(2).expand_as(antecedent_embeddings)
-
-        # Shape: (1, max_antecedents, embedding_size)
-        antecedent_distance_embeddings = self._distance_embedding(
-                util.bucket_values(antecedent_offsets,
-                                   num_total_buckets=self._num_distance_buckets))
-
-        # Shape: (1, 1, max_antecedents, embedding_size)
-        antecedent_distance_embeddings = antecedent_distance_embeddings.unsqueeze(0)
-
-        expanded_distance_embeddings_shape = (antecedent_embeddings.size(0),
-                                              antecedent_embeddings.size(1),
-                                              antecedent_embeddings.size(2),
-                                              antecedent_distance_embeddings.size(-1))
-        # Shape: (batch_size, num_spans_to_keep, max_antecedents, embedding_size)
-        antecedent_distance_embeddings = antecedent_distance_embeddings.expand(*expanded_distance_embeddings_shape)
-
-        # Shape: (batch_size, num_spans_to_keep, max_antecedents, embedding_size)
-        span_pair_embeddings = torch.cat([target_embeddings,
-                                          antecedent_embeddings,
-                                          antecedent_embeddings * target_embeddings,
-                                          antecedent_distance_embeddings], -1)
-        return span_pair_embeddings
-
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         metrics_coref = self._coref.get_metrics(reset=reset)
