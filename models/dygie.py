@@ -106,13 +106,12 @@ class DyGIE(Model):
         TODO(dwadden) change this.
         """
         # TODO(dwadden) Is there some smarter way to do the batching within a document?
-        # TODO(dwadden) Shape comments should have `max_sentence_length` rather than `document_length`.
 
-        # Shape: (batch_size, document_length, embedding_size)
+        # Shape: (batch_size, max_sentence_length, embedding_size)
         text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
         max_sentence_length = text_embeddings.size(1)
 
-        # Shape: (batch_size, document_length)
+        # Shape: (batch_size, max_sentence_length)
         text_mask = util.get_text_field_mask(text).float()
 
         sentence_lengths = text_mask.sum(dim=1).long()
@@ -129,7 +128,7 @@ class DyGIE(Model):
         # Shape: (batch_size, num_spans, 2)
         spans = F.relu(spans.float()).long()
 
-        # Shape: (batch_size, document_length, encoding_dim)
+        # Shape: (batch_size, max_sentence_length, encoding_dim)
         contextualized_embeddings = self._context_layer(text_embeddings, text_mask)
         # Shape: (batch_size, num_spans, 2 * encoding_dim + feature_size)
         endpoint_span_embeddings = self._endpoint_span_extractor(contextualized_embeddings, spans)
