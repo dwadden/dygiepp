@@ -13,7 +13,7 @@ from allennlp.modules import FeedForward
 from allennlp.modules import Seq2SeqEncoder, TimeDistributed, TextFieldEmbedder, Pruner
 from allennlp.modules.span_extractors import SelfAttentiveSpanExtractor, EndpointSpanExtractor
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
-from allennlp.training.metrics import ConllCorefScores, F1Measure
+from allennlp.training.metrics import F1Measure
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -44,7 +44,7 @@ class NERTagger(Model):
                  mention_feedforward: FeedForward,
                  feature_size: int,
                  spans_per_word: float,
-                 # initializer: InitializerApplicator = InitializerApplicator(), # TODO(dwadden add this).
+                 initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(NERTagger, self).__init__(vocab, regularizer)
 
@@ -60,8 +60,7 @@ class NERTagger(Model):
 
         self.loss_function = torch.nn.CrossEntropyLoss()
 
-        # TODO(dwadden) Add this.
-        #initializer(self)
+        initializer(self)
 
         self._ner_metrics = [F1Measure(i) for i in range(1, self.number_of_ner_classes)]
         self._ner_avg_metrics = F1Measure(-1)
@@ -104,7 +103,6 @@ class NERTagger(Model):
 
         if metadata is not None:
             output_dict["document"] = [x["sentence"] for x in metadata]
-        self.decode(output_dict)
         return output_dict
 
 
