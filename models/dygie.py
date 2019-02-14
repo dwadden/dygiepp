@@ -75,7 +75,6 @@ class DyGIE(Model):
                                           feature_size=feature_size,
                                           params=modules.pop("ner"))
         self._relation = RelationExtractor.from_params(vocab=vocab,
-                                                       ner_tagger=self._ner,
                                                        feature_size=feature_size,
                                                        params=modules.pop("relation"))
 
@@ -94,7 +93,6 @@ class DyGIE(Model):
         else:
             self._lexical_dropout = lambda x: x
         initializer(self)
-        #import ipdb; ipdb.set_trace()
 
     @overrides
     def forward(self,

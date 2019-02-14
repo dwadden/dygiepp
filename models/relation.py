@@ -39,14 +39,15 @@ class RelationExtractor(Model):
 
         self._n_labels = vocab.get_vocab_size("relation_labels")
 
-        # TODO(dwadden) Do we want TimeDistributed for this one?
+        # Span candidate scorer.
         # TODO(dwadden) make sure I've got the input dim right on this one.
-        self._relation_feedforward = TimeDistributed(relation_feedforward)
         feedforward_scorer = torch.nn.Sequential(
             TimeDistributed(mention_feedforward),
             TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1)))
         self._mention_pruner = Pruner(feedforward_scorer)
-        # Output dim is num labels - 1 since we set the score on the null label to 0.
+
+        # Relation scorer.
+        self._relation_feedforward = TimeDistributed(relation_feedforward)
         self._relation_scorer = TimeDistributed(torch.nn.Linear(
             relation_feedforward.get_output_dim(), self._n_labels))
 
