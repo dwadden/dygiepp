@@ -72,10 +72,8 @@ class RelationExtractor(Model):
         """
         num_spans = spans.size(1)  # Max number of spans for the minibatch.
 
-        # Keep different number of spans for each minibatch entry. Make sure to always keep at least
-        # one entry.
+        # Keep different number of spans for each minibatch entry.
         num_spans_to_keep = torch.floor(sentence_lengths.float() * self._spans_per_word).long()
-        num_spans_to_keep = torch.max(num_spans_to_keep, torch.ones_like(num_spans_to_keep))
 
         (top_span_embeddings, top_span_mask,
          top_span_indices, top_span_mention_scores) = self._mention_pruner(span_embeddings,
@@ -217,29 +215,16 @@ class RelationExtractor(Model):
 
         return torch.cat(relations, dim=0), torch.cat(mask, dim=0)
 
-    def _get_cross_entropy_loss(self, relation_scores, relation_labels, relation_mask):
+    def _get_cross_entropy_loss(self, relation_scores, relation_labels, mask):
         """
         Compute cross-entropy loss on relation labels. Ignore diagonal entries and entries giving
         relations between masked out spans.
         """
-        # Don't compute loss on predicted relation between a span and itself. When computing
-        # softmax, mask out the losses from the diagonal elements of the relation matrix. Also mask
-        # out invalid spans.
-        batch_size = relation_scores.size(0)
-        mat_size = relation_scores.size(1)
-        identity_mask = shared.batch_identity(
-            batch_size, mat_size, dtype=torch.uint8, device=relation_mask.device)
-        mask = (~identity_mask & relation_mask).view(-1)
+        mask = mask.view(-1)
         # Need to add one for the null class.
         scores_flat = relation_scores.view(-1, self._n_labels + 1)[mask]
         # Need to add 1 so that the null label is 0, to line up with indices into prediction matrix.
         labels_flat = relation_labels.view(-1)[mask] + 1
-
         # Compute cross-entropy loss.
-        # In edge case where all elements are masked out, return 0. This will occur when there's
-        # only a single span candidate. This requires grad because the loss is backpropped.
-        if mask.sum() == 0:
-            loss = torch.zeros(1, device=scores_flat.device, requires_grad=True)
-        else:
-            loss = F.cross_entropy(scores_flat, labels_flat)
+        loss = F.cross_entropy(scores_flat, labels_flat)
         return loss
