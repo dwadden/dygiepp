@@ -14,7 +14,7 @@ from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from allennlp.modules import Seq2SeqEncoder, TimeDistributed, TextFieldEmbedder, Pruner
 
 from dygie.models import shared
-from dygie.training.relation_metrics import RelationMetrics
+from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -54,6 +54,7 @@ class RelationExtractor(Model):
         self._spans_per_word = spans_per_word
 
         # TODO(dwadden) Add code to compute relation F1.
+        self._candidate_recall = CandidateRecall()
         self._relation_metrics = RelationMetrics()
 
         initializer(self)
@@ -113,6 +114,7 @@ class RelationExtractor(Model):
             # Compute F1.
             predictions = self.decode(output_dict)
             assert len(predictions) == len(metadata)  # Make sure length of predictions is right.
+            self._candidate_recall(predictions, metadata)
             self._relation_metrics(predictions, metadata)
 
             output_dict["loss"] = cross_entropy
@@ -141,9 +143,11 @@ class RelationExtractor(Model):
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         precision, recall, f1 = self._relation_metrics.get_metric(reset)
-        return {"relation_precision": precision,
-                "relation_recall": recall,
-                "relation_f1": f1}
+        candidate_recall = self._candidate_recall.get_metric(reset)
+        return {"rel_precision": precision,
+                "rel_recall": recall,
+                "rel_f1": f1,
+                "rel_span_recall": candidate_recall}
 
     def _decode_sentence(self, top_spans, predicted_relations):
         # Convert to native Python lists for easy iteration.

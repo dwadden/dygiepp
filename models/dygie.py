@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 
+
 @Model.register("dygie")
 class DyGIE(Model):
     """
@@ -48,6 +49,8 @@ class DyGIE(Model):
         Used to initialize the model parameters.
     regularizer : ``RegularizerApplicator``, optional (default=``None``)
         If provided, will be used to calculate the regularization penalty during training.
+    display_metrics: ``List[str]``. A list of the metrics that should be printed out during model
+        training.
     """
     def __init__(self,
                  vocab: Vocabulary,
@@ -59,7 +62,8 @@ class DyGIE(Model):
                  loss_weights,  # TOOD(dwadden) Add type.
                  lexical_dropout: float = 0.2,
                  initializer: InitializerApplicator = InitializerApplicator(),
-                 regularizer: Optional[RegularizerApplicator] = None) -> None:
+                 regularizer: Optional[RegularizerApplicator] = None,
+                 display_metrics: List[str] = None) -> None:
         super(DyGIE, self).__init__(vocab, regularizer)
 
         self._text_field_embedder = text_field_embedder
@@ -87,6 +91,8 @@ class DyGIE(Model):
             input_dim=text_field_embedder.get_output_dim())
 
         self._max_span_width = max_span_width
+
+        self._display_metrics = display_metrics
 
         if lexical_dropout > 0:
             self._lexical_dropout = torch.nn.Dropout(p=lexical_dropout)
@@ -201,11 +207,25 @@ class DyGIE(Model):
 
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
+        """
+        Get all metrics from all modules. For the ones that shouldn't be displayed, prefix their
+        keys with an underscore.
+        """
         metrics_coref = self._coref.get_metrics(reset=reset)
         metrics_ner = self._ner.get_metrics(reset=reset)
         metrics_relation = self._relation.get_metrics(reset=reset)
-        return dict(
-                list(metrics_coref.items())
-              + list(metrics_ner.items())
-              + list(metrics_relation.items())
-        )
+        all_metrics = dict(list(metrics_coref.items()) +
+                           list(metrics_ner.items()) +
+                           list(metrics_relation.items()))
+        # If no list of desired metrics given, return them all.
+        if self._display_metrics is None:
+            return all_metrics
+        # Otherwise return the selected ones.
+        res = {}
+        for k, v in all_metrics.items():
+            if k in self._display_metrics:
+                res[k] = v
+            else:
+                new_k = "_" + k
+                res[new_k] = v
+        return res
