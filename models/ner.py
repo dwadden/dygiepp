@@ -13,7 +13,7 @@ from allennlp.modules import FeedForward
 from allennlp.modules import Seq2SeqEncoder, TimeDistributed, TextFieldEmbedder, Pruner
 from allennlp.modules.span_extractors import SelfAttentiveSpanExtractor, EndpointSpanExtractor
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
-from allennlp.training.metrics import F1Measure
+from dygie.training.ner_metrics import NERMetrics
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -62,8 +62,7 @@ class NERTagger(Model):
 
         initializer(self)
 
-        self._ner_metrics = [F1Measure(i) for i in range(1, self.number_of_ner_classes)]
-        self._ner_avg_metrics = F1Measure(-1)
+        self._ner_metrics = NERMetrics(self.number_of_ner_classes, 0)
 
     @overrides
     def forward(self,  # type: ignore
@@ -96,8 +95,9 @@ class NERTagger(Model):
                        "predicted_ner": predicted_ner}
 
         if ner_labels is not None:
-            for metric in self._ner_metrics:
-                metric(ner_scores, ner_labels, span_mask)
+            self._ner_metrics(ner_scores, ner_labels, span_mask)
+            #for metric in self._ner_metrics:
+            #    metric(ner_scores, ner_labels, span_mask)
             loss = util.sequence_cross_entropy_with_logits(ner_scores, ner_labels, span_mask)
             output_dict["loss"] = loss
 
@@ -122,16 +122,8 @@ class NERTagger(Model):
 
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        metrics = [metric.get_metric(reset) for metric in self._ner_metrics]
-        self._ner_avg_metrics._true_positives = sum(metric._true_positives for metric in self._ner_metrics)
-        self._ner_avg_metrics._false_positives = sum(metric._false_positives for metric in self._ner_metrics)
-        self._ner_avg_metrics._true_negatives = sum(metric._true_negatives for metric in self._ner_metrics)
-        self._ner_avg_metrics._false_negatives = sum(metric._false_negatives for metric in self._ner_metrics)
-        ner_precision, ner_recall, ner_f1 = self._ner_avg_metrics.get_metric(reset)
+        ner_precision, ner_recall, ner_f1 = self._ner_metrics.get_metric(reset)
         
         return {"ner_precision": ner_precision,
                 "ner_recall": ner_recall,
                 "ner_f1": ner_f1}
-        #return {"ner_precision": sum(el[0] for el in metrics)/len(metrics),
-        #        "ner_recall": sum(el[1] for el in metrics)/len(metrics),
-        #        "ner_f1": sum(el[2] for el in metrics)/len(metrics)}
