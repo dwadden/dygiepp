@@ -72,8 +72,10 @@ class RelationExtractor(Model):
         """
         num_spans = spans.size(1)  # Max number of spans for the minibatch.
 
-        # Keep different number of spans for each minibatch entry.
+        # Keep different number of spans for each minibatch entry. Make sure to always keep at least
+        # one entry.
         num_spans_to_keep = torch.floor(sentence_lengths.float() * self._spans_per_word).long()
+        num_spans_to_keep = torch.max(num_spans_to_keep, torch.ones_like(num_spans_to_keep))
 
         (top_span_embeddings, top_span_mask,
          top_span_indices, top_span_mention_scores) = self._mention_pruner(span_embeddings,
@@ -232,6 +234,12 @@ class RelationExtractor(Model):
         scores_flat = relation_scores.view(-1, self._n_labels + 1)[mask]
         # Need to add 1 so that the null label is 0, to line up with indices into prediction matrix.
         labels_flat = relation_labels.view(-1)[mask] + 1
+
         # Compute cross-entropy loss.
-        loss = F.cross_entropy(scores_flat, labels_flat)
+        # In edge case where all elements are masked out, return 0. This will occur when there's
+        # only a single span candidate. This requires grad because the loss is backpropped.
+        if mask.sum() == 0:
+            loss = torch.zeros(1, device=scores_flat.device, requires_grad=True)
+        else:
+            loss = F.cross_entropy(scores_flat, labels_flat)
         return loss
