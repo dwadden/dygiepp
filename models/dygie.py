@@ -204,6 +204,8 @@ class DyGIE(Model):
         metrics_coref = self._coref.get_metrics(reset=reset)
         metrics_ner = self._ner.get_metrics(reset=reset)
         metrics_relation = self._relation.get_metrics(reset=reset)
-        #import ipdb; ipdb.set_trace()
-        #return dict(list(metrics_coref.items()) + list(metrics_ner.items()))
-        return dict(list(metrics_coref.items()) + list(metrics_ner.items()) + list(metrics_relation.items()))
+        return dict(
+                list(metrics_coref.items())
+              + list(metrics_ner.items())
+              + list(metrics_relation.items())
+        )
