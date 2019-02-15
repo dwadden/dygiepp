@@ -49,6 +49,7 @@ class NERTagger(Model):
         super(NERTagger, self).__init__(vocab, regularizer)
 
         self.number_of_ner_classes = vocab.get_vocab_size('ner_labels')
+        assert vocab._token_to_index['ner_labels'][''] == 0
 
         self.final_network = torch.nn.Sequential(
             TimeDistributed(mention_feedforward),
