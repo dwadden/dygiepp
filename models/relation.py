@@ -29,7 +29,8 @@ class RelationExtractor(Model):
     # TODO(dwadden) add option to make `mention_feedforward` be the NER tagger.
     def __init__(self,
                  vocab: Vocabulary,
-                 mention_feedforward: FeedForward,
+                 mention_feedforward: torch.nn,
+                 ner_scorer: torch.nn,
                  relation_feedforward: FeedForward,
                  feature_size: int,
                  spans_per_word: float,
@@ -41,9 +42,7 @@ class RelationExtractor(Model):
 
         # Span candidate scorer.
         # TODO(dwadden) make sure I've got the input dim right on this one.
-        feedforward_scorer = torch.nn.Sequential(
-            TimeDistributed(mention_feedforward),
-            TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1)))
+        feedforward_scorer = EntityBeamScorer(ner_scorer)
         self._mention_pruner = Pruner(feedforward_scorer)
 
         # Relation scorer.
@@ -233,3 +232,15 @@ class RelationExtractor(Model):
         # Compute cross-entropy loss.
         loss = F.cross_entropy(scores_flat, labels_flat)
         return loss
+
+
+class EntityBeamScorer(torch.nn.Module):
+    def __init__(self, ner_scorer):
+        super().__init__()
+        self._scorer = ner_scorer
+
+    @overrides
+    def forward(self, inputs):
+        max_scores, argmax_scores = self._scorer(inputs).max(dim=-1)
+        # The pruner requires the extra final dimension.
+        return max_scores.unsqueeze(-1)

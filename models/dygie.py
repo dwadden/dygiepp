@@ -80,6 +80,7 @@ class DyGIE(Model):
                                           params=modules.pop("ner"))
         self._relation = RelationExtractor.from_params(vocab=vocab,
                                                        feature_size=feature_size,
+                                                       ner_scorer=self._ner.final_network,
                                                        params=modules.pop("relation"))
 
         self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
