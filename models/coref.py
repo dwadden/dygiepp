@@ -181,6 +181,7 @@ class CorefResolver(Model):
 
         output_dict = {"top_spans": top_spans,
                        "antecedent_indices": valid_antecedent_indices,
+                       "coreference_scores": coreference_scores,
                        "predicted_antecedents": predicted_antecedents}
         if coref_labels is not None:
             # Find the gold labels for the spans which we kept.

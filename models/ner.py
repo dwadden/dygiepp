@@ -93,6 +93,7 @@ class NERTagger(Model):
         _, predicted_ner = ner_scores.max(2)
 
         output_dict = {"spans": spans,
+                       "ner_scores": ner_scores,
                        "predicted_ner": predicted_ner}
 
         if ner_labels is not None:
@@ -111,7 +112,7 @@ class NERTagger(Model):
     def decode(self, output_dict: Dict[str, torch.Tensor]):
         predicted_ner_batch = output_dict["predicted_ner"].detach().cpu()
         spans_batch = output_dict["spans"].detach().cpu()
-        
+
         res = []
         for spans, predicted_NERs in zip(spans_batch, predicted_ner_batch):
             res.append([])
@@ -124,7 +125,7 @@ class NERTagger(Model):
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         ner_precision, ner_recall, ner_f1 = self._ner_metrics.get_metric(reset)
-        
+
         return {"ner_precision": ner_precision,
                 "ner_recall": ner_recall,
                 "ner_f1": ner_f1}

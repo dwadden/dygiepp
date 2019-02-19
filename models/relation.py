@@ -97,6 +97,7 @@ class RelationExtractor(Model):
         predicted_relations -= 1
 
         output_dict = {"top_spans": top_spans,
+                       "relation_scores": relation_scores,
                        "predicted_relations": predicted_relations}
 
         # Evaluate loss and F1 if labels were probided.
