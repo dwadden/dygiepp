@@ -1,7 +1,10 @@
-from collections import deque
+from collections import deque, Counter
 from typing import Iterable, Deque
+import math
 import logging
 import random
+
+from overrides import overrides
 
 from allennlp.common.util import lazy_groups_of
 from allennlp.data.instance import Instance
@@ -49,3 +52,20 @@ class DocumentIterator(DataIterator):
                 if full_batch:
                     total_length += len(full_batch)
                     yield Batch(full_batch)
+
+    @overrides
+    def get_num_batches(self, instances: Iterable[Instance]) -> int:
+        """
+        Get the number of batches.
+        """
+        counts = Counter()
+        for instance in instances:
+            doc_key = instance["metadata"]["doc_key"]
+            counts[doc_key] += 1
+        if self._batch_size >= 0:
+            # If static batch sizes, sum the number of batches required for each document.
+            batches_per_doc = [math.ceil(entry / self._batch_size) for entry in counts.values()]
+            return sum(batches_per_doc)
+        else:
+            # If dynamic, one batch per document.
+            return len(counts)
