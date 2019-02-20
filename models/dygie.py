@@ -18,7 +18,7 @@ from allennlp.training.metrics import MentionRecall, ConllCorefScores
 # Import submodules.
 from dygie.models.coref import CorefResolver
 from dygie.models.ner import NERTagger
-from dygie.models.relation import RelationExtractor
+from dygie.models.relation2 import RelationExtractor
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
