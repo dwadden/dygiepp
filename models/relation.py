@@ -98,7 +98,8 @@ class RelationExtractor(Model):
 
         output_dict = {"top_spans": top_spans,
                        "relation_scores": relation_scores,
-                       "predicted_relations": predicted_relations}
+                       "predicted_relations": predicted_relations,
+                       "num_spans_to_keep": num_spans_to_keep}
 
         # Evaluate loss and F1 if labels were probided.
         if relation_labels is not None:
@@ -132,11 +133,13 @@ class RelationExtractor(Model):
         # TODO(dwadden) Should I enforce that we can't have self-relations, etc?
         top_spans_batch = output_dict["top_spans"].detach().cpu()
         predicted_relations_batch = output_dict["predicted_relations"].detach().cpu()
+        num_spans_to_keep_batch = output_dict["num_spans_to_keep"].detach().cpu()
         res = []
 
         # Collect predictions for each sentence in minibatch.
-        for top_spans, predicted_relations in zip(top_spans_batch, predicted_relations_batch):
-            entry = self._decode_sentence(top_spans, predicted_relations)
+        zipped = zip(top_spans_batch, predicted_relations_batch, num_spans_to_keep_batch)
+        for top_spans, predicted_relations, num_spans_to_keep in zipped:
+            entry = self._decode_sentence(top_spans, predicted_relations, num_spans_to_keep)
             res.append(entry)
 
         return res
@@ -150,19 +153,21 @@ class RelationExtractor(Model):
                 "rel_f1": f1,
                 "rel_span_recall": candidate_recall}
 
-    def _decode_sentence(self, top_spans, predicted_relations):
-        # Convert to native Python lists for easy iteration.
+    def _decode_sentence(self, top_spans, predicted_relations, num_spans_to_keep):
+        # TODO(dwadden) speed this up?
+        # Throw out all predictions that shouldn't be kept.
+        keep = num_spans_to_keep.item()
         top_spans = [tuple(x) for x in top_spans.tolist()]
-        predicted_label_ixs = predicted_relations.view(-1).tolist()
-        predicted_labels = [self.vocab.get_token_from_index(x, namespace="relation_labels")
-                            if x >= 0 else None for x in predicted_label_ixs]
 
         # Iterate over all span pairs and labels. Record the span if the label isn't null.
         res = {}
-        for (span_1, span_2), predicted_label in zip(itertools.product(top_spans, top_spans),
-                                                     predicted_labels):
-            if predicted_label is not None:
-                res[(span_1, span_2)] = predicted_label
+        for i, j in itertools.product(range(keep), range(keep)):
+            span_1 = top_spans[i]
+            span_2 = top_spans[j]
+            label = predicted_relations[i, j].item()
+            if label >= 0:
+                label_name = self.vocab.get_token_from_index(label, namespace="relation_labels")
+                res[(span_1, span_2)] = label_name
 
         return res
 
