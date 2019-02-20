@@ -16,8 +16,6 @@ from allennlp.modules import Seq2SeqEncoder, TimeDistributed, TextFieldEmbedder,
 from dygie.models import shared
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
 
-import numpy as np
-
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
@@ -232,9 +230,6 @@ class RelationExtractor(Model):
         scores_flat = relation_scores.view(-1, self._n_labels + 1)[mask]
         # Need to add 1 so that the null label is 0, to line up with indices into prediction matrix.
         labels_flat = relation_labels.view(-1)[mask] + 1
-        perm = np.random.permutation(len(labels_flat))
-        perm = torch.tensor(perm)
-        labels_flat = labels_flat[perm]
         # Compute cross-entropy loss.
         loss = F.cross_entropy(scores_flat, labels_flat)
         return loss
