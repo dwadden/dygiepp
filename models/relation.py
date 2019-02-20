@@ -183,8 +183,7 @@ class RelationExtractor(Model):
         similarity_embeddings = embeddings_1_expanded * embeddings_2_expanded
 
         # In case the order got flipped somehow
-        # pair_embeddings_list = [embeddings_1_tiled, embeddings_2_tiled, similarity_embeddings]
-        pair_embeddings_list = [embeddings_2_tiled, embeddings_1_tiled, similarity_embeddings]
+        pair_embeddings_list = [embeddings_1_tiled, embeddings_2_tiled, similarity_embeddings]
         pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
 
         return pair_embeddings
@@ -201,6 +200,7 @@ class RelationExtractor(Model):
         dummy_scores = relation_scores.new_zeros(*shape)
 
         relation_scores = torch.cat([dummy_scores, relation_scores], -1)
+        relation_scores = relation_scores.transpose(1, 2)
         return relation_scores
 
     @staticmethod
