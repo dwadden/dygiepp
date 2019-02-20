@@ -199,7 +199,6 @@ class RelationExtractor(Model):
         dummy_scores = relation_scores.new_zeros(*shape)
 
         relation_scores = torch.cat([dummy_scores, relation_scores], -1)
-        relation_scores = relation_scores.transpose(1, 2).contiguous()
         return relation_scores
 
     @staticmethod
