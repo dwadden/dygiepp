@@ -18,7 +18,7 @@ from allennlp.training.metrics import MentionRecall, ConllCorefScores
 # Import submodules.
 from dygie.models.coref import CorefResolver
 from dygie.models.ner import NERTagger
-from dygie.models.relation2 import RelationExtractor
+from dygie.models.relation import RelationExtractor
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -82,13 +82,17 @@ class DyGIE(Model):
                                                        feature_size=feature_size,
                                                        params=modules.pop("relation"))
 
+        # self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
+        #                                                       combination="x,y",
+        #                                                       num_width_embeddings=max_span_width,
+        #                                                       span_width_embedding_dim=feature_size,
+        #                                                       bucket_widths=False)
+        # self._attentive_span_extractor = SelfAttentiveSpanExtractor(
+        #     input_dim=text_field_embedder.get_output_dim())
+
+        # No span width embeddings.
         self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
-                                                              combination="x,y",
-                                                              num_width_embeddings=max_span_width,
-                                                              span_width_embedding_dim=feature_size,
-                                                              bucket_widths=False)
-        self._attentive_span_extractor = SelfAttentiveSpanExtractor(
-            input_dim=text_field_embedder.get_output_dim())
+                                                              combination="x,y")
 
         self._max_span_width = max_span_width
 
@@ -139,14 +143,14 @@ class DyGIE(Model):
         # Shape: (batch_size, num_spans, 2 * encoding_dim + feature_size)
         endpoint_span_embeddings = self._endpoint_span_extractor(contextualized_embeddings, spans)
         # Shape: (batch_size, num_spans, emebedding_size)
-        attended_span_embeddings = self._attentive_span_extractor(text_embeddings, spans)
+        # attended_span_embeddings = self._attentive_span_extractor(text_embeddings, spans)
 
-        # Shape: (batch_size, num_spans, emebedding_size + 2 * encoding_dim + feature_size)
-        span_embeddings = torch.cat([endpoint_span_embeddings, attended_span_embeddings], -1)
+        # # Shape: (batch_size, num_spans, emebedding_size + 2 * encoding_dim + feature_size)
+        # span_embeddings = torch.cat([endpoint_span_embeddings, attended_span_embeddings], -1)
+        span_embeddings = endpoint_span_embeddings
 
         #import ipdb; ipdb.set_trace()
         # Make calls out to the modules to get results.
-
 
 
         output_coref = {'loss': 0}
