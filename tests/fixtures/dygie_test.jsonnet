@@ -127,11 +127,11 @@
     "batch_size": -1,
   },
   "trainer": {
-    "num_epochs": 150,
+    "num_epochs": 2,
     "grad_norm": 5.0,
     "patience" : 10,
     "cuda_device" : 0,
-    "validation_metric": "+coref_f1",
+    "validation_metric": "+relation_f1",
     "learning_rate_scheduler": {
       "type": "reduce_on_plateau",
       "factor": 0.5,
