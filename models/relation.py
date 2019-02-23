@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
+from torch.nn import CrossEntropyLoss
 from overrides import overrides
 
 from allennlp.data import Vocabulary
@@ -47,9 +48,8 @@ class RelationExtractor(Model):
         self._mention_pruner = Pruner(feedforward_scorer)
 
         # Relation scorer.
-        self._relation_feedforward = TimeDistributed(relation_feedforward)
-        self._relation_scorer = TimeDistributed(torch.nn.Linear(
-            relation_feedforward.get_output_dim(), self._n_labels))
+        self._relation_feedforward = relation_feedforward
+        self._relation_scorer = torch.nn.Linear(relation_feedforward.get_output_dim(), self._n_labels)
 
         self._spans_per_word = spans_per_word
 
@@ -57,6 +57,7 @@ class RelationExtractor(Model):
         self._candidate_recall = CandidateRecall()
         self._relation_metrics = RelationMetrics()
 
+        self._loss = torch.nn.CrossEntropyLoss(reduction="none")
         initializer(self)
 
     @overrides
@@ -193,8 +194,17 @@ class RelationExtractor(Model):
         return pair_embeddings
 
     def _compute_relation_scores(self, pairwise_embeddings, top_span_mention_scores):
-        relation_scores = self._relation_scorer(
-            self._relation_feedforward(pairwise_embeddings)).squeeze(-1)
+        batch_size = pairwise_embeddings.size(0)
+        max_num_spans = pairwise_embeddings.size(1)
+        feature_dim = pairwise_embeddings.size(-1)
+
+        embeddings_flat = pairwise_embeddings.view(-1, feature_dim)
+
+        relation_projected_flat = self._relation_feedforward(embeddings_flat)
+        relation_scores_flat = self._relation_scorer(relation_projected_flat)
+
+        relation_scores = relation_scores_flat.view(batch_size, max_num_spans, max_num_spans, -1)
+
         # Add the mention scores for each of the candidates.
 
         relation_scores += (top_span_mention_scores.unsqueeze(-1) +
@@ -232,9 +242,10 @@ class RelationExtractor(Model):
         """
         mask = mask.view(-1)
         # Need to add one for the null class.
-        scores_flat = relation_scores.view(-1, self._n_labels + 1)[mask]
+        scores_flat = relation_scores.view(-1, self._n_labels + 1)
         # Need to add 1 so that the null label is 0, to line up with indices into prediction matrix.
-        labels_flat = relation_labels.view(-1)[mask] + 1
+        labels_flat = relation_labels.view(-1) + 1
         # Compute cross-entropy loss.
-        loss = F.cross_entropy(scores_flat, labels_flat)
-        return loss
+        ix = mask.nonzero().view(-1)
+        loss = self._loss(scores_flat[ix], labels_flat[ix])
+        return loss.sum()
