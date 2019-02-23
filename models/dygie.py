@@ -61,6 +61,7 @@ class DyGIE(Model):
                  max_span_width: int,
                  loss_weights,  # TOOD(dwadden) Add type.
                  lexical_dropout: float = 0.2,
+                 use_attentive_span_extractor: bool = True,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
                  display_metrics: List[str] = None) -> None:
@@ -87,8 +88,11 @@ class DyGIE(Model):
                                                               num_width_embeddings=max_span_width,
                                                               span_width_embedding_dim=feature_size,
                                                               bucket_widths=False)
-        self._attentive_span_extractor = SelfAttentiveSpanExtractor(
-            input_dim=text_field_embedder.get_output_dim())
+        if use_attentive_span_extractor:
+            self._attentive_span_extractor = SelfAttentiveSpanExtractor(
+                input_dim=text_field_embedder.get_output_dim())
+        else:
+            self._attentive_span_extractor = None
 
         self._max_span_width = max_span_width
 
@@ -138,11 +142,14 @@ class DyGIE(Model):
         contextualized_embeddings = self._context_layer(text_embeddings, text_mask)
         # Shape: (batch_size, num_spans, 2 * encoding_dim + feature_size)
         endpoint_span_embeddings = self._endpoint_span_extractor(contextualized_embeddings, spans)
-        # Shape: (batch_size, num_spans, emebedding_size)
-        attended_span_embeddings = self._attentive_span_extractor(text_embeddings, spans)
 
-        # Shape: (batch_size, num_spans, emebedding_size + 2 * encoding_dim + feature_size)
-        span_embeddings = torch.cat([endpoint_span_embeddings, attended_span_embeddings], -1)
+        if self._attentive_span_extractor is not None:
+            # Shape: (batch_size, num_spans, emebedding_size)
+            attended_span_embeddings = self._attentive_span_extractor(text_embeddings, spans)
+            # Shape: (batch_size, num_spans, emebedding_size + 2 * encoding_dim + feature_size)
+            span_embeddings = torch.cat([endpoint_span_embeddings, attended_span_embeddings], -1)
+        else:
+            span_embeddings = endpoint_span_embeddings
 
         #import ipdb; ipdb.set_trace()
         # Make calls out to the modules to get results.
