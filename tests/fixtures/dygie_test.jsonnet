@@ -112,6 +112,11 @@
     "lexical_dropout": 0.5,
     "feature_size": 20,
     "max_span_width": 10,
+    "loss_weights": {
+      "relation": 1,
+      "ner": 1,
+      "coref": 1
+    }
   },
   "iterator": {
     "type": "document",

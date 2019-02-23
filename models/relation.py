@@ -83,7 +83,7 @@ class RelationExtractor(Model):
                                                                            num_spans_to_keep)
 
         # Convert to Boolean for logical indexing operations later.
-        top_span_mask = top_span_mask.unsqueeze(-1).byte()
+        top_span_mask = top_span_mask.unsqueeze(-1)
 
         flat_top_span_indices = util.flatten_and_batch_shift_indices(top_span_indices, num_spans)
         top_spans = util.batched_index_select(spans,
@@ -102,7 +102,7 @@ class RelationExtractor(Model):
                        "predicted_relations": predicted_relations,
                        "num_spans_to_keep": num_spans_to_keep}
 
-        # Evaluate loss and F1 if labels were probided.
+        # Evaluate loss and F1 if labels were provided.
         if relation_labels is not None:
             # TODO(dwadden) Figure out why the relation labels didn't get read in as ints.
             relation_labels = relation_labels.long()
@@ -227,7 +227,7 @@ class RelationExtractor(Model):
         relations = []
         mask = []
 
-        for sliced, ixs, top_span_mask in zip(relation_labels, top_span_indices, top_span_masks):
+        for sliced, ixs, top_span_mask in zip(relation_labels, top_span_indices, top_span_masks.byte()):
             entry = sliced[ixs][:, ixs].unsqueeze(0)
             mask_entry = top_span_mask & top_span_mask.transpose(0, 1).unsqueeze(0)
             relations.append(entry)
