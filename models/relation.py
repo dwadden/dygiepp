@@ -71,11 +71,10 @@ class RelationExtractor(Model):
         """
         TODO(dwadden) Write documentation.
         """
-        max_sentence_length = sentence_lengths.max().item()
         num_spans = spans.size(1)  # Max number of spans for the minibatch.
 
         # Keep different number of spans for each minibatch entry.
-        num_spans_to_keep = torch.floor(sentence_lengths.float() * self._spans_per_word).long()
+        num_spans_to_keep = torch.floor(sentence_lengths.max().float() * self._spans_per_word).long().item()
 
         (top_span_embeddings, top_span_mask,
          top_span_indices, top_span_mention_scores) = self._mention_pruner(span_embeddings,
@@ -97,10 +96,12 @@ class RelationExtractor(Model):
         _, predicted_relations = relation_scores.max(-1)
         predicted_relations -= 1
 
+        num_spans_kept = top_span_mask.sum(dim=1).squeeze(1).long()
+
         output_dict = {"top_spans": top_spans,
                        "relation_scores": relation_scores,
                        "predicted_relations": predicted_relations,
-                       "num_spans_to_keep": num_spans_to_keep}
+                       "num_spans_kept": num_spans_kept}
 
         # Evaluate loss and F1 if labels were provided.
         if relation_labels is not None:
@@ -134,13 +135,13 @@ class RelationExtractor(Model):
         # TODO(dwadden) Should I enforce that we can't have self-relations, etc?
         top_spans_batch = output_dict["top_spans"].detach().cpu()
         predicted_relations_batch = output_dict["predicted_relations"].detach().cpu()
-        num_spans_to_keep_batch = output_dict["num_spans_to_keep"].detach().cpu()
+        num_spans_kept_batch = output_dict["num_spans_kept"]
         res = []
 
         # Collect predictions for each sentence in minibatch.
-        zipped = zip(top_spans_batch, predicted_relations_batch, num_spans_to_keep_batch)
-        for top_spans, predicted_relations, num_spans_to_keep in zipped:
-            entry = self._decode_sentence(top_spans, predicted_relations, num_spans_to_keep)
+        zipped = zip(top_spans_batch, predicted_relations_batch, num_spans_kept_batch)
+        for top_spans, predicted_relations, num_spans_kept in zipped:
+            entry = self._decode_sentence(top_spans, predicted_relations, num_spans_kept)
             res.append(entry)
 
         return res
@@ -154,10 +155,10 @@ class RelationExtractor(Model):
                 "rel_f1": f1,
                 "rel_span_recall": candidate_recall}
 
-    def _decode_sentence(self, top_spans, predicted_relations, num_spans_to_keep):
+    def _decode_sentence(self, top_spans, predicted_relations, num_spans_kept):
         # TODO(dwadden) speed this up?
         # Throw out all predictions that shouldn't be kept.
-        keep = num_spans_to_keep.item()
+        keep = num_spans_kept.item()
         top_spans = [tuple(x) for x in top_spans.tolist()]
 
         # Iterate over all span pairs and labels. Record the span if the label isn't null.
