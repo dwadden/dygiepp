@@ -119,7 +119,6 @@ class DyGIE(Model):
 
         # Shape: (batch_size, max_sentence_length, embedding_size)
         text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
-        max_sentence_length = text_embeddings.size(1)
 
         # Shape: (batch_size, max_sentence_length)
         text_mask = util.get_text_field_mask(text).float()
@@ -166,11 +165,11 @@ class DyGIE(Model):
 
         if self._loss_weights['ner']>0:
             output_ner = self._ner(
-                spans, span_mask, span_embeddings, sentence_lengths, max_sentence_length, ner_labels, metadata)
+                spans, span_mask, span_embeddings, sentence_lengths, ner_labels, metadata)
 
         if self._loss_weights['relation']>0:
             output_relation = self._relation(
-                spans, span_mask, span_embeddings, sentence_lengths, max_sentence_length, relation_labels, metadata)
+                spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
         # TODO(dwadden) ... and now what?
 

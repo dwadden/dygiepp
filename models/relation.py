@@ -66,12 +66,12 @@ class RelationExtractor(Model):
                 span_mask,
                 span_embeddings,  # TODO(dwadden) add type.
                 sentence_lengths,
-                max_sentence_length,
                 relation_labels: torch.IntTensor = None,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
         """
         TODO(dwadden) Write documentation.
         """
+        max_sentence_length = sentence_lengths.max().item()
         num_spans = spans.size(1)  # Max number of spans for the minibatch.
 
         # Keep different number of spans for each minibatch entry.

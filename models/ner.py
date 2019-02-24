@@ -71,7 +71,6 @@ class NERTagger(Model):
                 span_mask: torch.IntTensor,
                 span_embeddings: torch.IntTensor,
                 sentence_lengths: torch.Tensor,
-                max_sentence_length: int,
                 ner_labels: torch.IntTensor = None,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
 
@@ -82,6 +81,7 @@ class NERTagger(Model):
         #Shape: (Batch size, Number of Spans, Span Embedding Size)
         #span_embeddings
 
+        max_sentence_length = sentence_lengths.max().item()
         num_spans = spans.size(1)
 
         ner_scores = self.final_network(span_embeddings)
