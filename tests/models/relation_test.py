@@ -1,36 +1,48 @@
 """
 Unit tests for the relation module.
-"""
 
-import json
+This module wasn't matching TensorFlow performance so it's tested pretty heavily.
+"""
 
 import torch
 
 from allennlp.common.testing import ModelTestCase
-from allennlp.nn import util
-from allennlp.data.dataset import Batch
-
-from dygie.models import DyGIE
-from dygie.data import IEJsonReader
-from dygie.data import DocumentIterator
 
 
 class TestRelation(ModelTestCase):
     def setUp(self):
-        # TODO(dwadden) create smaller model for testing.
         super(TestRelation, self).setUp()
         self.config_file = "tests/fixtures/dygie_test.jsonnet"
         self.data_file = "tests/fixtures/scierc_article.json"
         self.set_up_model(self.config_file, self.data_file)
-        self.reader = IEJsonReader(max_span_width=5)
-        self.instances = self.reader.read("tests/fixtures/scierc_article.json")
 
-    def get_raw_data(self):
-        lines = []
-        with open(self.data_file, "r") as f:
-            for line in f:
-                lines.append(json.loads(line))
-        return lines
+    def test_decode(self):
+        def convert(x):
+            return self.model.vocab.get_token_from_index(x, namespace="relation_labels")
+
+        top_spans = torch.tensor([[[0, 2], [1, 3], [1, 3]],
+                                  [[1, 6], [2, 4], [3, 8]],
+                                  [[0, 1], [0, 1], [0, 1]]])
+        predicted_relations = torch.tensor([[[-1, -1, 1],
+                                             [1, -1, -1],
+                                             [-1, 0, -1]],
+                                            [[-1, -1, -1],
+                                             [1, -1, 2],
+                                             [-1, -1, 4]],
+                                            [[1, 1, 2],
+                                             [1, 3, 2],
+                                             [-1, 2, 1]]])
+        num_spans_to_keep = torch.tensor([2, 3, 0])
+        predict_dict = {"top_spans": top_spans,
+                        "predicted_relations": predicted_relations,
+                        "num_spans_to_keep": num_spans_to_keep}
+        decoded = self.model._relation.decode(predict_dict)
+        expected = [{((1, 3), (0, 2)): convert(1)},
+                    {((2, 4), (1, 6)): convert(1),
+                     ((2, 4), (3, 8)): convert(2),
+                     ((3, 8), (3, 8)): convert(4)},
+                    {}]
+        assert expected == decoded
 
     def test_compute_span_pair_embeddings(self):
         top_span_embeddings = torch.randn([3, 51, 1220])  # Make up random embeddings.
@@ -67,10 +79,68 @@ class TestRelation(ModelTestCase):
         assert torch.allclose(scores[batch_ix, ix1, ix2], score)
 
     def test_get_pruned_gold_relations(self):
-        pass
-        # import ipdb; ipdb.set_trace()
-        # foo = Batch(self.instances)
-        # for batch in it(self.instances):
-        #     import ipdb; ipdb.set_trace()
+        relation_labels = torch.tensor([[[-1, -1, 2, 3],
+                                         [1, -1, -1, 0],
+                                         [-1, 3, -1, 1],
+                                         [0, -1, -1, -1]],
+                                        [[0, 2, 1, 2],
+                                         [-1, -1, -1, -1],
+                                         [3, 0, -1, -1],
+                                         [-1, 0, 1, -1]]])
+        top_span_indices = torch.tensor([[0, 1, 3],
+                                         [0, 2, 2]])
+        top_span_masks = torch.tensor([[1, 1, 1],
+                                       [1, 1, 0]]).unsqueeze(-1)
 
-        # instance = self.instances[6]
+        labels, mask = self.model._relation._get_pruned_gold_relations(
+            relation_labels, top_span_indices, top_span_masks)
+
+        expected_labels = torch.tensor([[[-1, -1, 3],
+                                         [1, -1, 0],
+                                         [0, -1, -1]],
+                                        [[0, 1, 1],
+                                         [3, -1, -1],
+                                         [3, -1, -1]]])
+        expected_mask = torch.tensor([[[1, 1, 1],
+                                       [1, 1, 1],
+                                       [1, 1, 1]],
+                                      [[1, 1, 0],
+                                       [1, 1, 0],
+                                       [0, 0, 0]]],
+                                     dtype=torch.uint8)
+
+        assert torch.equal(labels, expected_labels)
+        assert torch.equal(mask, expected_mask)
+
+    def test_cross_entropy_loss_mask(self):
+        # Make sure the masking is happening correctly in the loss function.
+        relation_scores = torch.randn(2, 3, 3, self.model._relation._n_labels + 1)
+        labels = torch.tensor([[[-1, -1, 3],
+                                [1, -1, 0],
+                                [0, -1, -1]],
+                               [[0, 1, 1],
+                                [3, -1, -1],
+                                [3, -1, -1]]])
+        labels_offset = labels + 1
+
+        mask = torch.tensor([[[1, 1, 1],
+                              [1, 1, 1],
+                              [1, 1, 1]],
+                             [[1, 1, 0],
+                              [1, 1, 0],
+                              [0, 0, 0]]],
+                            dtype=torch.uint8)
+
+        # Calculate the loss with a loop over entries.
+        total_loss = torch.tensor([0.0])
+        for fold in [0, 1]:
+            for i in range(3):
+                for j in range(3):
+                    if mask[fold, i, j]:
+                        scores_entry = relation_scores[fold, i, j].unsqueeze(0)
+                        prediction_entry = labels_offset[fold, i, j].unsqueeze(0)
+                        loss_entry = self.model._relation._loss(scores_entry, prediction_entry)
+                        total_loss += loss_entry
+
+        model_loss = self.model._relation._get_cross_entropy_loss(relation_scores, labels, mask)
+        assert torch.allclose(total_loss, model_loss)

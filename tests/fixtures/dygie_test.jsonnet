@@ -120,7 +120,7 @@
   },
   "iterator": {
     "type": "document",
-    "batch_size": -1,
+    "batch_size": 10,
   },
   "validation_iterator": {
     "type": "document",
@@ -130,8 +130,8 @@
     "num_epochs": 2,
     "grad_norm": 5.0,
     "patience" : 10,
-    "cuda_device" : 0,
-    "validation_metric": "+relation_f1",
+    "cuda_device" : -1,
+    "validation_metric": "+rel_f1",
     "learning_rate_scheduler": {
       "type": "reduce_on_plateau",
       "factor": 0.5,
@@ -139,7 +139,7 @@
       "patience": 2
     },
     "optimizer": {
-      "type": "adam"
+      "type": "dense_sparse_adam"
     },
     "shuffle": false
   }
