@@ -35,6 +35,7 @@ class RelationExtractor(Model):
                  feature_size: int,
                  spans_per_word: float,
                  initializer: InitializerApplicator = InitializerApplicator(),
+                 positive_label_weight: float = 1.0,
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(RelationExtractor, self).__init__(vocab, regularizer)
 
@@ -57,7 +58,8 @@ class RelationExtractor(Model):
         self._candidate_recall = CandidateRecall()
         self._relation_metrics = RelationMetrics()
 
-        self._loss = torch.nn.CrossEntropyLoss(reduction="sum", ignore_index=-1)
+        class_weights = torch.cat([torch.tensor([1.0]), positive_label_weight * torch.ones(self._n_labels)])
+        self._loss = torch.nn.CrossEntropyLoss(reduction="sum", ignore_index=-1, weight=class_weights)
         initializer(self)
 
     @overrides
@@ -104,9 +106,6 @@ class RelationExtractor(Model):
 
         # Evaluate loss and F1 if labels were provided.
         if relation_labels is not None:
-            # TODO(dwadden) Figure out why the relation labels didn't get read in as ints.
-            relation_labels = relation_labels.long()
-
             # Compute cross-entropy loss.
             gold_relations = self._get_pruned_gold_relations(
                 relation_labels, top_span_indices, top_span_mask)

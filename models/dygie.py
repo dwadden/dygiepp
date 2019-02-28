@@ -117,6 +117,9 @@ class DyGIE(Model):
         """
         # TODO(dwadden) Is there some smarter way to do the batching within a document?
 
+        # They're passed in as float, due to AllenNLP internals.
+        relation_labels = relation_labels.long()
+
         # Shape: (batch_size, max_sentence_length, embedding_size)
         text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
 
