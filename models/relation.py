@@ -57,7 +57,7 @@ class RelationExtractor(Model):
         self._candidate_recall = CandidateRecall()
         self._relation_metrics = RelationMetrics()
 
-        self._loss = torch.nn.CrossEntropyLoss(reduction="none")
+        self._loss = torch.nn.CrossEntropyLoss(reduction="sum", ignore_index=-1)
         initializer(self)
 
     @overrides
@@ -108,11 +108,10 @@ class RelationExtractor(Model):
             relation_labels = relation_labels.long()
 
             # Compute cross-entropy loss.
-            gold_relations, relation_mask = self._get_pruned_gold_relations(
+            gold_relations = self._get_pruned_gold_relations(
                 relation_labels, top_span_indices, top_span_mask)
 
-            cross_entropy = self._get_cross_entropy_loss(
-                relation_scores, gold_relations, relation_mask)
+            cross_entropy = self._get_cross_entropy_loss(relation_scores, gold_relations)
 
             # Compute F1.
             predictions = self.decode(output_dict)
@@ -220,32 +219,31 @@ class RelationExtractor(Model):
     def _get_pruned_gold_relations(relation_labels, top_span_indices, top_span_masks):
         """
         Loop over each slice and get the labels for the spans from that slice.
-        Mask out all relations where either of the spans involved was masked out.
-        TODO(dwadden) document me better.
+        All labels are offset by 1 so that the "null" label gets class zero. This is the desired
+        behavior for the softmax. Labels corresponding to masked relations keep the label -1, which
+        the softmax loss ignores.
         """
         # TODO(dwadden) Test and possibly optimize.
         relations = []
-        mask = []
 
         for sliced, ixs, top_span_mask in zip(relation_labels, top_span_indices, top_span_masks.byte()):
             entry = sliced[ixs][:, ixs].unsqueeze(0)
             mask_entry = top_span_mask & top_span_mask.transpose(0, 1).unsqueeze(0)
+            entry[mask_entry] += 1
+            entry[~mask_entry] = -1
             relations.append(entry)
-            mask.append(mask_entry)
 
-        return torch.cat(relations, dim=0), torch.cat(mask, dim=0)
+        return torch.cat(relations, dim=0)
 
-    def _get_cross_entropy_loss(self, relation_scores, relation_labels, mask):
+    def _get_cross_entropy_loss(self, relation_scores, relation_labels):
         """
         Compute cross-entropy loss on relation labels. Ignore diagonal entries and entries giving
         relations between masked out spans.
         """
-        mask = mask.view(-1)
         # Need to add one for the null class.
         scores_flat = relation_scores.view(-1, self._n_labels + 1)
         # Need to add 1 so that the null label is 0, to line up with indices into prediction matrix.
-        labels_flat = relation_labels.view(-1) + 1
+        labels_flat = relation_labels.view(-1)
         # Compute cross-entropy loss.
-        ix = mask.nonzero().view(-1)
-        loss = self._loss(scores_flat[ix], labels_flat[ix])
-        return loss.sum()
+        loss = self._loss(scores_flat, labels_flat)
+        return loss
