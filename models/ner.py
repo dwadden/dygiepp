@@ -50,13 +50,13 @@ class NERTagger(Model):
 
         # Null label is needed to keep track of when calculating the metrics
         self.null_label = vocab._token_to_index['ner_labels']['']
+        assert self.null_label == 0  # If not, the dummy class won't correspond to the null label.
 
         self.final_network = torch.nn.Sequential(
             TimeDistributed(mention_feedforward),
             TimeDistributed(torch.nn.Linear(
-                                mention_feedforward.get_output_dim(),
-                                self.number_of_ner_classes - 1))
-        )
+                mention_feedforward.get_output_dim(),
+                self.number_of_ner_classes - 1)))
 
         self.loss_function = torch.nn.CrossEntropyLoss(reduction="sum")
         self._ner_metrics = NERMetrics(self.number_of_ner_classes, self.null_label)
@@ -87,6 +87,7 @@ class NERTagger(Model):
         _, predicted_ner = ner_scores.max(2)
 
         output_dict = {"spans": spans,
+                       "span_mask": span_mask,
                        "ner_scores": ner_scores,
                        "predicted_ner": predicted_ner}
 
@@ -103,15 +104,20 @@ class NERTagger(Model):
     def decode(self, output_dict: Dict[str, torch.Tensor]):
         predicted_ner_batch = output_dict["predicted_ner"].detach().cpu()
         spans_batch = output_dict["spans"].detach().cpu()
+        span_mask_batch = output_dict["span_mask"].detach().cpu().byte()
 
         res = []
-        for spans, predicted_NERs in zip(spans_batch, predicted_ner_batch):
-            res.append([])
-            for span, ner in zip(spans, predicted_NERs):
+        for spans, span_mask, predicted_NERs in zip(spans_batch, span_mask_batch, predicted_ner_batch):
+            entry = []
+            for span, ner in zip(spans[span_mask], predicted_NERs[span_mask]):
+                ner = ner.item()
                 if ner > 0:
-                    res[-1].append([int(span[0]), int(span[1]), int(ner)])
+                    entry.append((span[0].item(), span[1].item(),
+                                  self.vocab.get_token_from_index(ner, "ner_labels")))
+            res.append(entry)
 
-        return res
+        output_dict["decoded_ner"] = res
+        return output_dict
 
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:

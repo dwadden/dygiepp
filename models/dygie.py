@@ -1,6 +1,5 @@
 import logging
-import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import torch
 import torch.nn.functional as F
@@ -8,12 +7,9 @@ from overrides import overrides
 
 from allennlp.data import Vocabulary
 from allennlp.models.model import Model
-from allennlp.modules.token_embedders import Embedding
-from allennlp.modules import FeedForward
-from allennlp.modules import Seq2SeqEncoder, TimeDistributed, TextFieldEmbedder, Pruner
+from allennlp.modules import Seq2SeqEncoder, TextFieldEmbedder
 from allennlp.modules.span_extractors import SelfAttentiveSpanExtractor, EndpointSpanExtractor
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
-from allennlp.training.metrics import MentionRecall, ConllCorefScores
 
 # Import submodules.
 from dygie.models.coref import CorefResolver
@@ -21,8 +17,6 @@ from dygie.models.ner import NERTagger
 from dygie.models.relation import RelationExtractor
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
-
 
 
 @Model.register("dygie")
@@ -201,7 +195,15 @@ class DyGIE(Model):
             which are in turn comprised of a list of (start, end) inclusive spans into the
             original document.
         """
-        pass
+        res = {}
+        if self._loss_weights["coref"] > 0:
+            res["coref"] = self._coref.decode(output_dict["coref"])
+        if self._loss_weights["ner"] > 0:
+            res["ner"] = self._ner.decode(output_dict["ner"])
+        if self._loss_weights["relation"] > 0:
+            res["relation"] = self._relation.decode(output_dict["relation"])
+
+        return res
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         """

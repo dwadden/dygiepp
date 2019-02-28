@@ -1,20 +1,16 @@
 import logging
-import math
 import itertools
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import torch
-import torch.nn.functional as F
-from torch.nn import CrossEntropyLoss
 from overrides import overrides
 
 from allennlp.data import Vocabulary
 from allennlp.models.model import Model
 from allennlp.modules import FeedForward
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
-from allennlp.modules import Seq2SeqEncoder, TimeDistributed, TextFieldEmbedder, Pruner
+from allennlp.modules import TimeDistributed, Pruner
 
-from dygie.models import shared
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -73,7 +69,6 @@ class RelationExtractor(Model):
         """
         TODO(dwadden) Write documentation.
         """
-        max_sentence_length = sentence_lengths.max().item()
         num_spans = spans.size(1)  # Max number of spans for the minibatch.
 
         # Keep different number of spans for each minibatch entry.
@@ -113,7 +108,7 @@ class RelationExtractor(Model):
             cross_entropy = self._get_cross_entropy_loss(relation_scores, gold_relations)
 
             # Compute F1.
-            predictions = self.decode(output_dict)
+            predictions = self.decode(output_dict)["decoded_relations_dict"]
             assert len(predictions) == len(metadata)  # Make sure length of predictions is right.
             self._candidate_recall(predictions, metadata)
             self._relation_metrics(predictions, metadata)
@@ -129,19 +124,23 @@ class RelationExtractor(Model):
         pair of span indices for that sentence, and each value is the relation label on that span
         pair.
         """
-        # TODO(dwadden) Should I enforce that we can't have self-relations, etc?
         top_spans_batch = output_dict["top_spans"].detach().cpu()
         predicted_relations_batch = output_dict["predicted_relations"].detach().cpu()
         num_spans_to_keep_batch = output_dict["num_spans_to_keep"].detach().cpu()
-        res = []
+        res_dict = []
+        res_list = []
 
         # Collect predictions for each sentence in minibatch.
         zipped = zip(top_spans_batch, predicted_relations_batch, num_spans_to_keep_batch)
         for top_spans, predicted_relations, num_spans_to_keep in zipped:
-            entry = self._decode_sentence(top_spans, predicted_relations, num_spans_to_keep)
-            res.append(entry)
+            entry_dict, entry_list = self._decode_sentence(
+                top_spans, predicted_relations, num_spans_to_keep)
+            res_dict.append(entry_dict)
+            res_list.append(entry_list)
 
-        return res
+        output_dict["decoded_relations_dict"] = res_dict
+        output_dict["decoded_relations"] = res_list
+        return output_dict
 
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
@@ -159,16 +158,19 @@ class RelationExtractor(Model):
         top_spans = [tuple(x) for x in top_spans.tolist()]
 
         # Iterate over all span pairs and labels. Record the span if the label isn't null.
-        res = {}
+        res_dict = {}
+        res_list = []
         for i, j in itertools.product(range(keep), range(keep)):
             span_1 = top_spans[i]
             span_2 = top_spans[j]
             label = predicted_relations[i, j].item()
             if label >= 0:
                 label_name = self.vocab.get_token_from_index(label, namespace="relation_labels")
-                res[(span_1, span_2)] = label_name
+                res_dict[(span_1, span_2)] = label_name
+                list_entry = (span_1[0], span_1[1], span_2[0], span_2[1], label_name)
+                res_list.append(list_entry)
 
-        return res
+        return res_dict, res_list
 
     @staticmethod
     def _compute_span_pair_embeddings(top_span_embeddings: torch.FloatTensor):
