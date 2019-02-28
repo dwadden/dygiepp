@@ -153,41 +153,30 @@ class DyGIE(Model):
         else:
             span_embeddings = endpoint_span_embeddings
 
-        #import ipdb; ipdb.set_trace()
         # Make calls out to the modules to get results.
-
-
-
         output_coref = {'loss': 0}
         output_ner = {'loss': 0}
         output_relation = {'loss': 0}
 
-        if self._loss_weights['coref']>0:
+        if self._loss_weights['coref'] > 0:
             output_coref = self._coref(
                 spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
 
-        if self._loss_weights['ner']>0:
+        if self._loss_weights['ner'] > 0:
             output_ner = self._ner(
                 spans, span_mask, span_embeddings, sentence_lengths, ner_labels, metadata)
 
-        if self._loss_weights['relation']>0:
+        if self._loss_weights['relation'] > 0:
             output_relation = self._relation(
                 spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
-        # TODO(dwadden) ... and now what?
+        loss = (self._loss_weights['coref'] * output_coref['loss'] +
+                self._loss_weights['ner'] * output_ner['loss'] +
+                self._loss_weights['relation'] * output_relation['loss'])
 
-        loss = (
-                self._loss_weights['coref'] * output_coref['loss']
-              + self._loss_weights['ner'] * output_ner['loss']
-              + self._loss_weights['relation'] * output_relation['loss']
-        )
-
-        output_dict = dict(
-                    list(output_coref.items())
-                  + list(output_ner.items())
-                  + list(output_relation.items())
-        )
-
+        output_dict = dict(coref=output_coref,
+                           relation=output_relation,
+                           ner=output_ner)
         output_dict['loss'] = loss
 
         return output_dict
@@ -214,7 +203,6 @@ class DyGIE(Model):
         """
         pass
 
-
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         """
         Get all metrics from all modules. For the ones that shouldn't be displayed, prefix their
@@ -223,13 +211,19 @@ class DyGIE(Model):
         metrics_coref = self._coref.get_metrics(reset=reset)
         metrics_ner = self._ner.get_metrics(reset=reset)
         metrics_relation = self._relation.get_metrics(reset=reset)
+
+        # Make sure that there aren't any conflicting names.
+        metric_names = (list(metrics_coref.keys()) + list(metrics_ner.keys()) +
+                        list(metrics_relation.keys()))
+        assert len(set(metric_names)) == len(metric_names)
         all_metrics = dict(list(metrics_coref.items()) +
                            list(metrics_ner.items()) +
                            list(metrics_relation.items()))
-        # If no list of desired metrics given, return them all.
+
+        # If no list of desired metrics given, display them all.
         if self._display_metrics is None:
             return all_metrics
-        # Otherwise return the selected ones.
+        # Otherwise only display the selected ones.
         res = {}
         for k, v in all_metrics.items():
             if k in self._display_metrics:

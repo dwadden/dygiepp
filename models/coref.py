@@ -314,7 +314,7 @@ class CorefResolver(Model):
         return {"coref_precision": coref_precision,
                 "coref_recall": coref_recall,
                 "coref_f1": coref_f1,
-                "mention_recall": mention_recall}
+                "coref_mention_recall": mention_recall}
 
     @staticmethod
     def _generate_valid_antecedents(num_spans_to_keep: int,

@@ -58,7 +58,7 @@ class NERTagger(Model):
                                 self.number_of_ner_classes - 1))
         )
 
-        self.loss_function = torch.nn.CrossEntropyLoss()
+        self.loss_function = torch.nn.CrossEntropyLoss(reduction="sum")
         self._ner_metrics = NERMetrics(self.number_of_ner_classes, self.null_label)
 
         initializer(self)
