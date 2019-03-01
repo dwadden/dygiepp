@@ -1,12 +1,9 @@
-from collections import deque, Counter
-from typing import Iterable, Deque
-import math
+from typing import Iterable
 import logging
-import random
+import numpy as np
 
 from overrides import overrides
 
-from allennlp.common.util import lazy_groups_of
 from allennlp.data.instance import Instance
 from allennlp.data.iterators.data_iterator import DataIterator
 from allennlp.data.dataset import Batch
@@ -24,48 +21,23 @@ class DocumentIterator(DataIterator):
     in an entire document as a minibatch.
     """
     def _create_batches(self, instances: Iterable[Instance], shuffle: bool) -> Iterable[Batch]:
-        # TODO(dwadden) Write minimal unit test.
-        doc_key = instances[0]["metadata"]["doc_key"]
-        this_batch = []
+        # Make a list indicating whether each entry is the last sentence of the document.
+        doc_keys = np.array([instance["metadata"]["doc_key"] for instance in instances])
+        rolled = np.roll(doc_keys, -1)
+        last_sentences = (doc_keys != rolled).tolist()
 
-        total_length = 0
-
-        for i, instance in enumerate(instances):
-            # If this sentence is from the current document, append to instance list.
-            if instance["metadata"]["doc_key"] == doc_key:
-                this_batch.append(instance)
-                # If we've got a full batch, yield it and reset the batch.
-                # If batch_size is -1, then just do entire documents at a time. For evaluation.
-                # Also, if we're on the final instance in the batch, yield.
-                if ((self._batch_size >= 0 and len(this_batch) == self._batch_size) or
-                    (i == len(instances) - 1)):
-                    full_batch = this_batch
-                    this_batch = []
-                    total_length += len(full_batch)
-                    yield Batch(full_batch)
-            # If we've hit the start of a new document, yield the old one and create a new batch.
-            else:
-                full_batch = this_batch
-                this_batch = [instance]
-                doc_key = instance["metadata"]["doc_key"]
-                # Check to make sure the batch has at least one entry.
-                if full_batch:
-                    total_length += len(full_batch)
-                    yield Batch(full_batch)
+        batch = []
+        for instance, last_sentence in zip(instances, last_sentences):
+            batch.append(instance)
+            if last_sentence:
+                full_batch = batch
+                batch = []
+                yield Batch(full_batch)
 
     @overrides
     def get_num_batches(self, instances: Iterable[Instance]) -> int:
         """
         Get the number of batches.
         """
-        counts = Counter()
-        for instance in instances:
-            doc_key = instance["metadata"]["doc_key"]
-            counts[doc_key] += 1
-        if self._batch_size >= 0:
-            # If static batch sizes, sum the number of batches required for each document.
-            batches_per_doc = [math.ceil(entry / self._batch_size) for entry in counts.values()]
-            return sum(batches_per_doc)
-        else:
-            # If dynamic, one batch per document.
-            return len(counts)
+        n_docs = len(set([instance["metadata"]["doc_key"] for instance in instances]))
+        return n_docs

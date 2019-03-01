@@ -196,7 +196,7 @@ class RelationExtractor(Model):
     def _compute_relation_scores(self, pairwise_embeddings, top_span_mention_scores):
         batch_size = pairwise_embeddings.size(0)
         max_num_spans = pairwise_embeddings.size(1)
-        feature_dim = pairwise_embeddings.size(-1)
+        feature_dim = self._relation_feedforward.input_dim
 
         embeddings_flat = pairwise_embeddings.view(-1, feature_dim)
 
