@@ -83,9 +83,53 @@ class CorefResolver(Model):
                 sentence_lengths,
                 coref_labels_batched: torch.IntTensor = None,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
+        """
+        Run the forward pass. Since we can only have coreferences between spans in the same
+        document, we loop over the documents in the batch. This function assumes that the inputs are
+        in order, but may go across documents.
+        """
+        output_docs = {}
+        doc_keys = [entry["doc_key"] for entry in metadata]
+        uniq_keys = []
+        for entry in doc_keys:
+            if entry not in uniq_keys:
+                uniq_keys.append(entry)
+
+        for key in uniq_keys:
+            ix_list = [1 if entry == key else 0 for entry in doc_keys]
+            doc_metadata = [entry for entry in metadata if entry["doc_key"] == key]
+            ix = torch.tensor(ix_list, dtype=torch.uint8)
+            output_docs[key] = self._forward_doc(
+                spans_batched[ix], span_mask_batched[ix], span_embeddings_batched[ix],
+                sentence_lengths[ix], coref_labels_batched[ix], doc_metadata)
+
+        losses = torch.cat([entry["loss"].unsqueeze(0) for entry in output_docs.values()])
+        loss = torch.sum(losses)
+
+        # At train time, return a separate output dict for each document.
+        if self.training:
+            output = {"loss": loss,
+                      "doc": output_docs}
+        # At test time, we evaluate a whole document at a time. Just return the results for that
+        # document.
+        else:
+            assert len(uniq_keys) == 1
+            key = uniq_keys[0]
+            output = output_docs[key]
+            output["loss"] = loss
+        return output
+
+
+    def _forward_doc(self,  # type: ignore
+                     spans_batched: torch.IntTensor,
+                     span_mask_batched,
+                     span_embeddings_batched,  # TODO(dwadden) add type.
+                     sentence_lengths,
+                     coref_labels_batched: torch.IntTensor = None,
+                     metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
         # pylint: disable=arguments-differ
         """
-        TODO(dwadden) Update documentation.
+        Run the forward pass for a single document.
 
         Important: This function assumes that sentences are going to be passed in in sorted order,
         from the same document.
