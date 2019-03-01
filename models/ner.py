@@ -46,7 +46,7 @@ class NERTagger(Model):
         super(NERTagger, self).__init__(vocab, regularizer)
 
         # Number of classes determine the output dimension of the final layer
-        self.number_of_ner_classes = vocab.get_vocab_size('ner_labels')
+        self._n_labels = vocab.get_vocab_size('ner_labels')
 
         # Null label is needed to keep track of when calculating the metrics
         self.null_label = vocab._token_to_index['ner_labels']['']
@@ -56,10 +56,11 @@ class NERTagger(Model):
             TimeDistributed(mention_feedforward),
             TimeDistributed(torch.nn.Linear(
                 mention_feedforward.get_output_dim(),
-                self.number_of_ner_classes - 1)))
+                self._n_labels - 1)))
 
-        self.loss_function = torch.nn.CrossEntropyLoss(reduction="sum")
-        self._ner_metrics = NERMetrics(self.number_of_ner_classes, self.null_label)
+        self._ner_metrics = NERMetrics(self._n_labels, self.null_label)
+
+        self._loss = torch.nn.CrossEntropyLoss(reduction="sum")
 
         initializer(self)
 
@@ -93,7 +94,11 @@ class NERTagger(Model):
 
         if ner_labels is not None:
             self._ner_metrics(ner_scores, ner_labels, span_mask)
-            loss = util.sequence_cross_entropy_with_logits(ner_scores, ner_labels, span_mask)
+            ner_scores_flat = ner_scores.view(-1, self.number_of_ner_classes)
+            ner_labels_flat = ner_labels.view(-1)
+            mask_flat = span_mask.view(-1).byte()
+
+            loss = self._loss(ner_scores_flat[mask_flat], ner_labels_flat[mask_flat])
             output_dict["loss"] = loss
 
         if metadata is not None:
