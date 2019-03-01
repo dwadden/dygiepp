@@ -94,7 +94,7 @@ class NERTagger(Model):
 
         if ner_labels is not None:
             self._ner_metrics(ner_scores, ner_labels, span_mask)
-            ner_scores_flat = ner_scores.view(-1, self.number_of_ner_classes)
+            ner_scores_flat = ner_scores.view(-1, self._n_labels)
             ner_labels_flat = ner_labels.view(-1)
             mask_flat = span_mask.view(-1).byte()
 
