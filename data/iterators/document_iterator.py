@@ -23,8 +23,14 @@ class DocumentIterator(DataIterator):
     def _create_batches(self, instances: Iterable[Instance], shuffle: bool) -> Iterable[Batch]:
         # Make a list indicating whether each entry is the last sentence of the document.
         doc_keys = np.array([instance["metadata"]["doc_key"] for instance in instances])
-        rolled = np.roll(doc_keys, -1)
-        last_sentences = (doc_keys != rolled).tolist()
+        # If one document, just set the last sentence manually.
+        if len(set(doc_keys)) == 1:
+            last_sentences = np.repeat(False, len(doc_keys))
+            last_sentences[-1] = True
+        # Otherwise get last sentences by comparing document names.
+        else:
+            rolled = np.roll(doc_keys, -1)
+            last_sentences = (doc_keys != rolled).tolist()
 
         batch = []
         for instance, last_sentence in zip(instances, last_sentences):
