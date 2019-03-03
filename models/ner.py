@@ -25,9 +25,6 @@ class NERTagger(Model):
         by a linear layer.
     feature_size: ``int``
         The embedding size for all the embedded features, such as distances or span widths.
-    spans_per_word: float, required.
-        A multiplier between zero and one which controls what percentage of candidate mention
-        spans we retain with respect to the number of words in the document.
     lexical_dropout: ``int``
         The probability of dropping out dimensions of the embedded text.
     initializer : ``InitializerApplicator``, optional (default=``InitializerApplicator()``)
@@ -40,7 +37,6 @@ class NERTagger(Model):
                  vocab: Vocabulary,
                  mention_feedforward: FeedForward,
                  feature_size: int,
-                 spans_per_word: float,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(NERTagger, self).__init__(vocab, regularizer)
