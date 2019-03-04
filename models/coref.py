@@ -145,8 +145,9 @@ class CorefResolver(Model):
         document_length = sentence_lengths.sum().item()
         num_spans = spans.size(1)
 
-        # Prune based on mention scores.
+        # Prune based on mention scores. Make sure we keep at least 1.
         num_spans_to_keep = int(math.floor(self._spans_per_word * document_length))
+        num_spans_to_keep = max(num_spans_to_keep, 1)
 
         # Since there's only one minibatch, there aren't any masked spans for us. The span mask is
         # always 1.

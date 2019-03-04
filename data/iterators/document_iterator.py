@@ -11,7 +11,7 @@ from allennlp.data.dataset import Batch
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@DataIterator.register("document")
+@DataIterator.register("ie_document")
 class DocumentIterator(DataIterator):
     """
     For multi-task IE, we want the training instances in a batch to be successive sentences from the
