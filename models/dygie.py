@@ -102,11 +102,10 @@ class DyGIE(Model):
     def forward(self,
                 text,
                 spans,
-                epoch=None,
-                ner_labels=None,
-                coref_labels=None,
-                relation_labels=None,
-                metadata=None):
+                ner_labels,
+                coref_labels,
+                relation_labels,
+                metadata):
         """
         TODO(dwadden) change this.
         """
@@ -163,7 +162,7 @@ class DyGIE(Model):
 
         if self._loss_weights['relation'] > 0:
             output_relation = self._relation(
-                spans, span_mask, span_embeddings, sentence_lengths, epoch, relation_labels, metadata)
+                spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
         loss = (self._loss_weights['coref'] * output_coref['loss'] +
                 self._loss_weights['ner'] * output_ner['loss'] +
