@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 import torch
 from overrides import overrides
+from torch.nn import functional as F
 
 from allennlp.data import Vocabulary
 from allennlp.models.model import Model
@@ -49,13 +50,12 @@ class RelationExtractor(Model):
         self._relation_scorer = torch.nn.Linear(relation_feedforward.get_output_dim(), self._n_labels)
 
         self._spans_per_word = spans_per_word
+        self._positive_label_weight = positive_label_weight
 
         # TODO(dwadden) Add code to compute relation F1.
         self._candidate_recall = CandidateRecall()
         self._relation_metrics = RelationMetrics()
 
-        class_weights = torch.cat([torch.tensor([1.0]), positive_label_weight * torch.ones(self._n_labels)])
-        self._loss = torch.nn.CrossEntropyLoss(reduction="sum", ignore_index=-1, weight=class_weights)
         initializer(self)
 
     @overrides
@@ -64,6 +64,7 @@ class RelationExtractor(Model):
                 span_mask,
                 span_embeddings,  # TODO(dwadden) add type.
                 sentence_lengths,
+                epoch=None,
                 relation_labels: torch.IntTensor = None,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
         """
@@ -105,7 +106,7 @@ class RelationExtractor(Model):
             gold_relations = self._get_pruned_gold_relations(
                 relation_labels, top_span_indices, top_span_mask)
 
-            cross_entropy = self._get_cross_entropy_loss(relation_scores, gold_relations)
+            cross_entropy = self._get_cross_entropy_loss(relation_scores, gold_relations, epoch)
 
             # Compute F1.
             predictions = self.decode(output_dict)["decoded_relations_dict"]
@@ -236,7 +237,7 @@ class RelationExtractor(Model):
 
         return torch.cat(relations, dim=0)
 
-    def _get_cross_entropy_loss(self, relation_scores, relation_labels):
+    def _get_cross_entropy_loss(self, relation_scores, relation_labels, epoch):
         """
         Compute cross-entropy loss on relation labels. Ignore diagonal entries and entries giving
         relations between masked out spans.
@@ -246,5 +247,11 @@ class RelationExtractor(Model):
         # Need to add 1 so that the null label is 0, to line up with indices into prediction matrix.
         labels_flat = relation_labels.view(-1)
         # Compute cross-entropy loss.
-        loss = self._loss(scores_flat, labels_flat)
+        class_weights = torch.cat(
+            [torch.tensor([1.0]), self._positive_label_weight * torch.ones(self._n_labels)])
+        class_weights = class_weights.to(scores_flat.device)
+        if epoch is not None:
+            class_weights = torch.pow(class_weights, pow(0.95, epoch))
+        loss = F.cross_entropy(
+            scores_flat, labels_flat, reduction="sum", ignore_index=-1, weight=class_weights)
         return loss
