@@ -67,21 +67,21 @@ class DyGIE(Model):
         self._loss_weights = loss_weights.as_dict()
 
         # TODO(dwadden) Figure out the parameters that need to get passed in.
-        self._coref = CorefResolver.from_params(vocab=vocab,
-                                                feature_size=feature_size,
-                                                params=modules.pop("coref"))
-        self._ner = NERTagger.from_params(vocab=vocab,
-                                          feature_size=feature_size,
-                                          params=modules.pop("ner"))
+        # self._coref = CorefResolver.from_params(vocab=vocab,
+        #                                         feature_size=feature_size,
+        #                                         params=modules.pop("coref"))
+        # self._ner = NERTagger.from_params(vocab=vocab,
+        #                                   feature_size=feature_size,
+        #                                   params=modules.pop("ner"))
         self._relation = RelationExtractor.from_params(vocab=vocab,
                                                        feature_size=feature_size,
                                                        params=modules.pop("relation"))
 
         self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
-                                                              combination="x,y",
-                                                              num_width_embeddings=max_span_width,
-                                                              span_width_embedding_dim=feature_size,
-                                                              bucket_widths=False)
+                                                              combination="x,y")
+                                                              # num_width_embeddings=max_span_width,
+                                                              # span_width_embedding_dim=feature_size,
+                                                              # bucket_widths=False)
         if use_attentive_span_extractor:
             self._attentive_span_extractor = SelfAttentiveSpanExtractor(
                 input_dim=text_field_embedder.get_output_dim())
@@ -117,6 +117,12 @@ class DyGIE(Model):
         # Shape: (batch_size, max_sentence_length, embedding_size)
         text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
 
+        import numpy as np
+        to_save = text_embeddings.detach().numpy()
+        np.save(
+            "/data/dave/proj/dygie/dygie-experiments/dwadden/2019-03-04/tf_compare/pytorch_params/context_emb",
+            to_save)
+
         # Shape: (batch_size, max_sentence_length)
         text_mask = util.get_text_field_mask(text).float()
 
@@ -136,6 +142,12 @@ class DyGIE(Model):
 
         # Shape: (batch_size, max_sentence_length, encoding_dim)
         contextualized_embeddings = self._context_layer(text_embeddings, text_mask)
+
+        to_save = contextualized_embeddings.detach().numpy()
+        np.save(
+            "/data/dave/proj/dygie/dygie-experiments/dwadden/2019-03-04/tf_compare/pytorch_params/context_outputs",
+            to_save)
+
         # Shape: (batch_size, num_spans, 2 * encoding_dim + feature_size)
         endpoint_span_embeddings = self._endpoint_span_extractor(contextualized_embeddings, spans)
 
@@ -164,13 +176,15 @@ class DyGIE(Model):
             output_relation = self._relation(
                 spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
-        loss = (self._loss_weights['coref'] * output_coref['loss'] +
-                self._loss_weights['ner'] * output_ner['loss'] +
-                self._loss_weights['relation'] * output_relation['loss'])
+        # loss = (self._loss_weights['coref'] * output_coref['loss'] +
+        #         self._loss_weights['ner'] * output_ner['loss'] +
+        #         self._loss_weights['relation'] * output_relation['loss'])
+        loss = output_relation['loss']
 
-        output_dict = dict(coref=output_coref,
-                           relation=output_relation,
-                           ner=output_ner)
+        # output_dict = dict(coref=output_coref,
+        #                    relation=output_relation,
+        #                    ner=output_ner)
+        output_dict = dict(relation=output_relation)
         output_dict['loss'] = loss
 
         return output_dict
@@ -210,27 +224,29 @@ class DyGIE(Model):
         Get all metrics from all modules. For the ones that shouldn't be displayed, prefix their
         keys with an underscore.
         """
-        metrics_coref = self._coref.get_metrics(reset=reset)
-        metrics_ner = self._ner.get_metrics(reset=reset)
+        # metrics_coref = self._coref.get_metrics(reset=reset)
+        # metrics_ner = self._ner.get_metrics(reset=reset)
         metrics_relation = self._relation.get_metrics(reset=reset)
 
-        # Make sure that there aren't any conflicting names.
-        metric_names = (list(metrics_coref.keys()) + list(metrics_ner.keys()) +
-                        list(metrics_relation.keys()))
-        assert len(set(metric_names)) == len(metric_names)
-        all_metrics = dict(list(metrics_coref.items()) +
-                           list(metrics_ner.items()) +
-                           list(metrics_relation.items()))
+        return metrics_relation
 
-        # If no list of desired metrics given, display them all.
-        if self._display_metrics is None:
-            return all_metrics
-        # Otherwise only display the selected ones.
-        res = {}
-        for k, v in all_metrics.items():
-            if k in self._display_metrics:
-                res[k] = v
-            else:
-                new_k = "_" + k
-                res[new_k] = v
-        return res
+        # # Make sure that there aren't any conflicting names.
+        # metric_names = (list(metrics_coref.keys()) + list(metrics_ner.keys()) +
+        #                 list(metrics_relation.keys()))
+        # assert len(set(metric_names)) == len(metric_names)
+        # all_metrics = dict(list(metrics_coref.items()) +
+        #                    list(metrics_ner.items()) +
+        #                    list(metrics_relation.items()))
+
+        # # If no list of desired metrics given, display them all.
+        # if self._display_metrics is None:
+        #     return all_metrics
+        # # Otherwise only display the selected ones.
+        # res = {}
+        # for k, v in all_metrics.items():
+        #     if k in self._display_metrics:
+        #         res[k] = v
+        #     else:
+        #         new_k = "_" + k
+        #         res[new_k] = v
+        # return res

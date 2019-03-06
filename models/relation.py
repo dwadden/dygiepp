@@ -78,7 +78,6 @@ class RelationExtractor(Model):
          top_span_indices, top_span_mention_scores) = self._mention_pruner(span_embeddings,
                                                                            span_mask,
                                                                            num_spans_to_keep)
-
         # Convert to Boolean for logical indexing operations later.
         top_span_mask = top_span_mask.unsqueeze(-1)
 
@@ -90,6 +89,7 @@ class RelationExtractor(Model):
         span_pair_embeddings = self._compute_span_pair_embeddings(top_span_embeddings)
         relation_scores = self._compute_relation_scores(span_pair_embeddings,
                                                         top_span_mention_scores)
+
         # Subtract 1 so that the "null" relation corresponds to -1.
         _, predicted_relations = relation_scores.max(-1)
         predicted_relations -= 1
