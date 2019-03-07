@@ -73,6 +73,7 @@ class RelationExtractor(Model):
 
         # Keep different number of spans for each minibatch entry.
         num_spans_to_keep = torch.floor(sentence_lengths.float() * self._spans_per_word).long()
+        num_spans_to_keep = torch.max(num_spans_to_keep, torch.ones_like(num_spans_to_keep))
 
         (top_span_embeddings, top_span_mask,
          top_span_indices, top_span_mention_scores) = self._mention_pruner(span_embeddings,
