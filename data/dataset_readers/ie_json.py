@@ -62,7 +62,13 @@ def cluster_dict_sentence(cluster_dict: Dict[Tuple[int, int], int], sentence_sta
     return cluster_sent, new_cluster_dict
 
 
-def format_label_fields(ner: List[List[Union[int,str]]], relations: List[List[Union[int,str]]], cluster_tmp: Dict[Tuple[int,int], int], sentence_start: int) -> Tuple[Dict[Tuple[int,int],str], Dict[Tuple[Tuple[int,int],Tuple[int,int]],str], Dict[Tuple[int,int],int]]:
+def format_label_fields(ner: List[List[Union[int,str]]],
+                        relations: List[List[Union[int,str]]],
+                        cluster_tmp: Dict[Tuple[int,int], int],
+                        events: List[List[Union[int,str]]],
+                        sentence_start: int) -> Tuple[Dict[Tuple[int,int],str],
+                                                      Dict[Tuple[Tuple[int,int],Tuple[int,int]],str],
+                                                      Dict[Tuple[int,int],int]]:
     """
     Format the label fields, making the following changes:
     1. Span indices should be with respect to sentence, not document.
@@ -93,7 +99,21 @@ def format_label_fields(ner: List[List[Union[int,str]]], relations: List[List[Un
         )
     )
 
-    return ner_dict, relation_dict, cluster_dict
+    # Events. There are two structures. The `trigger_dict` is a mapping from span pairs to the
+    # trigger labels. The `arg_dict` maps from (trigger_span, arg_span) pairs to trigger labels.
+    trigger_dict = MissingDict("")
+    arg_dict = MissingDict("")
+    for event in events:
+        the_trigger = event[0]
+        the_args = event[1:]
+        # All triggers consist of a single token, which is why `the_trigger[0]` is repeated.
+        trigger_dict[(the_trigger[0] - ss, the_trigger[0] - ss)] = the_trigger[1]
+        for the_arg in the_args:
+            # Like above, triggers are a single token.
+            arg_dict[((the_trigger[0] - ss, the_trigger[0] - ss),
+                      (the_arg[0] - ss, the_arg[1] - ss))] = the_arg[2]
+
+    return ner_dict, relation_dict, cluster_dict, trigger_dict, arg_dict
 
 
 @DatasetReader.register("ie_json")
@@ -101,27 +121,6 @@ class IEJsonReader(DatasetReader):
     """
     Reads a single JSON-formatted file. This is the same file format as used in the
     scierc, but is preprocessed
-
-    ##############################OLD COMMENTS#####################################
-
-    #to dump all documents into a single file per train, dev and test split. See
-    #scripts/compile_coref_data.sh for more details of how to pre-process the Ontonotes 5.0 data
-    #into the correct format.
-
-    Returns a ``Dataset`` where the ``Instances`` have four fields: ``text``, a ``TextField``
-    containing the full document text, ``spans``, a ``ListField[SpanField]`` of inclusive start and
-    end indices for span candidates, and ``metadata``, a ``MetadataField`` that stores the instance's
-    original text. For data with gold cluster labels, we also include the original ``clusters``
-    (a list of list of index pairs) and a ``SequenceLabelField`` of cluster ids for every span
-    candidate.
-
-    Parameters
-    ----------
-    max_span_width: ``int``, required.
-        The maximum width of candidate spans to consider.
-    token_indexers : ``Dict[str, TokenIndexer]``, optional
-        This is used to index the words in the document.  See :class:`TokenIndexer`.
-        Default is ``{"tokens": SingleIdTokenIndexer()}``.
     """
     def __init__(self,
                  max_span_width: int,
@@ -143,25 +142,35 @@ class IEJsonReader(DatasetReader):
                 js = json.loads(line)
                 doc_key = js["doc_key"]
                 cluster_dict_doc = make_cluster_dict(js["clusters"])
-                zipped = zip(js["sentences"], js["ner"], js["relations"])
+                zipped = zip(js["sentences"], js["ner"], js["relations"], js["events"])
 
                 # Loop over the sentences.
-                for sentence_num, (sentence, ner, relations) in enumerate(zipped):
+                for sentence_num, (sentence, ner, relations, events) in enumerate(zipped):
 
                     sentence_end = sentence_start + len(sentence) - 1
                     cluster_tmp, cluster_dict_doc = cluster_dict_sentence(
                         cluster_dict_doc, sentence_start, sentence_end)
 
+                    # TODO(dwadden) too many outputs. Re-write as a dictionary.
                     # Make span indices relative to sentence instead of document.
-                    ner_dict, relation_dict, cluster_dict = format_label_fields(
-                        ner, relations, cluster_tmp, sentence_start)
+                    ner_dict, relation_dict, cluster_dict, trigger_dict, arg_dict = \
+                        format_label_fields(ner, relations, cluster_tmp, events, sentence_start)
                     sentence_start += len(sentence)
                     instance = self.text_to_instance(
-                        sentence, ner_dict, relation_dict, cluster_dict, doc_key, sentence_num)
+                        sentence, ner_dict, relation_dict, cluster_dict, trigger_dict, arg_dict,
+                        doc_key, sentence_num)
                     yield instance
 
     @overrides
-    def text_to_instance(self, sentence: List[str], ner_dict: Dict[Tuple[int, int], str], relation_dict, cluster_dict, doc_key: str, sentence_num: int):
+    def text_to_instance(self,
+                         sentence: List[str],
+                         ner_dict: Dict[Tuple[int, int], str],
+                         relation_dict,
+                         cluster_dict,
+                         trigger_dict,
+                         arg_dict,
+                         doc_key: str,
+                         sentence_num: int):
         """
         TODO(dwadden) document me.
         """
@@ -175,54 +184,70 @@ class IEJsonReader(DatasetReader):
                         ner_dict=ner_dict,
                         relation_dict=relation_dict,
                         cluster_dict=cluster_dict,
+                        trigger_dict=trigger_dict,
+                        arg_dict=arg_dict,
                         doc_key=doc_key,
                         sentence_num=sentence_num)
         metadata_field = MetadataField(metadata)
 
-        # Generate fields for text spans, ner labels, coref labels.
+        # Generate fields for text spans, ner labels, coref labels, and trigger labels.
         spans = []
         span_ner_labels = []
         span_coref_labels = []
+        span_trigger_labels = []
         for start, end in enumerate_spans(sentence, max_span_width=self._max_span_width):
             span_ix = (start, end)
             span_ner_labels.append(ner_dict[span_ix])
             span_coref_labels.append(cluster_dict[span_ix])
+            span_trigger_labels.append(trigger_dict[span_ix])
             spans.append(SpanField(start, end, text_field))
-
-        #all_spans = enumerate_spans(sentence, max_span_width=self._max_span_width)
-        #nspan_ner_labels = [ner_dict[(start, end)] for start, end in all_spans]
-        #nspan_coref_labels = [cluster_dict[(start, end)] for start, end in all_spans]
-        #nspans = [SpanField(start, end, text_field) for start, end in all_spans]
 
         span_field = ListField(spans)
         ner_label_field = SequenceLabelField(span_ner_labels, span_field,
                                              label_namespace="ner_labels")
         coref_label_field = SequenceLabelField(span_coref_labels, span_field,
                                                label_namespace="coref_labels")
+        trigger_label_field = SequenceLabelField(span_trigger_labels, span_field,
+                                                 label_namespace="trigger_labels")
 
-        # Generate fields for relations. Only record the non-null relations.
+        # Generate labels for relations and arguments. Only store non-null values.
+        # For the arguments, by convention the first span specifies the trigger, and the second
+        # specifies the argument.
         n_spans = len(spans)
         span_tuples = [(span.span_start, span.span_end) for span in spans]
         candidate_indices = [(i, j) for i in range(n_spans) for j in range(n_spans)]
 
         relations = []
-        indices = []
+        arguments = []
+        relation_indices = []
+        argument_indices = []
         for i, j in candidate_indices:
             span_pair = (span_tuples[i], span_tuples[j])
-            label = relation_dict[span_pair]
-            if label:
-                indices.append((i, j))
-                relations.append(label)
+            relation_label = relation_dict[span_pair]
+            if relation_label:
+                relation_indices.append((i, j))
+                relations.append(relation_label)
+            # The trigger is i, the label is j. Only consider the case of single-token triggers.
+            argument_label = arg_dict[span_pair]
+            if argument_label:
+                argument_indices.append((i, j))
+                arguments.append(argument_label)
 
         relation_label_field = AdjacencyField(
-            indices=indices, sequence_field=span_field, labels=relations,
+            indices=relation_indices, sequence_field=span_field, labels=relations,
             label_namespace="relation_labels")
+
+        argument_label_field = AdjacencyField(
+            indices=argument_indices, sequence_field=span_field, labels=arguments,
+            label_namespace="argument_labels")
 
         # Pull it  all together.
         fields = dict(text=text_field,
                       spans=span_field,
                       ner_labels=ner_label_field,
                       coref_labels=coref_label_field,
+                      trigger_labels=trigger_label_field,
+                      argument_labels=argument_label_field,
                       relation_labels=relation_label_field,
                       metadata=metadata_field)
 

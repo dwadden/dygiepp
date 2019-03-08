@@ -105,14 +105,17 @@ class DyGIE(Model):
                 ner_labels,
                 coref_labels,
                 relation_labels,
+                trigger_labels,
+                argument_labels,
                 metadata):
         """
         TODO(dwadden) change this.
         """
         # TODO(dwadden) Is there some smarter way to do the batching within a document?
 
-        # They're passed in as float, due to AllenNLP internals.
+        # In AllenNLP, AdjacencyFields are passed in as floats. This fixes it.
         relation_labels = relation_labels.long()
+        argument_labels = argument_labels.long()
 
         # Shape: (batch_size, max_sentence_length, embedding_size)
         text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
