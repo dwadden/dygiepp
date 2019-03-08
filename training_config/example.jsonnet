@@ -1,29 +1,29 @@
-// Quick test that doesn't load in any data.
+// Options set by user.
 
 // Primary prediction target. Watch metrics associated with this target.
 local target = "rel";
 
 // Specifies the token-level features that will be created.
 local use_glove = true;
-local use_char = true;
+local use_char = false;
 local use_elmo = false;
-local use_attentive_span_extractor = true;
+local use_attentive_span_extractor = false;
 
 // Specifies the model parameters.
 local lstm_hidden_size = 200;
 local lstm_n_layers = 1;
-local feature_size = 10;
+local feature_size = 20;
 local feedforward_layers = 2;
-local char_n_filters = 50;
-local feedforward_dim = 150;
+local char_n_filters = 100;
+local feedforward_dim = 250;
 local max_span_width = 8;
 local feedforward_dropout = 0.2;
 local lexical_dropout = 0.5;
 local lstm_dropout = 0.4;
 local loss_weights = {
-  "ner": 1.0,
+  "ner": 0.0,
   "relation": 1.0,
-  "coref": 1.0
+  "coref": 0.0
 };
 
 // Coref settings.
@@ -126,7 +126,7 @@ local text_field_embedder = {
   "token_embedders": {
     [if use_glove then "tokens"]: {
       "type": "embedding",
-      // "pretrained_file": "https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.300d.txt.gz",
+      "pretrained_file": "https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.300d.txt.gz",
       "embedding_dim": 300,
       "trainable": false
     },
@@ -164,8 +164,9 @@ local text_field_embedder = {
     "token_indexers": token_indexers,
     "max_span_width": max_span_width
   },
-  "train_data_path": "tests/fixtures/scierc_article.json",
-  "validation_data_path": "tests/fixtures/scierc_article.json",
+  "train_data_path": std.extVar("ie_train_data_path"),
+  "validation_data_path": std.extVar("ie_dev_data_path"),
+  "test_data_path": std.extVar("ie_test_data_path"),
   "model": {
     "type": "dygie",
     "text_field_embedder": text_field_embedder,
@@ -216,7 +217,7 @@ local text_field_embedder = {
     "num_epochs": num_epochs,
     "grad_norm": 5.0,
     "patience" : patience,
-    "cuda_device" : -1,
+    "cuda_device" : std.parseInt(std.extVar("cuda_device")),
     "validation_metric": validation_metrics[target],
     "learning_rate_scheduler": learning_rate_scheduler,
     "optimizer": {
