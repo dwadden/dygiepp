@@ -141,7 +141,20 @@ class IEJsonReader(DatasetReader):
                 sentence_start = 0
                 js = json.loads(line)
                 doc_key = js["doc_key"]
+
+                # If some fields are missing in the data set, fill them with empties.
+                # TODO(dwadden) do this more cleanly once things are running.
+                n_sentences = len(js["sentences"])
+                if "clusters" not in js:
+                    js["clusters"] = []
+                for field in ["ner", "relations", "events"]:
+                    if field not in js:
+                        js[field] = [[] for _ in range(n_sentences)]
+
                 cluster_dict_doc = make_cluster_dict(js["clusters"])
+                for field in ["ner", "relations", "events"]:
+                    if field not in js:
+                        js[field] = [[] for _ in range(n_sentences)]
                 zipped = zip(js["sentences"], js["ner"], js["relations"], js["events"])
 
                 # Loop over the sentences.
