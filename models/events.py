@@ -12,6 +12,9 @@ from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from allennlp.modules import TimeDistributed, Pruner
 
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
+from dygie.models.entity_beam_scorer import EntityBeamScorer
+from dygie.training.event_metrics import EventMetrics
+# TODO(dwadden) rename NERMetrics
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -27,96 +30,136 @@ class EventExtractor(Model):
     def __init__(self,
                  vocab: Vocabulary,
                  trigger_feedforward: FeedForward,
+                 ner_scorer: FeedForward,
                  argument_feedforward: FeedForward,
-                 role_feedforward: FeedForward,
                  feature_size: int,
                  trigger_spans_per_word: float,
                  argument_spans_per_word: float,
+                 loss_weights,
                  initializer: InitializerApplicator = InitializerApplicator(),
-                 positive_role_weight: float = 1.0,
+                 positive_label_weight: float = 1.0,
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(EventExtractor, self).__init__(vocab, regularizer)
 
-        self._n_labels_trigger = vocab.get_vocab_size("triggers")
-        self._n_labels_role = vocab.get_vocab_size("roles")
+        self._n_trigger_labels = vocab.get_vocab_size("trigger_labels")
+        self._n_argument_labels = vocab.get_vocab_size("argument_labels")
 
-        # Span candidate scorer.
-        # TODO(dwadden) make sure I've got the input dim right on this one.
-        feedforward_scorer = torch.nn.Sequential(
-            TimeDistributed(mention_feedforward),
-            TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1)))
-        self._mention_pruner = Pruner(feedforward_scorer)
+        # Weight on trigger labeling and argument labeling.
+        self._loss_weights = loss_weights.as_dict()
 
-        # Relation scorer.
-        self._relation_feedforward = relation_feedforward
-        self._relation_scorer = torch.nn.Linear(relation_feedforward.get_output_dim(), self._n_labels)
+        # Trigger candidate scorer.
+        null_label = vocab.get_token_index("", "trigger_labels")
+        assert null_label == 0  # If not, the dummy class won't correspond to the null label.
+        self._trigger_scorer = torch.nn.Sequential(
+            TimeDistributed(trigger_feedforward),
+            TimeDistributed(torch.nn.Linear(trigger_feedforward.get_output_dim(),
+                                            self._n_trigger_labels - 1)))
+        self._trigger_pruner = Pruner(EntityBeamScorer(self._trigger_scorer))
 
-        self._spans_per_word = spans_per_word
+        # Use the same argument scorer as the NER module used, since arguments are always named
+        # entities.
+        argument_scorer = EntityBeamScorer(ner_scorer)
+        self._argument_pruner = Pruner(argument_scorer)
 
-        # TODO(dwadden) Add code to compute relation F1.
-        self._candidate_recall = CandidateRecall()
-        self._relation_metrics = RelationMetrics()
+        # Argument scorer.
+        self._argument_feedforward = argument_feedforward
+        self._argument_scorer = torch.nn.Linear(argument_feedforward.get_output_dim(), self._n_argument_labels)
 
-        class_weights = torch.cat([torch.tensor([1.0]), positive_label_weight * torch.ones(self._n_labels)])
-        self._loss = torch.nn.CrossEntropyLoss(reduction="sum", ignore_index=-1, weight=class_weights)
+        self._trigger_spans_per_word = trigger_spans_per_word
+        self._argument_spans_per_word = argument_spans_per_word
+
+        # TODO(dwadden) Add metrics.
+        self._metrics = EventMetrics()
+
+        self._trigger_loss = torch.nn.CrossEntropyLoss(reduction="sum")
+        # TODO(dwadden) add loss weights.
+        self._argument_loss = torch.nn.CrossEntropyLoss(reduction="sum", ignore_index=-1)
         initializer(self)
 
     @overrides
     def forward(self,  # type: ignore
-                spans: torch.IntTensor,
+                trigger_mask,
+                trigger_embeddings,
+                spans,
                 span_mask,
                 span_embeddings,  # TODO(dwadden) add type.
                 sentence_lengths,
-                relation_labels: torch.IntTensor = None,
+                trigger_labels,
+                argument_labels,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
         """
         TODO(dwadden) Write documentation.
+        The trigger embeddings are just the contextualized token embeddings, and the trigger mask is
+        the text mask. For the arguments, we consider all the spans.
         """
-        num_spans = spans.size(1)  # Max number of spans for the minibatch.
+        # Compute trigger scores.
+        trigger_scores = self._compute_trigger_scores(trigger_embeddings, trigger_mask)
 
-        # Keep different number of spans for each minibatch entry.
-        num_spans_to_keep = torch.floor(sentence_lengths.float() * self._spans_per_word).long()
 
-        (top_span_embeddings, top_span_mask,
-         top_span_indices, top_span_mention_scores) = self._mention_pruner(span_embeddings,
-                                                                           span_mask,
-                                                                           num_spans_to_keep)
+        # Get trigger candidates for event argument labeling.
+        num_trig_spans_to_keep = torch.floor(
+            sentence_lengths.float() * self._trigger_spans_per_word).long()
+        num_trig_spans_to_keep = torch.max(num_trig_spans_to_keep,
+                                           torch.ones_like(num_trig_spans_to_keep))
 
-        # Convert to Boolean for logical indexing operations later.
-        top_span_mask = top_span_mask.unsqueeze(-1)
+        (top_trig_embeddings, top_trig_mask,
+         top_trig_indices, top_trig_scores) = self._trigger_pruner(trigger_embeddings,
+                                                                   trigger_mask,
+                                                                   num_trig_spans_to_keep)
+        top_trig_mask = top_trig_mask.unsqueeze(-1)
 
-        flat_top_span_indices = util.flatten_and_batch_shift_indices(top_span_indices, num_spans)
-        top_spans = util.batched_index_select(spans,
-                                              top_span_indices,
-                                              flat_top_span_indices)
+        # Compute the number of argument spans to keep.
+        num_arg_spans_to_keep = torch.floor(
+            sentence_lengths.float() * self._argument_spans_per_word).long()
+        num_arg_spans_to_keep = torch.max(num_arg_spans_to_keep,
+                                          torch.ones_like(num_arg_spans_to_keep))
 
-        span_pair_embeddings = self._compute_span_pair_embeddings(top_span_embeddings)
-        relation_scores = self._compute_relation_scores(span_pair_embeddings,
-                                                        top_span_mention_scores)
-        # Subtract 1 so that the "null" relation corresponds to -1.
-        _, predicted_relations = relation_scores.max(-1)
-        predicted_relations -= 1
+        (top_arg_embeddings, top_arg_mask,
+         top_arg_indices, top_arg_scores) = self._argument_pruner(span_embeddings,
+                                                                  span_mask,
+                                                                  num_arg_spans_to_keep)
 
-        output_dict = {"top_spans": top_spans,
-                       "relation_scores": relation_scores,
-                       "predicted_relations": predicted_relations,
-                       "num_spans_to_keep": num_spans_to_keep}
+        top_arg_mask = top_arg_mask.unsqueeze(-1)
+        top_arg_spans = util.batched_index_select(spans,
+                                                  top_arg_indices)
+
+        trig_arg_embeddings = self._compute_trig_arg_embeddings(top_trig_embeddings,
+                                                                top_arg_embeddings)
+
+        argument_scores = self._compute_argument_scores(trig_arg_embeddings,
+                                                        top_trig_scores,
+                                                        top_arg_scores)
+
+        _, predicted_triggers = trigger_scores.max(-1)
+        _, predicted_arguments = argument_scores.max(-1)
+        predicted_arguments -= 1  # The null argument has label -1.
+
+        output_dict = {"top_trigger_indices": top_trig_indices,
+                       "top_argument_spans": top_arg_spans,
+                       "trigger_scores": trigger_scores,
+                       "argument_scores": argument_scores,
+                       "predicted_triggers": predicted_triggers,
+                       "predicted_arguments": predicted_arguments,
+                       "num_trigger_spans_to_keep": num_trig_spans_to_keep,
+                       "num_argument_spans_to_keep": num_arg_spans_to_keep}
 
         # Evaluate loss and F1 if labels were provided.
-        if relation_labels is not None:
-            # Compute cross-entropy loss.
-            gold_relations = self._get_pruned_gold_relations(
-                relation_labels, top_span_indices, top_span_mask)
+        if trigger_labels is not None and argument_labels is not None:
+            # Compute the loss for both triggers and arguments.
+            trigger_loss = self._get_trigger_loss(trigger_scores, trigger_labels, trigger_mask)
 
-            cross_entropy = self._get_cross_entropy_loss(relation_scores, gold_relations)
+            gold_arguments = self._get_pruned_gold_arguments(
+                argument_labels, top_trig_indices, top_arg_indices, top_trig_mask, top_arg_mask)
+
+            argument_loss = self._get_argument_loss(argument_scores, gold_arguments)
 
             # Compute F1.
-            predictions = self.decode(output_dict)["decoded_relations_dict"]
+            predictions = self.decode(output_dict)["decoded_events"]
             assert len(predictions) == len(metadata)  # Make sure length of predictions is right.
-            self._candidate_recall(predictions, metadata)
-            self._relation_metrics(predictions, metadata)
+            self._metrics(predictions, metadata)
 
-            output_dict["loss"] = cross_entropy
+            output_dict["loss"] = (self._loss_weights["trigger"] * trigger_loss +
+                                   self._loss_weights["arguments"] * argument_loss)
 
         return output_dict
 
@@ -127,74 +170,120 @@ class EventExtractor(Model):
         pair of span indices for that sentence, and each value is the relation label on that span
         pair.
         """
-        top_spans_batch = output_dict["top_spans"].detach().cpu()
-        predicted_relations_batch = output_dict["predicted_relations"].detach().cpu()
-        num_spans_to_keep_batch = output_dict["num_spans_to_keep"].detach().cpu()
-        res_dict = []
-        res_list = []
+        predicted_trigs_batch = output_dict["predicted_triggers"].detach().cpu()
+        predicted_args_batch = output_dict["predicted_arguments"].detach().cpu()
+        top_trigs_batch = output_dict["top_trigger_indices"].detach().cpu()
+        top_args_batch = output_dict["top_argument_spans"].detach().cpu()
+        num_trig_spans_to_keep_batch = output_dict["num_trigger_spans_to_keep"].detach().cpu()
+        num_arg_spans_to_keep_batch = output_dict["num_argument_spans_to_keep"].detach().cpu()
+        res = []
 
         # Collect predictions for each sentence in minibatch.
-        zipped = zip(top_spans_batch, predicted_relations_batch, num_spans_to_keep_batch)
-        for top_spans, predicted_relations, num_spans_to_keep in zipped:
-            entry_dict, entry_list = self._decode_sentence(
-                top_spans, predicted_relations, num_spans_to_keep)
-            res_dict.append(entry_dict)
-            res_list.append(entry_list)
+        zipped = zip(predicted_trigs_batch, predicted_args_batch, top_trigs_batch, top_args_batch,
+                     num_trig_spans_to_keep_batch, num_arg_spans_to_keep_batch)
+        for predicted_trigs, predicted_args, top_trigs, top_args, num_trigs_kept, num_args_kept in zipped:
+            entry = self._decode_sentence(
+                predicted_trigs, predicted_args, top_trigs, top_args, num_trigs_kept, num_args_kept)
+            res.append(entry)
 
-        output_dict["decoded_relations_dict"] = res_dict
-        output_dict["decoded_relations"] = res_list
+        output_dict["decoded_events"] = res
         return output_dict
 
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        precision, recall, f1 = self._relation_metrics.get_metric(reset)
-        candidate_recall = self._candidate_recall.get_metric(reset)
-        return {"rel_precision": precision,
-                "rel_recall": recall,
-                "rel_f1": f1,
-                "rel_span_recall": candidate_recall}
+        return self._metrics.get_metric(reset)
 
-    def _decode_sentence(self, top_spans, predicted_relations, num_spans_to_keep):
-        # TODO(dwadden) speed this up?
+    def _decode_sentence(self, predicted_trigs, predicted_args, top_trigs, top_args, num_trigs_kept,
+                         num_args_kept):
         # Throw out all predictions that shouldn't be kept.
-        keep = num_spans_to_keep.item()
-        top_spans = [tuple(x) for x in top_spans.tolist()]
+        keep_trigs = num_trigs_kept.item()
+        keep_args = num_args_kept.item()
+
+        top_trigs = top_trigs.tolist()
+        top_args = [tuple(x) for x in top_args.tolist()]
 
         # Iterate over all span pairs and labels. Record the span if the label isn't null.
-        res_dict = {}
-        res_list = []
-        for i, j in itertools.product(range(keep), range(keep)):
-            span_1 = top_spans[i]
-            span_2 = top_spans[j]
-            label = predicted_relations[i, j].item()
-            if label >= 0:
-                label_name = self.vocab.get_token_from_index(label, namespace="relation_labels")
-                res_dict[(span_1, span_2)] = label_name
-                list_entry = (span_1[0], span_1[1], span_2[0], span_2[1], label_name)
-                res_list.append(list_entry)
+        trigger_dict = {}
+        for i in range(keep_trigs):
+            trig_ix = top_trigs[i]
+            trig_label = predicted_trigs[i].item()
+            if trig_label > 0:
+                trigger_dict[trig_ix] = self.vocab.get_token_from_index(trig_label, namespace="trigger_labels")
 
-        return res_dict, res_list
+        argument_dict = {}
+        for i, j in itertools.product(range(keep_trigs), range(keep_args)):
+            trig_ix = top_trigs[i]
+            arg_span = top_args[j]
+            arg_label = predicted_args[i, j].item()
+            if arg_label >= 0:
+                label_name = self.vocab.get_token_from_index(arg_label, namespace="argument_labels")
+                argument_dict[(trig_ix, arg_span)] = label_name
+
+        res = {"trigger": trigger_dict,
+               "argument": argument_dict}
+        return res
+
+    def _compute_trigger_scores(self, trigger_embeddings, trigger_mask):
+        """
+        Compute trigger scores for all tokens.
+        """
+        trigger_scores = self._trigger_scorer(trigger_embeddings)
+        dummy_dims = [trigger_scores.size(0), trigger_scores.size(1), 1]
+        dummy_scores = trigger_scores.new_zeros(*dummy_dims)
+        trigger_scores = torch.cat((dummy_scores, trigger_scores), -1)
+        # Give large negative scores to the masked-out values.
+        mask = trigger_mask.unsqueeze(-1)
+        trigger_scores = util.replace_masked_values(trigger_scores, mask, -1e20)
+        return trigger_scores
+
 
     @staticmethod
-    def _compute_span_pair_embeddings(top_span_embeddings: torch.FloatTensor):
+    def _compute_trig_arg_embeddings(top_trig_embeddings: torch.FloatTensor,
+                                     top_arg_embeddings: torch.FloatTensor):
         """
         TODO(dwadden) document me and add comments.
         """
-        # Shape: (batch_size, num_spans_to_keep, num_spans_to_keep, embedding_size)
-        num_candidates = top_span_embeddings.size(1)
+        # TODO(dwadden) this is the same pattern as in the relation module. Maybe this should be
+        # refactored somehow?
+        num_trigs = top_trig_embeddings.size(1)
+        num_args = top_arg_embeddings.size(1)
 
-        embeddings_1_expanded = top_span_embeddings.unsqueeze(2)
-        embeddings_1_tiled = embeddings_1_expanded.repeat(1, 1, num_candidates, 1)
+        trig_emb_expanded = top_trig_embeddings.unsqueeze(2)
+        trig_emb_tiled = trig_emb_expanded.repeat(1, 1, num_args, 1)
 
-        embeddings_2_expanded = top_span_embeddings.unsqueeze(1)
-        embeddings_2_tiled = embeddings_2_expanded.repeat(1, num_candidates, 1, 1)
+        arg_emb_expanded = top_arg_embeddings.unsqueeze(1)
+        arg_emb_tiled = arg_emb_expanded.repeat(1, num_trigs, 1, 1)
 
-        similarity_embeddings = embeddings_1_expanded * embeddings_2_expanded
-
-        pair_embeddings_list = [embeddings_1_tiled, embeddings_2_tiled, similarity_embeddings]
+        pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled]
         pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
 
         return pair_embeddings
+
+
+    def _compute_argument_scores(self, pairwise_embeddings, top_trig_scores, top_arg_scores):
+        batch_size = pairwise_embeddings.size(0)
+        max_num_trigs = pairwise_embeddings.size(1)
+        max_num_args = pairwise_embeddings.size(2)
+        feature_dim = self._argument_feedforward.input_dim
+
+        embeddings_flat = pairwise_embeddings.view(-1, feature_dim)
+
+        arguments_projected_flat = self._argument_feedforward(embeddings_flat)
+        argument_scores_flat = self._argument_scorer(arguments_projected_flat)
+
+        argument_scores = argument_scores_flat.view(batch_size, max_num_trigs, max_num_args, -1)
+
+        # Add the mention scores for each of the candidates.
+
+        argument_scores += (top_trig_scores.unsqueeze(-1) +
+                            top_arg_scores.transpose(1, 2).unsqueeze(-1))
+
+        shape = [argument_scores.size(0), argument_scores.size(1), argument_scores.size(2), 1]
+        dummy_scores = argument_scores.new_zeros(*shape)
+
+        argument_scores = torch.cat([dummy_scores, argument_scores], -1)
+        return argument_scores
+
 
     def _compute_relation_scores(self, pairwise_embeddings, top_span_mention_scores):
         batch_size = pairwise_embeddings.size(0)
@@ -220,34 +309,44 @@ class EventExtractor(Model):
         return relation_scores
 
     @staticmethod
-    def _get_pruned_gold_relations(relation_labels, top_span_indices, top_span_masks):
+    def _get_pruned_gold_arguments(argument_labels, top_trig_indices, top_arg_indices,
+                                   top_trig_masks, top_arg_masks):
         """
         Loop over each slice and get the labels for the spans from that slice.
         All labels are offset by 1 so that the "null" label gets class zero. This is the desired
         behavior for the softmax. Labels corresponding to masked relations keep the label -1, which
         the softmax loss ignores.
         """
-        # TODO(dwadden) Test and possibly optimize.
-        relations = []
+        arguments = []
 
-        for sliced, ixs, top_span_mask in zip(relation_labels, top_span_indices, top_span_masks.byte()):
-            entry = sliced[ixs][:, ixs].unsqueeze(0)
-            mask_entry = top_span_mask & top_span_mask.transpose(0, 1).unsqueeze(0)
+        zipped = zip(argument_labels, top_trig_indices, top_arg_indices,
+                     top_trig_masks.byte(), top_arg_masks.byte())
+
+        for sliced, trig_ixs, arg_ixs, trig_mask, arg_mask in zipped:
+            entry = sliced[trig_ixs][:, arg_ixs].unsqueeze(0)
+            mask_entry = trig_mask & arg_mask.transpose(0, 1).unsqueeze(0)
             entry[mask_entry] += 1
             entry[~mask_entry] = -1
-            relations.append(entry)
+            arguments.append(entry)
 
-        return torch.cat(relations, dim=0)
+        return torch.cat(arguments, dim=0)
 
-    def _get_cross_entropy_loss(self, relation_scores, relation_labels):
+    def _get_trigger_loss(self, trigger_scores, trigger_labels, trigger_mask):
+        trigger_scores_flat = trigger_scores.view(-1, self._n_trigger_labels)
+        trigger_labels_flat = trigger_labels.view(-1)
+        mask_flat = trigger_mask.view(-1).byte()
+
+        loss = self._trigger_loss(trigger_scores_flat[mask_flat], trigger_labels_flat[mask_flat])
+        return loss
+
+    def _get_argument_loss(self, argument_scores, argument_labels):
         """
-        Compute cross-entropy loss on relation labels. Ignore diagonal entries and entries giving
-        relations between masked out spans.
+        Compute cross-entropy loss on argument labels.
         """
         # Need to add one for the null class.
-        scores_flat = relation_scores.view(-1, self._n_labels + 1)
+        scores_flat = argument_scores.view(-1, self._n_argument_labels + 1)
         # Need to add 1 so that the null label is 0, to line up with indices into prediction matrix.
-        labels_flat = relation_labels.view(-1)
+        labels_flat = argument_labels.view(-1)
         # Compute cross-entropy loss.
-        loss = self._loss(scores_flat, labels_flat)
+        loss = self._argument_loss(scores_flat, labels_flat)
         return loss

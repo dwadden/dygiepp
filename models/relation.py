@@ -80,7 +80,6 @@ class RelationExtractor(Model):
                                                                            span_mask,
                                                                            num_spans_to_keep)
 
-        # Convert to Boolean for logical indexing operations later.
         top_span_mask = top_span_mask.unsqueeze(-1)
 
         flat_top_span_indices = util.flatten_and_batch_shift_indices(top_span_indices, num_spans)

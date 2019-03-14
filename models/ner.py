@@ -44,17 +44,18 @@ class NERTagger(Model):
         # Number of classes determine the output dimension of the final layer
         self._n_labels = vocab.get_vocab_size('ner_labels')
 
+        # TODO(dwadden) think of a better way to enforce this.
         # Null label is needed to keep track of when calculating the metrics
-        self.null_label = vocab._token_to_index['ner_labels']['']
-        assert self.null_label == 0  # If not, the dummy class won't correspond to the null label.
+        null_label = vocab.get_token_index("", "ner_labels")
+        assert null_label == 0  # If not, the dummy class won't correspond to the null label.
 
-        self.final_network = torch.nn.Sequential(
+        self._ner_scorer = torch.nn.Sequential(
             TimeDistributed(mention_feedforward),
             TimeDistributed(torch.nn.Linear(
                 mention_feedforward.get_output_dim(),
                 self._n_labels - 1)))
 
-        self._ner_metrics = NERMetrics(self._n_labels, self.null_label)
+        self._ner_metrics = NERMetrics(self._n_labels, null_label)
 
         self._loss = torch.nn.CrossEntropyLoss(reduction="sum")
 
@@ -76,7 +77,7 @@ class NERTagger(Model):
         # Shape: (Batch size, Number of Spans, Span Embedding Size)
         # span_embeddings
 
-        ner_scores = self.final_network(span_embeddings)
+        ner_scores = self._ner_scorer(span_embeddings)
         dummy_dims = [ner_scores.size(0), ner_scores.size(1), 1]
         dummy_scores = ner_scores.new_zeros(*dummy_dims)
         ner_scores = torch.cat((dummy_scores, ner_scores), -1)

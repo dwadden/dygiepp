@@ -15,6 +15,7 @@ from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from dygie.models.coref import CorefResolver
 from dygie.models.ner import NERTagger
 from dygie.models.relation import RelationExtractor
+from dygie.models.events import EventExtractor
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -76,6 +77,10 @@ class DyGIE(Model):
         self._relation = RelationExtractor.from_params(vocab=vocab,
                                                        feature_size=feature_size,
                                                        params=modules.pop("relation"))
+        self._events = EventExtractor.from_params(vocab=vocab,
+                                                  feature_size=feature_size,
+                                                  ner_scorer=self._ner._ner_scorer,
+                                                  params=modules.pop("events"))
 
         self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
                                                               combination="x,y",
@@ -154,6 +159,7 @@ class DyGIE(Model):
         output_coref = {'loss': 0}
         output_ner = {'loss': 0}
         output_relation = {'loss': 0}
+        output_events = {'loss': 0}
 
         if self._loss_weights['coref'] > 0:
             output_coref = self._coref(
@@ -167,13 +173,21 @@ class DyGIE(Model):
             output_relation = self._relation(
                 spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
+        if self._loss_weights['events'] > 0:
+            output_events = self._events(
+                text_mask, contextualized_embeddings, spans, span_mask, span_embeddings,
+                sentence_lengths, trigger_labels, argument_labels, metadata)
+
+        # TODO(dwadden) just did this part.
         loss = (self._loss_weights['coref'] * output_coref['loss'] +
                 self._loss_weights['ner'] * output_ner['loss'] +
-                self._loss_weights['relation'] * output_relation['loss'])
+                self._loss_weights['relation'] * output_relation['loss'] +
+                self._loss_weights['events'] * output_events['loss'])
 
         output_dict = dict(coref=output_coref,
                            relation=output_relation,
-                           ner=output_ner)
+                           ner=output_ner,
+                           events=output_events)
         output_dict['loss'] = loss
 
         return output_dict
@@ -216,14 +230,16 @@ class DyGIE(Model):
         metrics_coref = self._coref.get_metrics(reset=reset)
         metrics_ner = self._ner.get_metrics(reset=reset)
         metrics_relation = self._relation.get_metrics(reset=reset)
+        metrics_events = self._events.get_metrics(reset=reset)
 
         # Make sure that there aren't any conflicting names.
         metric_names = (list(metrics_coref.keys()) + list(metrics_ner.keys()) +
-                        list(metrics_relation.keys()))
+                        list(metrics_relation.keys()) + list(metrics_events.keys()))
         assert len(set(metric_names)) == len(metric_names)
         all_metrics = dict(list(metrics_coref.items()) +
                            list(metrics_ner.items()) +
-                           list(metrics_relation.items()))
+                           list(metrics_relation.items()) +
+                           list(metrics_events.items()))
 
         # If no list of desired metrics given, display them all.
         if self._display_metrics is None:
