@@ -18,6 +18,8 @@ from allennlp.data.dataset_readers.dataset_utils import Ontonotes, enumerate_spa
 
 from allennlp.data.fields.span_field import SpanField
 
+from dygie.data.fields.adjacency_field_assym import AdjacencyFieldAssym
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 # TODO(dwadden) Add types, unit-test, clean up.
@@ -108,9 +110,7 @@ def format_label_fields(ner: List[List[Union[int,str]]],
         the_args = event[1:]
         trigger_dict[the_trigger[0] - ss] = the_trigger[1]
         for the_arg in the_args:
-            # All triggers consist of a single token, which is why `the_trigger[0]` is repeated.
-            arg_dict[((the_trigger[0] - ss, the_trigger[0] - ss),
-                      (the_arg[0] - ss, the_arg[1] - ss))] = the_arg[2]
+            arg_dict[(the_trigger[0] - ss, (the_arg[0] - ss, the_arg[1] - ss))] = the_arg[2]
 
     return ner_dict, relation_dict, cluster_dict, trigger_dict, arg_dict
 
@@ -165,11 +165,11 @@ class IEJsonReader(DatasetReader):
 
                     # TODO(dwadden) too many outputs. Re-write as a dictionary.
                     # Make span indices relative to sentence instead of document.
-                    ner_dict, relation_dict, cluster_dict, trigger_dict, arg_dict = \
+                    ner_dict, relation_dict, cluster_dict, trigger_dict, argument_dict = \
                         format_label_fields(ner, relations, cluster_tmp, events, sentence_start)
                     sentence_start += len(sentence)
                     instance = self.text_to_instance(
-                        sentence, ner_dict, relation_dict, cluster_dict, trigger_dict, arg_dict,
+                        sentence, ner_dict, relation_dict, cluster_dict, trigger_dict, argument_dict,
                         doc_key, sentence_num)
                     yield instance
 
@@ -180,7 +180,7 @@ class IEJsonReader(DatasetReader):
                          relation_dict,
                          cluster_dict,
                          trigger_dict,
-                         arg_dict,
+                         argument_dict,
                          doc_key: str,
                          sentence_num: int):
         """
@@ -197,7 +197,7 @@ class IEJsonReader(DatasetReader):
                         relation_dict=relation_dict,
                         cluster_dict=cluster_dict,
                         trigger_dict=trigger_dict,
-                        arg_dict=arg_dict,
+                        argument_dict=argument_dict,
                         doc_key=doc_key,
                         sentence_num=sentence_num)
         metadata_field = MetadataField(metadata)
@@ -236,27 +236,31 @@ class IEJsonReader(DatasetReader):
         candidate_indices = [(i, j) for i in range(n_spans) for j in range(n_spans)]
 
         relations = []
-        arguments = []
         relation_indices = []
-        argument_indices = []
         for i, j in candidate_indices:
             span_pair = (span_tuples[i], span_tuples[j])
             relation_label = relation_dict[span_pair]
             if relation_label:
                 relation_indices.append((i, j))
                 relations.append(relation_label)
-            # The trigger is i, the label is j. Only consider the case of single-token triggers.
-            argument_label = arg_dict[span_pair]
-            if argument_label:
-                argument_indices.append((i, j))
-                arguments.append(argument_label)
 
         relation_label_field = AdjacencyField(
             indices=relation_indices, sequence_field=span_field, labels=relations,
             label_namespace="relation_labels")
 
-        argument_label_field = AdjacencyField(
-            indices=argument_indices, sequence_field=span_field, labels=arguments,
+        arguments = []
+        argument_indices = []
+        n_tokens = len(sentence)
+        candidate_indices = [(i, j) for i in range(n_tokens) for j in range(n_spans)]
+        for i, j in candidate_indices:
+            token_span_pair = (i, span_tuples[j])
+            argument_label = argument_dict[token_span_pair]
+            if argument_label:
+                argument_indices.append((i, j))
+                arguments.append(argument_label)
+
+        argument_label_field = AdjacencyFieldAssym(
+            indices=argument_indices, row_field=text_field, col_field=span_field, labels=arguments,
             label_namespace="argument_labels")
 
         # Pull it  all together.
