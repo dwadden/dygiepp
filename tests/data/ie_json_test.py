@@ -109,9 +109,8 @@ class TestIEJsonReader(AllenNlpTestCase):
         # Check the event triggers.
         instance = self.instances_ace[57]
         trigger_field = instance["trigger_labels"]
-        for label, span in zip(trigger_field.labels, trigger_field.sequence_field.field_list):
-            start, end = span.span_start, span.span_end
-            if start == 16 and end == 16:
+        for i, label in enumerate(trigger_field.labels):
+            if i == 16:
                 assert label == "conflict_attack"
             else:
                 assert label == ""

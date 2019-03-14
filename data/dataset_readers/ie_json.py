@@ -106,10 +106,9 @@ def format_label_fields(ner: List[List[Union[int,str]]],
     for event in events:
         the_trigger = event[0]
         the_args = event[1:]
-        # All triggers consist of a single token, which is why `the_trigger[0]` is repeated.
-        trigger_dict[(the_trigger[0] - ss, the_trigger[0] - ss)] = the_trigger[1]
+        trigger_dict[the_trigger[0] - ss] = the_trigger[1]
         for the_arg in the_args:
-            # Like above, triggers are a single token.
+            # All triggers consist of a single token, which is why `the_trigger[0]` is repeated.
             arg_dict[((the_trigger[0] - ss, the_trigger[0] - ss),
                       (the_arg[0] - ss, the_arg[1] - ss))] = the_arg[2]
 
@@ -203,16 +202,22 @@ class IEJsonReader(DatasetReader):
                         sentence_num=sentence_num)
         metadata_field = MetadataField(metadata)
 
-        # Generate fields for text spans, ner labels, coref labels, and trigger labels.
+        # Trigger labels. One label per token in the input.
+        token_trigger_labels = []
+        for i in range(len(text_field)):
+            token_trigger_labels.append(trigger_dict[i])
+
+        trigger_label_field = SequenceLabelField(token_trigger_labels, text_field,
+                                                 label_namespace="trigger_labels")
+
+        # Generate fields for text spans, ner labels, coref labels.
         spans = []
         span_ner_labels = []
         span_coref_labels = []
-        span_trigger_labels = []
         for start, end in enumerate_spans(sentence, max_span_width=self._max_span_width):
             span_ix = (start, end)
             span_ner_labels.append(ner_dict[span_ix])
             span_coref_labels.append(cluster_dict[span_ix])
-            span_trigger_labels.append(trigger_dict[span_ix])
             spans.append(SpanField(start, end, text_field))
 
         span_field = ListField(spans)
@@ -220,12 +225,12 @@ class IEJsonReader(DatasetReader):
                                              label_namespace="ner_labels")
         coref_label_field = SequenceLabelField(span_coref_labels, span_field,
                                                label_namespace="coref_labels")
-        trigger_label_field = SequenceLabelField(span_trigger_labels, span_field,
-                                                 label_namespace="trigger_labels")
 
         # Generate labels for relations and arguments. Only store non-null values.
         # For the arguments, by convention the first span specifies the trigger, and the second
-        # specifies the argument.
+        # specifies the argument. Ideally we'd have an adjacency field between (token, span) pairs
+        # for the event arguments field, but AllenNLP doesn't make it possible to express
+        # adjacencies between two different sequences.
         n_spans = len(spans)
         span_tuples = [(span.span_start, span.span_end) for span in spans]
         candidate_indices = [(i, j) for i in range(n_spans) for j in range(n_spans)]
