@@ -14,6 +14,7 @@ from allennlp.modules import TimeDistributed, Pruner
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
 from dygie.models.entity_beam_scorer import EntityBeamScorer
 from dygie.training.event_metrics import EventMetrics
+from dygie.models.shared import fields_to_batches
 # TODO(dwadden) rename NERMetrics
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -95,10 +96,52 @@ class EventExtractor(Model):
         # Compute trigger scores.
         trigger_scores = self._compute_trigger_scores(trigger_embeddings, trigger_mask)
 
-        _, predicted_triggers = trigger_scores.max(-1)
+        # Get trigger candidates for event argument labeling.
+        num_trigs_to_keep = torch.floor(
+            sentence_lengths.float() * self._trigger_spans_per_word).long()
+        num_trigs_to_keep = torch.max(num_trigs_to_keep,
+                                      torch.ones_like(num_trigs_to_keep))
 
-        output_dict = {"trigger_scores": trigger_scores,
+        (top_trig_embeddings, top_trig_mask,
+         top_trig_indices, top_trig_scores) = self._trigger_pruner(trigger_embeddings,
+                                                                   trigger_mask,
+                                                                   num_trigs_to_keep)
+        top_trig_mask = top_trig_mask.unsqueeze(-1)
+
+        # Compute the number of argument spans to keep.
+        num_arg_spans_to_keep = torch.floor(
+            sentence_lengths.float() * self._argument_spans_per_word).long()
+        num_arg_spans_to_keep = torch.max(num_arg_spans_to_keep,
+                                          torch.ones_like(num_arg_spans_to_keep))
+
+        (top_arg_embeddings, top_arg_mask,
+         top_arg_indices, top_arg_scores) = self._argument_pruner(span_embeddings,
+                                                                  span_mask,
+                                                                  num_arg_spans_to_keep)
+
+        top_arg_mask = top_arg_mask.unsqueeze(-1)
+        top_arg_spans = util.batched_index_select(spans,
+                                                  top_arg_indices)
+
+        trig_arg_embeddings = self._compute_trig_arg_embeddings(top_trig_embeddings,
+                                                                top_arg_embeddings)
+
+        argument_scores = self._compute_argument_scores(trig_arg_embeddings,
+                                                        top_trig_scores,
+                                                        top_arg_scores)
+
+        _, predicted_triggers = trigger_scores.max(-1)
+        _, predicted_arguments = argument_scores.max(-1)
+        predicted_arguments -= 1  # The null argument has label -1.
+
+        output_dict = {"top_trigger_indices": top_trig_indices,
+                       "top_argument_spans": top_arg_spans,
+                       "trigger_scores": trigger_scores,
+                       "argument_scores": argument_scores,
                        "predicted_triggers": predicted_triggers,
+                       "predicted_arguments": predicted_arguments,
+                       "num_triggers_to_keep": num_trigs_to_keep,
+                       "num_argument_spans_to_keep": num_arg_spans_to_keep,
                        "sentence_lengths": sentence_lengths}
 
         # Evaluate loss and F1 if labels were provided.
@@ -106,12 +149,18 @@ class EventExtractor(Model):
             # Compute the loss for both triggers and arguments.
             trigger_loss = self._get_trigger_loss(trigger_scores, trigger_labels, trigger_mask)
 
+            gold_arguments = self._get_pruned_gold_arguments(
+                argument_labels, top_trig_indices, top_arg_indices, top_trig_mask, top_arg_mask)
+
+            argument_loss = self._get_argument_loss(argument_scores, gold_arguments)
+
             # Compute F1.
             predictions = self.decode(output_dict)["decoded_events"]
             assert len(predictions) == len(metadata)  # Make sure length of predictions is right.
             self._metrics(predictions, metadata)
 
-            output_dict["loss"] = self._loss_weights["trigger"] * trigger_loss
+            output_dict["loss"] = (self._loss_weights["trigger"] * trigger_loss +
+                                   self._loss_weights["arguments"] * argument_loss)
 
         return output_dict
 
@@ -122,14 +171,15 @@ class EventExtractor(Model):
         pair of span indices for that sentence, and each value is the relation label on that span
         pair.
         """
-        predicted_trigs_batch = output_dict["predicted_triggers"].detach().cpu()
-        sentence_lengths = output_dict["sentence_lengths"].detach().cpu()
+        outputs = fields_to_batches({k: v.detach().cpu() for k, v in output_dict.items()})
+
         res = []
 
         # Collect predictions for each sentence in minibatch.
-        zipped = zip(predicted_trigs_batch, sentence_lengths)
-        for predicted_trigs, sentence_length in zipped:
-            entry = self._decode_sentence(predicted_trigs, sentence_length.item())
+        for output in outputs:
+            decoded_trig = self._decode_trigger(output)
+            decoded_args = self._decode_arguments(output)
+            entry = dict(trigger_dict=decoded_trig, argument_dict=decoded_args)
             res.append(entry)
 
         output_dict["decoded_events"] = res
@@ -139,15 +189,27 @@ class EventExtractor(Model):
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         return self._metrics.get_metric(reset)
 
-    def _decode_sentence(self, predicted_trigs, sentence_length):
-        # Iterate over all span pairs and labels. Record the span if the label isn't null.
+    def _decode_trigger(self, output):
         trigger_dict = {}
-        for i in range(sentence_length):
-            trig_label = predicted_trigs[i].item()
+        for i in range(output["sentence_lengths"]):
+            trig_label = output["predicted_triggers"][i].item()
             if trig_label > 0:
                 trigger_dict[i] = self.vocab.get_token_from_index(trig_label, namespace="trigger_labels")
 
         return trigger_dict
+
+    def _decode_arguments(self, output):
+        argument_dict = {}
+        for i, j in itertools.product(range(output["num_triggers_to_keep"]),
+                                      range(output["num_argument_spans_to_keep"])):
+            trig_ix = output["top_trigger_indices"][i].item()
+            arg_span = tuple(output["top_argument_spans"][i].tolist())
+            arg_label = output["predicted_arguments"][i, j].item()
+            if arg_label >= 0:
+                label_name = self.vocab.get_token_from_index(arg_label, namespace="argument_labels")
+                argument_dict[(trig_ix, arg_span)] = label_name
+
+        return argument_dict
 
     def _compute_trigger_scores(self, trigger_embeddings, trigger_mask):
         """
