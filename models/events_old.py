@@ -95,23 +95,71 @@ class EventExtractor(Model):
         # Compute trigger scores.
         trigger_scores = self._compute_trigger_scores(trigger_embeddings, trigger_mask)
 
-        _, predicted_triggers = trigger_scores.max(-1)
 
-        output_dict = {"trigger_scores": trigger_scores,
+        # Get trigger candidates for event argument labeling.
+        num_trig_spans_to_keep = torch.floor(
+            sentence_lengths.float() * self._trigger_spans_per_word).long()
+        num_trig_spans_to_keep = torch.max(num_trig_spans_to_keep,
+                                           torch.ones_like(num_trig_spans_to_keep))
+
+        (top_trig_embeddings, top_trig_mask,
+         top_trig_indices, top_trig_scores) = self._trigger_pruner(trigger_embeddings,
+                                                                   trigger_mask,
+                                                                   num_trig_spans_to_keep)
+        top_trig_mask = top_trig_mask.unsqueeze(-1)
+
+        # Compute the number of argument spans to keep.
+        num_arg_spans_to_keep = torch.floor(
+            sentence_lengths.float() * self._argument_spans_per_word).long()
+        num_arg_spans_to_keep = torch.max(num_arg_spans_to_keep,
+                                          torch.ones_like(num_arg_spans_to_keep))
+
+        (top_arg_embeddings, top_arg_mask,
+         top_arg_indices, top_arg_scores) = self._argument_pruner(span_embeddings,
+                                                                  span_mask,
+                                                                  num_arg_spans_to_keep)
+
+        top_arg_mask = top_arg_mask.unsqueeze(-1)
+        top_arg_spans = util.batched_index_select(spans,
+                                                  top_arg_indices)
+
+        trig_arg_embeddings = self._compute_trig_arg_embeddings(top_trig_embeddings,
+                                                                top_arg_embeddings)
+
+        argument_scores = self._compute_argument_scores(trig_arg_embeddings,
+                                                        top_trig_scores,
+                                                        top_arg_scores)
+
+        _, predicted_triggers = trigger_scores.max(-1)
+        _, predicted_arguments = argument_scores.max(-1)
+        predicted_arguments -= 1  # The null argument has label -1.
+
+        output_dict = {"top_trigger_indices": top_trig_indices,
+                       "top_argument_spans": top_arg_spans,
+                       "trigger_scores": trigger_scores,
+                       "argument_scores": argument_scores,
                        "predicted_triggers": predicted_triggers,
-                       "sentence_lengths": sentence_lengths}
+                       "predicted_arguments": predicted_arguments,
+                       "num_trigger_spans_to_keep": num_trig_spans_to_keep,
+                       "num_argument_spans_to_keep": num_arg_spans_to_keep}
 
         # Evaluate loss and F1 if labels were provided.
         if trigger_labels is not None and argument_labels is not None:
             # Compute the loss for both triggers and arguments.
             trigger_loss = self._get_trigger_loss(trigger_scores, trigger_labels, trigger_mask)
 
+            gold_arguments = self._get_pruned_gold_arguments(
+                argument_labels, top_trig_indices, top_arg_indices, top_trig_mask, top_arg_mask)
+
+            argument_loss = self._get_argument_loss(argument_scores, gold_arguments)
+
             # Compute F1.
             predictions = self.decode(output_dict)["decoded_events"]
             assert len(predictions) == len(metadata)  # Make sure length of predictions is right.
             self._metrics(predictions, metadata)
 
-            output_dict["loss"] = self._loss_weights["trigger"] * trigger_loss
+            output_dict["loss"] = (self._loss_weights["trigger"] * trigger_loss +
+                                   self._loss_weights["arguments"] * argument_loss)
 
         return output_dict
 
@@ -123,13 +171,19 @@ class EventExtractor(Model):
         pair.
         """
         predicted_trigs_batch = output_dict["predicted_triggers"].detach().cpu()
-        sentence_lengths = output_dict["sentence_lengths"].detach().cpu()
+        predicted_args_batch = output_dict["predicted_arguments"].detach().cpu()
+        top_trigs_batch = output_dict["top_trigger_indices"].detach().cpu()
+        top_args_batch = output_dict["top_argument_spans"].detach().cpu()
+        num_trig_spans_to_keep_batch = output_dict["num_trigger_spans_to_keep"].detach().cpu()
+        num_arg_spans_to_keep_batch = output_dict["num_argument_spans_to_keep"].detach().cpu()
         res = []
 
         # Collect predictions for each sentence in minibatch.
-        zipped = zip(predicted_trigs_batch, sentence_lengths)
-        for predicted_trigs, sentence_length in zipped:
-            entry = self._decode_sentence(predicted_trigs, sentence_length.item())
+        zipped = zip(predicted_trigs_batch, predicted_args_batch, top_trigs_batch, top_args_batch,
+                     num_trig_spans_to_keep_batch, num_arg_spans_to_keep_batch)
+        for predicted_trigs, predicted_args, top_trigs, top_args, num_trigs_kept, num_args_kept in zipped:
+            entry = self._decode_sentence(
+                predicted_trigs, predicted_args, top_trigs, top_args, num_trigs_kept, num_args_kept)
             res.append(entry)
 
         output_dict["decoded_events"] = res
@@ -139,15 +193,35 @@ class EventExtractor(Model):
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         return self._metrics.get_metric(reset)
 
-    def _decode_sentence(self, predicted_trigs, sentence_length):
+    def _decode_sentence(self, predicted_trigs, predicted_args, top_trigs, top_args, num_trigs_kept,
+                         num_args_kept):
+        # Throw out all predictions that shouldn't be kept.
+        keep_trigs = num_trigs_kept.item()
+        keep_args = num_args_kept.item()
+
+        top_trigs = top_trigs.tolist()
+        top_args = [tuple(x) for x in top_args.tolist()]
+
         # Iterate over all span pairs and labels. Record the span if the label isn't null.
         trigger_dict = {}
-        for i in range(sentence_length):
+        for i in range(keep_trigs):
+            trig_ix = top_trigs[i]
             trig_label = predicted_trigs[i].item()
             if trig_label > 0:
-                trigger_dict[i] = self.vocab.get_token_from_index(trig_label, namespace="trigger_labels")
+                trigger_dict[trig_ix] = self.vocab.get_token_from_index(trig_label, namespace="trigger_labels")
 
-        return trigger_dict
+        argument_dict = {}
+        for i, j in itertools.product(range(keep_trigs), range(keep_args)):
+            trig_ix = top_trigs[i]
+            arg_span = top_args[j]
+            arg_label = predicted_args[i, j].item()
+            if arg_label >= 0:
+                label_name = self.vocab.get_token_from_index(arg_label, namespace="argument_labels")
+                argument_dict[(trig_ix, arg_span)] = label_name
+
+        res = {"trigger": trigger_dict,
+               "argument": argument_dict}
+        return res
 
     def _compute_trigger_scores(self, trigger_embeddings, trigger_mask):
         """
