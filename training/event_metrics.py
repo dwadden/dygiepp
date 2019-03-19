@@ -29,7 +29,7 @@ class EventMetrics(Metric):
             self._total_predicted_arguments += len(predicted_arguments)
             for k, v in predicted_arguments.items():
                 if k in gold_arguments and gold_arguments[k] == v:
-                    self._total_matches_arguments += 1
+                    self._total_matched_arguments += 1
 
     @overrides
     def get_metric(self, reset=False):
