@@ -31,7 +31,7 @@ class EventExtractor(Model):
     def __init__(self,
                  vocab: Vocabulary,
                  trigger_feedforward: FeedForward,
-                 ner_scorer: FeedForward,
+                 mention_feedforward: FeedForward,
                  argument_feedforward: FeedForward,
                  feature_size: int,
                  trigger_spans_per_word: float,
@@ -59,8 +59,10 @@ class EventExtractor(Model):
 
         # Use the same argument scorer as the NER module used, since arguments are always named
         # entities.
-        argument_scorer = EntityBeamScorer(ner_scorer)
-        self._argument_pruner = Pruner(argument_scorer)
+        mention_scorer = torch.nn.Sequential(
+            TimeDistributed(mention_feedforward),
+            TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1)))
+        self._mention_pruner = Pruner(mention_scorer)
 
         # Argument scorer.
         self._argument_feedforward = argument_feedforward
@@ -116,9 +118,9 @@ class EventExtractor(Model):
                                           torch.ones_like(num_arg_spans_to_keep))
 
         (top_arg_embeddings, top_arg_mask,
-         top_arg_indices, top_arg_scores) = self._argument_pruner(span_embeddings,
-                                                                  span_mask,
-                                                                  num_arg_spans_to_keep)
+         top_arg_indices, top_arg_scores) = self._mention_pruner(span_embeddings,
+                                                                 span_mask,
+                                                                 num_arg_spans_to_keep)
 
         top_arg_mask = top_arg_mask.unsqueeze(-1)
         top_arg_spans = util.batched_index_select(spans,
@@ -160,11 +162,9 @@ class EventExtractor(Model):
             assert len(predictions) == len(metadata)  # Make sure length of predictions is right.
             self._metrics(predictions, metadata)
 
-            if epoch is None or epoch > 4:
-                loss = (self._loss_weights["trigger"] * trigger_loss +
-                        self._loss_weights["arguments"] * argument_loss)
-            else:
-                loss = self._loss_weights["trigger"] * trigger_loss
+            loss = (self._loss_weights["trigger"] * trigger_loss +
+                    self._loss_weights["arguments"] * argument_loss)
+
             output_dict["loss"] = loss
 
         return output_dict
