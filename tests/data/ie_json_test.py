@@ -119,7 +119,7 @@ class TestIEJsonReader(AllenNlpTestCase):
         # Check the event arguments.
         instance = self.instances_ace[57]
         argument_field = instance["argument_labels"]
-        span_list = argument_field.sequence_field.field_list
+        span_list = argument_field.col_field.field_list
         indices = argument_field.indices
         labels = argument_field.labels
         assert len(indices) == len(labels) == 4
@@ -128,16 +128,12 @@ class TestIEJsonReader(AllenNlpTestCase):
                             (5, 6): "target",
                             (9, 13): "target"}
         for ix, label in zip(indices, labels):
-            # All the arguments should have the same trigger.
-            trigger_span_ix = span_list[ix[0]]
+            # All the arguments should have the same trigger, at position 16.
+            trigger_ix = ix[0]
             argument_span_ix = span_list[ix[1]]
-            assert 16 == trigger_span_ix.span_start == trigger_span_ix.span_end
-            trigger_span = (trigger_span_ix.span_start, trigger_span_ix.span_end)
             argument_span = (argument_span_ix.span_start, argument_span_ix.span_end)
-            if argument_span in expected_results:
-                # All argument have the same trigger.
-                assert trigger_span == (16, 16)
-                # Check that arguments have correct labels.
-                assert label == expected_results[argument_span]
-            else:
-                assert label == ""
+            assert argument_span in expected_results
+            # All argument have the same trigger.
+            assert 16 == trigger_ix
+            # Check that arguments have correct labels.
+            assert label == expected_results[argument_span]
