@@ -87,7 +87,8 @@ class EventExtractor(Model):
                 sentence_lengths,
                 trigger_labels,
                 argument_labels,
-                metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
+                metadata: List[Dict[str, Any]] = None,
+                epoch: int = None) -> Dict[str, torch.Tensor]:
         """
         TODO(dwadden) Write documentation.
         The trigger embeddings are just the contextualized token embeddings, and the trigger mask is
@@ -159,8 +160,12 @@ class EventExtractor(Model):
             assert len(predictions) == len(metadata)  # Make sure length of predictions is right.
             self._metrics(predictions, metadata)
 
-            output_dict["loss"] = (self._loss_weights["trigger"] * trigger_loss +
-                                   self._loss_weights["arguments"] * argument_loss)
+            if epoch is None or epoch > 4:
+                loss = (self._loss_weights["trigger"] * trigger_loss +
+                        self._loss_weights["arguments"] * argument_loss)
+            else:
+                loss = self._loss_weights["trigger"] * trigger_loss
+            output_dict["loss"] = loss
 
         return output_dict
 
