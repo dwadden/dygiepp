@@ -111,8 +111,7 @@ class DyGIE(Model):
                 relation_labels,
                 trigger_labels,
                 argument_labels,
-                metadata,
-                epoch):
+                metadata):
         """
         TODO(dwadden) change this.
         """
@@ -176,7 +175,7 @@ class DyGIE(Model):
         if self._loss_weights['events'] > 0:
             output_events = self._events(
                 text_mask, contextualized_embeddings, spans, span_mask, span_embeddings,
-                sentence_lengths, trigger_labels, argument_labels, metadata, epoch)
+                sentence_lengths, trigger_labels, argument_labels, metadata)
 
         # TODO(dwadden) just did this part.
         loss = (self._loss_weights['coref'] * output_coref['loss'] +

@@ -31,6 +31,7 @@ class EventExtractor(Model):
     def __init__(self,
                  vocab: Vocabulary,
                  trigger_feedforward: FeedForward,
+                 trigger_candidate_feedforward: FeedForward,
                  mention_feedforward: FeedForward,
                  argument_feedforward: FeedForward,
                  feature_size: int,
@@ -55,7 +56,6 @@ class EventExtractor(Model):
             TimeDistributed(trigger_feedforward),
             TimeDistributed(torch.nn.Linear(trigger_feedforward.get_output_dim(),
                                             self._n_trigger_labels - 1)))
-        self._trigger_pruner = Pruner(EntityBeamScorer(self._trigger_scorer))
 
         # Use the same argument scorer as the NER module used, since arguments are always named
         # entities.
@@ -63,6 +63,11 @@ class EventExtractor(Model):
             TimeDistributed(mention_feedforward),
             TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1)))
         self._mention_pruner = Pruner(mention_scorer)
+
+        trigger_candidate_scorer = torch.nn.Sequential(
+            TimeDistributed(trigger_candidate_feedforward),
+            TimeDistributed(torch.nn.Linear(trigger_candidate_feedforward.get_output_dim(), 1)))
+        self._trigger_pruner = Pruner(trigger_candidate_scorer)
 
         # Argument scorer.
         self._argument_feedforward = argument_feedforward
@@ -89,8 +94,7 @@ class EventExtractor(Model):
                 sentence_lengths,
                 trigger_labels,
                 argument_labels,
-                metadata: List[Dict[str, Any]] = None,
-                epoch: int = None) -> Dict[str, torch.Tensor]:
+                metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
         """
         TODO(dwadden) Write documentation.
         The trigger embeddings are just the contextualized token embeddings, and the trigger mask is
@@ -208,7 +212,7 @@ class EventExtractor(Model):
         for i, j in itertools.product(range(output["num_triggers_to_keep"]),
                                       range(output["num_argument_spans_to_keep"])):
             trig_ix = output["top_trigger_indices"][i].item()
-            arg_span = tuple(output["top_argument_spans"][i].tolist())
+            arg_span = tuple(output["top_argument_spans"][j].tolist())
             arg_label = output["predicted_arguments"][i, j].item()
             if arg_label >= 0:
                 label_name = self.vocab.get_token_from_index(arg_label, namespace="argument_labels")
@@ -228,7 +232,6 @@ class EventExtractor(Model):
         mask = trigger_mask.unsqueeze(-1)
         trigger_scores = util.replace_masked_values(trigger_scores, mask, -1e20)
         return trigger_scores
-
 
     @staticmethod
     def _compute_trig_arg_embeddings(top_trig_embeddings: torch.FloatTensor,
