@@ -14,16 +14,21 @@ local lstm_hidden_size = 200;
 local lstm_n_layers = 1;
 local feature_size = 20;
 local feedforward_layers = 2;
-local char_n_filters = 100;
+local char_n_filters = 50;
 local feedforward_dim = 250;
 local max_span_width = 8;
-local feedforward_dropout = 0.2;
+local feedforward_dropout = 0.5;
 local lexical_dropout = 0.5;
 local lstm_dropout = 0.4;
-local loss_weights = {
+local loss_weights = {          // Loss weights for the modules.
   "ner": 0.0,
   "relation": 1.0,
-  "coref": 0.0
+  "coref": 0.0,
+  "events": 0.0
+};
+local loss_weights_events = {   // Loss weights for trigger and argument ID in events.
+  "trigger": 1.0,
+  "arguments": 1.0,
 };
 
 // Coref settings.
@@ -34,16 +39,25 @@ local coref_max_antecedents = 100;
 local relation_spans_per_word = 0.4;
 local relation_positive_label_weight = 1.0;
 
+// Event settings.
+local trigger_spans_per_word = 0.4;
+local argument_spans_per_word = 0.8;
+local events_positive_label_weight = 1.0;
+
 // Model training
 local num_epochs = 250;
-local patience = 25;
+local patience = 5;
+local optimizer = {
+  "type": "sgd",
+  "momentum": 0.9,
+  "lr": 0.01,
+};
 local learning_rate_scheduler = {
   "type": "reduce_on_plateau",
   "factor": 0.5,
   "mode": "max",
-  "patience": 5
+  "patience": 2
 };
-local learning_rate = 0.001;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -56,13 +70,15 @@ local learning_rate = 0.001;
 local validation_metrics = {
   "ner": "+ner_f1",
   "rel": "+rel_f1",
-  "coref": "+coref_f1"
+  "coref": "+coref_f1",
+  "events": "+arg_f1"
 };
 
 local display_metrics = {
   "ner": ["ner_precision", "ner_recall", "ner_f1"],
   "rel": ["rel_precision", "rel_recall", "rel_f1", "rel_span_recall"],
-  "coref": ["coref_precision", "coref_recall", "coref_f1", "coref_mention_recall"]
+  "coref": ["coref_precision", "coref_recall", "coref_f1", "coref_mention_recall"],
+  "events": ["trig_f1", "arg_precision", "arg_recall", "arg_f1"]
 };
 
 local glove_dim = 300;
@@ -93,6 +109,8 @@ local span_emb_dim = endpoint_span_emb_dim + attended_span_emb_dim;
 local pair_emb_dim = 3 * span_emb_dim;
 local relation_scorer_dim = pair_emb_dim;
 local coref_scorer_dim = pair_emb_dim + feature_size;
+local trigger_scorer_dim = 2 * lstm_hidden_size;  // Triggers are single contextualized tokens.
+local argument_scorer_dim = trigger_scorer_dim + span_emb_dim; // Trigger embeddings  and span embeddings.
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -153,7 +171,6 @@ local text_field_embedder = {
   }
 };
 
-
 ////////////////////////////////////////////////////////////////////////////////
 
 // The model
@@ -202,9 +219,20 @@ local text_field_embedder = {
         "positive_label_weight": relation_positive_label_weight,
         "mention_feedforward": make_feedforward(span_emb_dim),
         "relation_feedforward": make_feedforward(relation_scorer_dim),
-        "initializer": module_initializer,
+        "initializer": module_initializer
       },
-    },
+      "events": {
+        "trigger_spans_per_word": trigger_spans_per_word,
+        "argument_spans_per_word": argument_spans_per_word,
+        "positive_label_weight": events_positive_label_weight,
+        "trigger_feedforward": make_feedforward(trigger_scorer_dim),
+        "trigger_candidate_feedforward": make_feedforward(trigger_scorer_dim),
+        "mention_feedforward": make_feedforward(span_emb_dim),
+        "argument_feedforward": make_feedforward(argument_scorer_dim),
+        "initializer": module_initializer,
+        "loss_weights": loss_weights_events
+      }
+    }
   },
   "iterator": {
     "type": "ie_batch",
@@ -220,9 +248,6 @@ local text_field_embedder = {
     "cuda_device" : std.parseInt(std.extVar("cuda_device")),
     "validation_metric": validation_metrics[target],
     "learning_rate_scheduler": learning_rate_scheduler,
-    "optimizer": {
-      "type": "adam",
-      "lr": learning_rate,
-    },
+    "optimizer": optimizer
   }
 }
