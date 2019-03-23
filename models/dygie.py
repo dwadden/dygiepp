@@ -1,3 +1,4 @@
+from os import path
 import logging
 from typing import Dict, List, Optional
 
@@ -16,6 +17,7 @@ from dygie.models.coref import CorefResolver
 from dygie.models.ner import NERTagger
 from dygie.models.relation import RelationExtractor
 from dygie.models.events import EventExtractor
+from dygie.training.event_metrics import EventMetricsValid
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -59,7 +61,8 @@ class DyGIE(Model):
                  use_attentive_span_extractor: bool = True,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
-                 display_metrics: List[str] = None) -> None:
+                 display_metrics: List[str] = None,
+                 valid_events_dir: str = None) -> None:
         super(DyGIE, self).__init__(vocab, regularizer)
 
         self._text_field_embedder = text_field_embedder
@@ -93,6 +96,9 @@ class DyGIE(Model):
             self._attentive_span_extractor = None
 
         self._max_span_width = max_span_width
+
+        # Read valid event configurations.
+        self._valid_events = self._read_valid_events(valid_events_dir)
 
         self._display_metrics = display_metrics
 
@@ -211,6 +217,7 @@ class DyGIE(Model):
             which are in turn comprised of a list of (start, end) inclusive spans into the
             original document.
         """
+        # TODO(dwadden) which things are already decoded?
         res = {}
         if self._loss_weights["coref"] > 0:
             res["coref"] = self._coref.decode(output_dict["coref"])
@@ -218,6 +225,8 @@ class DyGIE(Model):
             res["ner"] = self._ner.decode(output_dict["ner"])
         if self._loss_weights["relation"] > 0:
             res["relation"] = self._relation.decode(output_dict["relation"])
+        if self._loss_weights["events"] > 0:
+            res["events"] = output_dict["events"]
 
         return res
 
@@ -252,3 +261,19 @@ class DyGIE(Model):
                 new_k = "_" + k
                 res[new_k] = v
         return res
+
+    @staticmethod
+    def _read_valid_events(valid_events_dir):
+        """
+        Load in the list of valid trigger / arg and ner / arg mappings.
+        """
+        ner_to_arg = []
+        with open(path.join(valid_events_dir, "ner-to-arg.csv"), "r") as f:
+            for line in f:
+                ner_to_arg.append(tuple(line.strip().split(",")))
+        trigger_to_arg = []
+        with open(path.join(valid_events_dir, "trigger-to-arg.csv"), "r") as g:
+            for line in g:
+                trigger_to_arg.append(tuple(line.strip().split(",")))
+        return {"ner_to_arg": ner_to_arg,
+                "trigger_to_arg": trigger_to_arg}
