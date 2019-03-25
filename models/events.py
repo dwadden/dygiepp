@@ -39,7 +39,6 @@ class EventExtractor(Model):
                  trigger_spans_per_word: float,
                  argument_spans_per_word: float,
                  loss_weights,
-                 valid_events_dir: str,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  positive_label_weight: float = 1.0,
                  regularizer: Optional[RegularizerApplicator] = None) -> None:

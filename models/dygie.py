@@ -17,7 +17,7 @@ from dygie.models.coref import CorefResolver
 from dygie.models.ner import NERTagger
 from dygie.models.relation import RelationExtractor
 from dygie.models.events import EventExtractor
-from dygie.training.event_metrics import EventMetricsValid
+from dygie.training.joint_metrics import JointMetrics
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -99,6 +99,7 @@ class DyGIE(Model):
 
         # Read valid event configurations.
         self._valid_events = self._read_valid_events(valid_events_dir)
+        self._joint_metrics = JointMetrics(self._valid_events)
 
         self._display_metrics = display_metrics
 
@@ -195,6 +196,13 @@ class DyGIE(Model):
                            events=output_events)
         output_dict['loss'] = loss
 
+        # Check to see if event predictions are globally compatible (argument labels are compatible
+        # with NER tags and trigger tags).
+        if self._loss_weights["ner"] > 0 and self._loss_weights["events"] > 0:
+            decoded = self.decode(output_dict)
+            self._joint_metrics(decoded["ner"]["decoded_ner_dict"],
+                                decoded["events"]["decoded_events"])
+
         return output_dict
 
     @overrides
@@ -239,6 +247,7 @@ class DyGIE(Model):
         metrics_ner = self._ner.get_metrics(reset=reset)
         metrics_relation = self._relation.get_metrics(reset=reset)
         metrics_events = self._events.get_metrics(reset=reset)
+        metrics_joint = self._joint_metrics.get_metric(reset=reset)
 
         # Make sure that there aren't any conflicting names.
         metric_names = (list(metrics_coref.keys()) + list(metrics_ner.keys()) +
@@ -247,7 +256,8 @@ class DyGIE(Model):
         all_metrics = dict(list(metrics_coref.items()) +
                            list(metrics_ner.items()) +
                            list(metrics_relation.items()) +
-                           list(metrics_events.items()))
+                           list(metrics_events.items()) +
+                           list(metrics_joint.items()))
 
         # If no list of desired metrics given, display them all.
         if self._display_metrics is None:
@@ -275,5 +285,5 @@ class DyGIE(Model):
         with open(path.join(valid_events_dir, "trigger-to-arg.csv"), "r") as g:
             for line in g:
                 trigger_to_arg.append(tuple(line.strip().split(",")))
-        return {"ner_to_arg": ner_to_arg,
-                "trigger_to_arg": trigger_to_arg}
+        return {"ner_to_arg": set(ner_to_arg),
+                "trigger_to_arg": set(trigger_to_arg)}
