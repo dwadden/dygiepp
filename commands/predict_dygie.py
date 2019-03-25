@@ -7,6 +7,8 @@ AllenNLP predictor framework, so here's a short script to do it.
 usage: predict.py [archive-file] [test-file] [output-file]
 """
 
+# TODO(dwadden) This breaks right now on relation prediction because json can't do dicts whose keys
+# are tuples.
 
 import json
 from sys import argv
@@ -24,17 +26,20 @@ from dygie.data.iterators.document_iterator import DocumentIterator
 
 decode_fields = dict(coref="clusters",
                      ner="decoded_ner",
-                     relation="decoded_relations")
+                     relation="decoded_relations",
+                     events="decoded_events")
 
 decode_names = dict(coref="clusters",
                     ner="ner",
-                    relation="relations")
+                    relation="relations",
+                    events="events")
 
 
 def cleanup(k, decoded, sentence_starts):
     dispatch = {"coref": cleanup_coref,
                 "ner": cleanup_ner,
-                "relation": cleanup_relation}
+                "relation": cleanup_relation,
+                "events": lambda x, y: x}  # TODO(dwadden) make this nicer later if worth it.
     return dispatch[k](decoded, sentence_starts)
 
 
