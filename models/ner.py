@@ -100,6 +100,7 @@ class NERTagger(Model):
 
         if metadata is not None:
             output_dict["document"] = [x["sentence"] for x in metadata]
+
         return output_dict
 
     @overrides
@@ -108,17 +109,23 @@ class NERTagger(Model):
         spans_batch = output_dict["spans"].detach().cpu()
         span_mask_batch = output_dict["span_mask"].detach().cpu().byte()
 
-        res = []
+        res_list = []
+        res_dict = []
         for spans, span_mask, predicted_NERs in zip(spans_batch, span_mask_batch, predicted_ner_batch):
-            entry = []
+            entry_list = []
+            entry_dict = {}
             for span, ner in zip(spans[span_mask], predicted_NERs[span_mask]):
                 ner = ner.item()
                 if ner > 0:
-                    entry.append((span[0].item(), span[1].item(),
-                                  self.vocab.get_token_from_index(ner, "ner_labels")))
-            res.append(entry)
+                    the_span = (span[0].item(), span[1].item())
+                    the_label = self.vocab.get_token_from_index(ner, "ner_labels")
+                    entry_list.append((the_span[0], the_span[1], the_label))
+                    entry_dict[the_span] = the_label
+            res_list.append(entry_list)
+            res_dict.append(entry_dict)
 
-        output_dict["decoded_ner"] = res
+        output_dict["decoded_ner"] = res_list
+        output_dict["decoded_ner_dict"] = res_dict
         return output_dict
 
     @overrides
