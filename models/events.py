@@ -14,7 +14,7 @@ from allennlp.modules import TimeDistributed, Pruner
 
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
 from dygie.models.entity_beam_scorer import EntityBeamScorer
-from dygie.training.event_metrics import EventMetrics
+from dygie.training.event_metrics import EventMetrics, ArgumentStats
 from dygie.models.shared import fields_to_batches
 # TODO(dwadden) rename NERMetrics
 
@@ -79,6 +79,7 @@ class EventExtractor(Model):
 
         # TODO(dwadden) Add metrics.
         self._metrics = EventMetrics()
+        self._argument_stats = ArgumentStats()
 
         self._trigger_loss = torch.nn.CrossEntropyLoss(reduction="sum")
         # TODO(dwadden) add loss weights.
@@ -166,6 +167,7 @@ class EventExtractor(Model):
             predictions = self.decode(output_dict)["decoded_events"]
             assert len(predictions) == len(metadata)  # Make sure length of predictions is right.
             self._metrics(predictions, metadata)
+            self._argument_stats(predictions)
 
             loss = (self._loss_weights["trigger"] * trigger_loss +
                     self._loss_weights["arguments"] * argument_loss)
@@ -197,7 +199,12 @@ class EventExtractor(Model):
 
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        return self._metrics.get_metric(reset)
+        f1_metrics = self._metrics.get_metric(reset)
+        argument_stats = self._argument_stats.get_metric(reset)
+        res = {}
+        res.update(f1_metrics)
+        res.update(argument_stats)
+        return res
 
     def _decode_trigger(self, output):
         trigger_dict = {}

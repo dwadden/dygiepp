@@ -1,4 +1,5 @@
 from overrides import overrides
+from collections import Counter
 
 from allennlp.training.metrics.metric import Metric
 
@@ -96,3 +97,41 @@ class EventMetrics(Metric):
         self._total_predicted_arguments = 0
         self._total_matched_arguments = 0
 
+
+class ArgumentStats(Metric):
+    """
+    Compute the fraction of predicted event arguments that are associated with multiple triggers.
+    """
+    def __init__(self):
+        self.reset()
+
+    @overrides
+    def __call__(self, predicted_events_list):
+        for predicted_events in predicted_events_list:
+            predicted_arguments = _invert_arguments(predicted_events["argument_dict"],
+                                                    predicted_events["trigger_dict"])
+            # Count how many times each span appears as an argument.
+            span_counts = Counter()
+            for prediction in predicted_arguments:
+                span_counts[prediction[0]] += 1
+            # Count how many spans appear more than once.
+            repeated = {k: v for k, v in span_counts.items() if v > 1}
+            self._total_arguments += len(span_counts)
+            self._repeated_arguments += len(repeated)
+
+    @overrides
+    def get_metric(self, reset=False):
+        # Fraction of event arguments associated with multiple triggers.
+        args_multiple = self._repeated_arguments / self._total_arguments
+
+        if reset:
+            self.reset()
+
+        res = dict(args_multiple=args_multiple)
+        return res
+
+
+    @overrides
+    def reset(self):
+        self._total_arguments = 0
+        self._repeated_arguments = 0
