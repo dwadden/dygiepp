@@ -3,6 +3,22 @@ from overrides import overrides
 from allennlp.training.metrics.metric import Metric
 
 
+def _invert_arguments(arguments, triggers):
+    """
+    For scoring the argument, we don't need the trigger spans to match exactly. We just need the
+    trigger label corresponding to the predicted trigger span to be correct.
+    """
+    # Can't use a dict because multiple triggers could share the same argument.
+    inverted = set()
+    for k, v in arguments.items():
+        if k[0] in triggers:  # If it's not, the trigger this arg points to is null. TODO(dwadden) check.
+            trigger_label = triggers[k[0]]
+            to_append = (k[1], trigger_label, v)
+            inverted.add(to_append)
+
+    return inverted
+
+
 class EventMetrics(Metric):
     """
     Computes precision, recall, and micro-averaged F1 for triggers and arguments.
@@ -19,8 +35,8 @@ class EventMetrics(Metric):
             self._score_triggers(predicted_triggers, gold_triggers)
 
             # Argument scoring.
-            predicted_arguments = self._invert_arguments(predicted_events["argument_dict"], predicted_triggers)
-            gold_arguments = self._invert_arguments(metadata["argument_dict"], gold_triggers)
+            predicted_arguments = _invert_arguments(predicted_events["argument_dict"], predicted_triggers)
+            gold_arguments = _invert_arguments(metadata["argument_dict"], gold_triggers)
             self._score_arguments(predicted_arguments, gold_arguments)
 
     def _score_triggers(self, predicted_triggers, gold_triggers):
@@ -33,9 +49,7 @@ class EventMetrics(Metric):
     def _score_arguments(self, predicted_arguments, gold_arguments):
         self._total_gold_arguments += len(gold_arguments)
         self._total_predicted_arguments += len(predicted_arguments)
-        for k, v in predicted_arguments.items():
-            if k in gold_arguments and gold_arguments[k] == v:
-                self._total_matched_arguments += 1
+        self._total_matched_arguments += len(predicted_arguments & gold_arguments)
 
     @overrides
     def get_metric(self, reset=False):
@@ -82,17 +96,3 @@ class EventMetrics(Metric):
         self._total_predicted_arguments = 0
         self._total_matched_arguments = 0
 
-    @staticmethod
-    def _invert_arguments(arguments, triggers):
-        """
-        For scoring the argument, we don't need the trigger spans to match exactly. We just need the
-        trigger label corresponding to the predicted trigger span to be correct.
-        """
-        # TODO(dwadden) Explain why I need to do this and make sure this is correct.
-        inverted = {}
-        for k, v in arguments.items():
-            if k[0] in triggers:  # If it's not, the trigger this arg points to is null. TODO(dwadden) check.
-                trigger_label = triggers[k[0]]
-                inverted[k[1]] = (trigger_label, v)
-
-        return inverted
