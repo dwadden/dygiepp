@@ -118,7 +118,7 @@ class DyGIE(Model):
         text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
 
         import numpy as np
-        to_save = text_embeddings.detach().numpy()
+        to_save = text_embeddings.detach().cpu().numpy()
         np.save(
             "/data/dave/proj/dygie/dygie-experiments/dwadden/2019-03-04/tf_compare/pytorch_params/context_emb",
             to_save)
@@ -143,7 +143,7 @@ class DyGIE(Model):
         # Shape: (batch_size, max_sentence_length, encoding_dim)
         contextualized_embeddings = self._context_layer(text_embeddings, text_mask)
 
-        to_save = contextualized_embeddings.detach().numpy()
+        to_save = contextualized_embeddings.detach().cpu().numpy()
         np.save(
             "/data/dave/proj/dygie/dygie-experiments/dwadden/2019-03-04/tf_compare/pytorch_params/context_outputs",
             to_save)

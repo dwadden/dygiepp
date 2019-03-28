@@ -80,17 +80,17 @@ class RelationExtractor(Model):
                                                                            num_spans_to_keep)
 
         import numpy as np
-        to_save = top_span_mention_scores.detach().numpy()
+        to_save = top_span_mention_scores.detach().cpu().numpy()
         np.save(
             "/data/dave/proj/dygie/dygie-experiments/dwadden/2019-03-04/tf_compare/pytorch_params/entity_scores",
             to_save)
 
-        to_save = top_span_indices.detach().numpy()
+        to_save = top_span_indices.detach().cpu().numpy()
         np.save(
             "/data/dave/proj/dygie/dygie-experiments/dwadden/2019-03-04/tf_compare/pytorch_params/top_entity_indices",
             to_save)
 
-        to_save = top_span_embeddings.detach().numpy()
+        to_save = top_span_embeddings.detach().cpu().numpy()
         np.save(
             "/data/dave/proj/dygie/dygie-experiments/dwadden/2019-03-04/tf_compare/pytorch_params/entity_emb",
             to_save)
@@ -103,7 +103,7 @@ class RelationExtractor(Model):
                                               top_span_indices,
                                               flat_top_span_indices)
 
-        to_save = top_spans.detach().numpy()
+        to_save = top_spans.detach().cpu().numpy()
         np.save(
             "/data/dave/proj/dygie/dygie-experiments/dwadden/2019-03-04/tf_compare/pytorch_params/top_spans",
             to_save)
@@ -111,7 +111,7 @@ class RelationExtractor(Model):
         span_pair_embeddings = self._compute_span_pair_embeddings(top_span_embeddings)
         relation_scores = self._compute_relation_scores(span_pair_embeddings,
                                                         top_span_mention_scores)
-        to_save = relation_scores.detach().numpy()
+        to_save = relation_scores.detach().cpu().numpy()
         np.save(
             "/data/dave/proj/dygie/dygie-experiments/dwadden/2019-03-04/tf_compare/pytorch_params/rel_scores",
             to_save)
@@ -131,7 +131,7 @@ class RelationExtractor(Model):
             gold_relations = self._get_pruned_gold_relations(
                 relation_labels, top_span_indices, top_span_mask)
 
-            to_save = gold_relations.detach().numpy()
+            to_save = gold_relations.detach().cpu().numpy()
             np.save(
                 "/data/dave/proj/dygie/dygie-experiments/dwadden/2019-03-04/tf_compare/pytorch_params/gold_rel_labels",
                 to_save)
@@ -146,7 +146,7 @@ class RelationExtractor(Model):
 
             output_dict["loss"] = cross_entropy
 
-            to_save = cross_entropy.detach().numpy()
+            to_save = cross_entropy.detach().cpu().numpy()
             np.save(
                 "/data/dave/proj/dygie/dygie-experiments/dwadden/2019-03-04/tf_compare/pytorch_params/loss",
                 to_save)
