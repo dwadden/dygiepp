@@ -122,7 +122,9 @@ class ArgumentStats(Metric):
     @overrides
     def get_metric(self, reset=False):
         # Fraction of event arguments associated with multiple triggers.
-        args_multiple = self._repeated_arguments / self._total_arguments
+        args_multiple = (self._repeated_arguments / self._total_arguments
+                         if self._total_arguments
+                         else 0)
 
         if reset:
             self.reset()
