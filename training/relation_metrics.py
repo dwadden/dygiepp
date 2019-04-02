@@ -2,6 +2,8 @@ from overrides import overrides
 
 from allennlp.training.metrics.metric import Metric
 
+from dygie.training.f1 import compute_f1
+
 
 class RelationMetrics(Metric):
     """
@@ -23,9 +25,7 @@ class RelationMetrics(Metric):
 
     @overrides
     def get_metric(self, reset=False):
-        precision = self._total_matched / self._total_predicted if self._total_predicted > 0 else 0
-        recall = self._total_matched / self._total_gold if self._total_gold > 0 else 0
-        f1 = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0
+        precision, recall, f1 = compute_f1(self._total_predicted, self._total_gold, self._total_matched)
 
         # Reset counts if at end of epoch.
         if reset:

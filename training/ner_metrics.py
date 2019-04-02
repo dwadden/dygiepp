@@ -56,4 +56,4 @@ class NERMetrics(Metric):
         self._true_negatives = 0
         self._false_negatives = 0
         for metric in self._single_class_ner_metrics:
-            metric.reset() 
+            metric.reset()
