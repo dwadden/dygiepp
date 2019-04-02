@@ -3,6 +3,8 @@ from collections import Counter
 
 from allennlp.training.metrics.metric import Metric
 
+from dygie.training.f1 import compute_f1
+
 
 def _invert_arguments(arguments, triggers):
     """
@@ -41,61 +43,61 @@ class EventMetrics(Metric):
             self._score_arguments(predicted_arguments, gold_arguments)
 
     def _score_triggers(self, predicted_triggers, gold_triggers):
-        self._total_gold_triggers += len(gold_triggers)
-        self._total_predicted_triggers += len(predicted_triggers)
+        self._gold_triggers += len(gold_triggers)
+        self._predicted_triggers += len(predicted_triggers)
         for token_ix, label in predicted_triggers.items():
-            if token_ix in gold_triggers and gold_triggers[token_ix] == label:
-                self._total_matched_triggers += 1
+            # Check whether the offsets match, and whether the labels match.
+            if token_ix in gold_triggers:
+                self._matched_trigger_ids += 1
+                if gold_triggers[token_ix] == label:
+                    self._matched_trigger_classes += 1
 
     def _score_arguments(self, predicted_arguments, gold_arguments):
-        self._total_gold_arguments += len(gold_arguments)
-        self._total_predicted_arguments += len(predicted_arguments)
-        self._total_matched_arguments += len(predicted_arguments & gold_arguments)
+        self._gold_arguments += len(gold_arguments)
+        self._predicted_arguments += len(predicted_arguments)
+        for prediction in predicted_arguments:
+            ix, trigger, arg = prediction
+            gold_id_matches = {entry for entry in gold_arguments
+                               if entry[0] == ix
+                               and entry[1] == trigger}
+            if gold_id_matches:
+                self._matched_argument_ids += 1
+                gold_class_matches = {entry for entry in gold_id_matches if entry[2] == arg}
+                if gold_class_matches:
+                    self._matched_argument_classes += 1
 
     @overrides
     def get_metric(self, reset=False):
+        res = {}
+
         # Triggers
-        trigger_precision = (self._total_matched_triggers / self._total_predicted_triggers
-                             if self._total_predicted_triggers > 0
-                             else 0)
-        trigger_recall = (self._total_matched_triggers / self._total_gold_triggers
-                          if self._total_gold_triggers > 0
-                          else 0)
-        trigger_f1 = (2 * trigger_precision * trigger_recall / (trigger_precision + trigger_recall)
-                      if trigger_precision + trigger_recall > 0
-                      else 0)
+        res["trig_id_precision"], res["trig_id_recall"], res["trig_id_f1"] = compute_f1(
+            self._predicted_triggers, self._gold_triggers, self._matched_trigger_ids)
+        res["trig_class_precision"], res["trig_class_recall"], res["trig_class_f1"] = compute_f1(
+            self._predicted_triggers, self._gold_triggers, self._matched_trigger_classes)
 
         # Arguments
-        argument_precision = (self._total_matched_arguments / self._total_predicted_arguments
-                              if self._total_predicted_arguments > 0
-                              else 0)
-        argument_recall = (self._total_matched_arguments / self._total_gold_arguments
-                           if self._total_gold_arguments > 0
-                           else 0)
-        argument_f1 = (2 * argument_precision * argument_recall / (argument_precision + argument_recall)
-                       if argument_precision + argument_recall > 0
-                       else 0)
+        res["arg_id_precision"], res["arg_id_recall"], res["arg_id_f1"] = compute_f1(
+            self._predicted_arguments, self._gold_arguments, self._matched_argument_ids)
+        res["arg_class_precision"], res["arg_class_recall"], res["arg_class_f1"] = compute_f1(
+            self._predicted_arguments, self._gold_arguments, self._matched_argument_classes)
 
         # Reset counts if at end of epoch.
         if reset:
             self.reset()
 
-        res = dict(trig_precision=trigger_precision,
-                   trig_recall=trigger_recall,
-                   trig_f1=trigger_f1,
-                   arg_precision=argument_precision,
-                   arg_recall=argument_recall,
-                   arg_f1=argument_f1)
         return res
 
     @overrides
     def reset(self):
-        self._total_gold_triggers = 0
-        self._total_predicted_triggers = 0
-        self._total_matched_triggers = 0
-        self._total_gold_arguments = 0
-        self._total_predicted_arguments = 0
-        self._total_matched_arguments = 0
+        self._gold_triggers = 0
+        self._predicted_triggers = 0
+        self._matched_trigger_ids = 0
+        self._matched_trigger_classes = 0
+        self._gold_arguments = 0
+        self._predicted_arguments = 0
+        self._matched_argument_ids = 0
+        self._matched_argument_classes = 0
 
 
 class ArgumentStats(Metric):
@@ -131,7 +133,6 @@ class ArgumentStats(Metric):
 
         res = dict(args_multiple=args_multiple)
         return res
-
 
     @overrides
     def reset(self):

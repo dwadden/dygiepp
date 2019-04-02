@@ -71,14 +71,14 @@ local validation_metrics = {
   "ner": "+ner_f1",
   "rel": "+rel_f1",
   "coref": "+coref_f1",
-  "events": "+arg_f1"
+  "events": "+arg_class_f1"
 };
 
 local display_metrics = {
   "ner": ["ner_precision", "ner_recall", "ner_f1"],
   "rel": ["rel_precision", "rel_recall", "rel_f1", "rel_span_recall"],
   "coref": ["coref_precision", "coref_recall", "coref_f1", "coref_mention_recall"],
-  "events": ["trig_f1", "arg_precision", "arg_recall", "arg_f1"]
+  "events": ["trig_id_f1", "trig_class_f1", "arg_id_f1", "arg_class_f1", "frac_trig_arg", "frac_ner_arg"]
 };
 
 local glove_dim = 300;
