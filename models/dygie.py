@@ -52,13 +52,13 @@ class DyGIE(Model):
     def __init__(self,
                  vocab: Vocabulary,
                  text_field_embedder: TextFieldEmbedder,
+                 context_layer: Seq2SeqEncoder,
                  modules,  # TODO(dwadden) Add type.
                  feature_size: int,
                  max_span_width: int,
                  loss_weights,  # TOOD(dwadden) Add type.
                  lexical_dropout: float = 0.2,
                  use_attentive_span_extractor: bool = True,
-                 context_layer: Seq2SeqEncoder = None,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
                  display_metrics: List[str] = None,
@@ -66,10 +66,7 @@ class DyGIE(Model):
         super(DyGIE, self).__init__(vocab, regularizer)
 
         self._text_field_embedder = text_field_embedder
-        if context_layer:
-            self._context_layer = context_layer
-        else:
-            self._context_layer = None
+        self._context_layer = context_layer
 
         self._loss_weights = loss_weights.as_dict()
 
@@ -87,18 +84,11 @@ class DyGIE(Model):
                                                   feature_size=feature_size,
                                                   params=modules.pop("events"))
 
-        if context_layer:
-            self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
-                                                                combination="x,y",
-                                                                num_width_embeddings=max_span_width,
-                                                                span_width_embedding_dim=feature_size,
-                                                                bucket_widths=False)
-        else:
-            self._endpoint_span_extractor = EndpointSpanExtractor(text_field_embedder.get_output_dim(),
-                                                                combination="x,y",
-                                                                num_width_embeddings=max_span_width,
-                                                                span_width_embedding_dim=feature_size,
-                                                                bucket_widths=False)
+        self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
+                                                              combination="x,y",
+                                                              num_width_embeddings=max_span_width,
+                                                              span_width_embedding_dim=feature_size,
+                                                              bucket_widths=False)
         if use_attentive_span_extractor:
             self._attentive_span_extractor = SelfAttentiveSpanExtractor(
                 input_dim=text_field_embedder.get_output_dim())
@@ -157,16 +147,14 @@ class DyGIE(Model):
         # consider a masked span.
         # Shape: (batch_size, num_spans, 2)
         spans = F.relu(spans.float()).long()
-        if self._context_layer:
-            # Shape: (batch_size, max_sentence_length, encoding_dim)
-            contextualized_embeddings = self._context_layer(text_embeddings, text_mask)
-            # Shape: (batch_size, num_spans, 2 * encoding_dim + feature_size)
-            endpoint_span_embeddings = self._endpoint_span_extractor(contextualized_embeddings, spans)
-        else:
-            endpoint_span_embeddings = self._endpoint_span_extractor(text_embeddings, spans)
+
+        # Shape: (batch_size, max_sentence_length, encoding_dim)
+        contextualized_embeddings = self._context_layer(text_embeddings, text_mask)
+        # Shape: (batch_size, num_spans, 2 * encoding_dim + feature_size)
+        endpoint_span_embeddings = self._endpoint_span_extractor(contextualized_embeddings, spans)
 
         if self._attentive_span_extractor is not None:
-            # Shape: (batch_size, num_spans, embedding_size)
+            # Shape: (batch_size, num_spans, emebedding_size)
             attended_span_embeddings = self._attentive_span_extractor(text_embeddings, spans)
             # Shape: (batch_size, num_spans, emebedding_size + 2 * encoding_dim + feature_size)
             span_embeddings = torch.cat([endpoint_span_embeddings, attended_span_embeddings], -1)
