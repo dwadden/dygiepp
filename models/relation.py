@@ -12,6 +12,7 @@ from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from allennlp.modules import TimeDistributed, Pruner
 
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
+from dygie.models.entity_beam_scorer import EntityBeamScorer
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -247,15 +248,3 @@ class RelationExtractor(Model):
         # Compute cross-entropy loss.
         loss = self._loss(scores_flat, labels_flat)
         return loss
-
-
-class EntityBeamScorer(torch.nn.Module):
-    def __init__(self, ner_scorer):
-        super().__init__()
-        self._scorer = ner_scorer
-
-    @overrides
-    def forward(self, inputs):
-        max_scores, argmax_scores = self._scorer(inputs).max(dim=-1)
-        # The pruner requires the extra final dimension.
-        return max_scores.unsqueeze(-1)
