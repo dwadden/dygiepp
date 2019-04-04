@@ -33,7 +33,8 @@ class EventExtractor(Model):
                  vocab: Vocabulary,
                  trigger_feedforward: FeedForward,
                  trigger_candidate_feedforward: FeedForward,
-                 mention_feedforward: FeedForward,
+                 mention_feedforward: FeedForward,  # We don't use this at all.
+                 ner_scorer: torch.nn,
                  argument_feedforward: FeedForward,
                  feature_size: int,
                  trigger_spans_per_word: float,
@@ -60,9 +61,7 @@ class EventExtractor(Model):
 
         # Use the same argument scorer as the NER module used, since arguments are always named
         # entities.
-        mention_scorer = torch.nn.Sequential(
-            TimeDistributed(mention_feedforward),
-            TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1)))
+        mention_scorer = EntityBeamScorer(ner_scorer)
         self._mention_pruner = Pruner(mention_scorer)
 
         trigger_candidate_scorer = torch.nn.Sequential(
