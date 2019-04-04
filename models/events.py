@@ -11,6 +11,7 @@ from allennlp.models.model import Model
 from allennlp.modules import FeedForward
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from allennlp.modules import TimeDistributed, Pruner
+from allennlp.modules.token_embedders import Embedding
 
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
 from dygie.models.entity_beam_scorer import EntityBeamScorer
@@ -77,7 +78,7 @@ class EventExtractor(Model):
         self._trigger_spans_per_word = trigger_spans_per_word
         self._argument_spans_per_word = argument_spans_per_word
 
-        # TODO(dwadden) Add metrics.
+        # Metrics
         self._metrics = EventMetrics()
         self._argument_stats = ArgumentStats()
 
@@ -94,6 +95,7 @@ class EventExtractor(Model):
                 span_mask,
                 span_embeddings,  # TODO(dwadden) add type.
                 sentence_lengths,
+                ner_scores,
                 trigger_labels,
                 argument_labels,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
@@ -132,8 +134,15 @@ class EventExtractor(Model):
         top_arg_spans = util.batched_index_select(spans,
                                                   top_arg_indices)
 
+        # The NER and trigger labels scores for the candidates selected by the beam scorer.
+        top_event_label_scores = util.batched_index_select(trigger_scores, top_trig_indices)
+        top_ner_scores = util.batched_index_select(ner_scores, top_arg_indices)
+
+        # The pairwise embeddings.
         trig_arg_embeddings = self._compute_trig_arg_embeddings(top_trig_embeddings,
-                                                                top_arg_embeddings)
+                                                                top_arg_embeddings,
+                                                                top_event_label_scores,
+                                                                top_ner_scores)
 
         argument_scores = self._compute_argument_scores(trig_arg_embeddings,
                                                         top_trig_scores,
@@ -243,26 +252,31 @@ class EventExtractor(Model):
 
     @staticmethod
     def _compute_trig_arg_embeddings(top_trig_embeddings: torch.FloatTensor,
-                                     top_arg_embeddings: torch.FloatTensor):
+                                     top_arg_embeddings: torch.FloatTensor,
+                                     top_event_label_scores: torch.FloatTensor,
+                                     top_ner_scores: torch.FloatTensor):
         """
-        TODO(dwadden) document me and add comments.
+        The trigger representations concatenate the word embeddings and the trigger label scores.
+        The ner representations concatenate the word embeddings and the ner label scores.
         """
-        # TODO(dwadden) this is the same pattern as in the relation module. Maybe this should be
-        # refactored somehow?
-        num_trigs = top_trig_embeddings.size(1)
-        num_args = top_arg_embeddings.size(1)
+        # Concatenate word embeddings with scores. Throw out the scores for the null class since we
+        # can't learn anything from them.
+        trig_embeddings = torch.cat([top_trig_embeddings, top_event_label_scores[:, :, 1:]], dim=-1)
+        arg_embeddings = torch.cat([top_arg_embeddings, top_ner_scores[:, :, 1:]], dim=-1)
 
-        trig_emb_expanded = top_trig_embeddings.unsqueeze(2)
+        num_trigs = trig_embeddings.size(1)
+        num_args = arg_embeddings.size(1)
+
+        trig_emb_expanded = trig_embeddings.unsqueeze(2)
         trig_emb_tiled = trig_emb_expanded.repeat(1, 1, num_args, 1)
 
-        arg_emb_expanded = top_arg_embeddings.unsqueeze(1)
+        arg_emb_expanded = arg_embeddings.unsqueeze(1)
         arg_emb_tiled = arg_emb_expanded.repeat(1, num_trigs, 1, 1)
 
         pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled]
         pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
 
         return pair_embeddings
-
 
     def _compute_argument_scores(self, pairwise_embeddings, top_trig_scores, top_arg_scores):
         batch_size = pairwise_embeddings.size(0)

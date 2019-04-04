@@ -180,9 +180,10 @@ class DyGIE(Model):
                 spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
         if self._loss_weights['events'] > 0:
+            ner_scores = output_ner["ner_scores"]
             output_events = self._events(
                 text_mask, contextualized_embeddings, spans, span_mask, span_embeddings,
-                sentence_lengths, trigger_labels, argument_labels, metadata)
+                sentence_lengths, ner_scores, trigger_labels, argument_labels, metadata)
 
         # TODO(dwadden) just did this part.
         loss = (self._loss_weights['coref'] * output_coref['loss'] +
