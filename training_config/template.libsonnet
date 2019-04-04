@@ -128,6 +128,7 @@ function(p) {
     initializer: dygie_initializer,
     loss_weights: p.loss_weights,
     lexical_dropout: p.lexical_dropout,
+    lstm_dropout: p.lstm_dropout
     feature_size: p.feature_size,
     use_attentive_span_extractor: p.use_attentive_span_extractor,
     max_span_width: p.max_span_width,
@@ -139,7 +140,6 @@ function(p) {
       input_size: token_embedding_dim,
       hidden_size: p.lstm_hidden_size,
       num_layers: p.lstm_n_layers,
-      dropout: p.lstm_dropout
     },
     modules: {
       coref: {

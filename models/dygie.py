@@ -58,6 +58,7 @@ class DyGIE(Model):
                  max_span_width: int,
                  loss_weights,  # TOOD(dwadden) Add type.
                  lexical_dropout: float = 0.2,
+                 lstm_dropout: float = 0.4,
                  use_attentive_span_extractor: bool = True,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
@@ -107,6 +108,11 @@ class DyGIE(Model):
             self._lexical_dropout = torch.nn.Dropout(p=lexical_dropout)
         else:
             self._lexical_dropout = lambda x: x
+
+        if lstm_dropout > 0:
+            self._lstm_dropout = torch.nn.Dropout(p=lstm_dropout)
+        else:
+            self._lstm_dropout = lambda x: x
         initializer(self)
 
     @overrides
@@ -149,7 +155,7 @@ class DyGIE(Model):
         spans = F.relu(spans.float()).long()
 
         # Shape: (batch_size, max_sentence_length, encoding_dim)
-        contextualized_embeddings = self._context_layer(text_embeddings, text_mask)
+        contextualized_embeddings = self._lstm_dropout(self._context_layer(text_embeddings, text_mask))
         # Shape: (batch_size, num_spans, 2 * encoding_dim + feature_size)
         endpoint_span_embeddings = self._endpoint_span_extractor(contextualized_embeddings, spans)
 
