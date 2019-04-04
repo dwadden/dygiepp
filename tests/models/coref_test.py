@@ -11,10 +11,10 @@ from dygie.models import DyGIE
 from dygie.data import IEJsonReader
 
 
-class TestDyGIE(ModelTestCase):
+class TestCoref(ModelTestCase):
     def setUp(self):
         # TODO(dwadden) create smaller model for testing.
-        super(TestDyGIE, self).setUp()
+        super(TestCoref, self).setUp()
         self.config_file = "tests/fixtures/dygie_test.jsonnet"
         self.data_file = "tests/fixtures/scierc_article.json"
         self.set_up_model(self.config_file, self.data_file)

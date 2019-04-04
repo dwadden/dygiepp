@@ -1,21 +1,18 @@
 import logging
-import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import torch
-import torch.nn.functional as F
 from overrides import overrides
 
 from allennlp.data import Vocabulary
 from allennlp.models.model import Model
-from allennlp.modules.token_embedders import Embedding
 from allennlp.modules import FeedForward
-from allennlp.modules import Seq2SeqEncoder, TimeDistributed, TextFieldEmbedder, Pruner
-from allennlp.modules.span_extractors import SelfAttentiveSpanExtractor, EndpointSpanExtractor
+from allennlp.modules import TimeDistributed
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from dygie.training.ner_metrics import NERMetrics
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
 
 class NERTagger(Model):
     """
@@ -28,9 +25,6 @@ class NERTagger(Model):
         by a linear layer.
     feature_size: ``int``
         The embedding size for all the embedded features, such as distances or span widths.
-    spans_per_word: float, required.
-        A multiplier between zero and one which controls what percentage of candidate mention
-        spans we retain with respect to the number of words in the document.
     lexical_dropout: ``int``
         The probability of dropping out dimensions of the embedded text.
     initializer : ``InitializerApplicator``, optional (default=``InitializerApplicator()``)
@@ -43,27 +37,29 @@ class NERTagger(Model):
                  vocab: Vocabulary,
                  mention_feedforward: FeedForward,
                  feature_size: int,
-                 spans_per_word: float,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(NERTagger, self).__init__(vocab, regularizer)
 
-        self.number_of_ner_classes = vocab.get_vocab_size('ner_labels')
-        assert vocab._token_to_index['ner_labels'][''] == 0
+        # Number of classes determine the output dimension of the final layer
+        self._n_labels = vocab.get_vocab_size('ner_labels')
 
-        self.final_network = torch.nn.Sequential(
+        # TODO(dwadden) think of a better way to enforce this.
+        # Null label is needed to keep track of when calculating the metrics
+        null_label = vocab.get_token_index("", "ner_labels")
+        assert null_label == 0  # If not, the dummy class won't correspond to the null label.
+
+        self._ner_scorer = torch.nn.Sequential(
             TimeDistributed(mention_feedforward),
             TimeDistributed(torch.nn.Linear(
-                                mention_feedforward.get_output_dim(),
-                                self.number_of_ner_classes - 1)
-            )
-        )
+                mention_feedforward.get_output_dim(),
+                self._n_labels - 1)))
 
-        self.loss_function = torch.nn.CrossEntropyLoss()
+        self._ner_metrics = NERMetrics(self._n_labels, null_label)
+
+        self._loss = torch.nn.CrossEntropyLoss(reduction="sum")
 
         initializer(self)
-
-        self._ner_metrics = NERMetrics(self.number_of_ner_classes, 0)
 
     @overrides
     def forward(self,  # type: ignore
@@ -71,7 +67,6 @@ class NERTagger(Model):
                 span_mask: torch.IntTensor,
                 span_embeddings: torch.IntTensor,
                 sentence_lengths: torch.Tensor,
-                max_sentence_length: int,
                 ner_labels: torch.IntTensor = None,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
 
@@ -79,53 +74,63 @@ class NERTagger(Model):
         TODO(dwadden) Write documentation.
         """
 
-        #Shape: (Batch size, Number of Spans, Span Embedding Size)
-        #span_embeddings
+        # Shape: (Batch size, Number of Spans, Span Embedding Size)
+        # span_embeddings
 
-        num_spans = spans.size(1)
-
-        ner_scores = self.final_network(span_embeddings)
+        ner_scores = self._ner_scorer(span_embeddings)
         dummy_dims = [ner_scores.size(0), ner_scores.size(1), 1]
         dummy_scores = ner_scores.new_zeros(*dummy_dims)
         ner_scores = torch.cat((dummy_scores, ner_scores), -1)
 
-        # Shape: (batch_size, num_spans_to_keep)
         _, predicted_ner = ner_scores.max(2)
 
         output_dict = {"spans": spans,
+                       "span_mask": span_mask,
                        "ner_scores": ner_scores,
                        "predicted_ner": predicted_ner}
 
         if ner_labels is not None:
             self._ner_metrics(ner_scores, ner_labels, span_mask)
-            #for metric in self._ner_metrics:
-            #    metric(ner_scores, ner_labels, span_mask)
-            loss = util.sequence_cross_entropy_with_logits(ner_scores, ner_labels, span_mask)
+            ner_scores_flat = ner_scores.view(-1, self._n_labels)
+            ner_labels_flat = ner_labels.view(-1)
+            mask_flat = span_mask.view(-1).byte()
+
+            loss = self._loss(ner_scores_flat[mask_flat], ner_labels_flat[mask_flat])
             output_dict["loss"] = loss
 
         if metadata is not None:
             output_dict["document"] = [x["sentence"] for x in metadata]
-        return output_dict
 
+        return output_dict
 
     @overrides
     def decode(self, output_dict: Dict[str, torch.Tensor]):
         predicted_ner_batch = output_dict["predicted_ner"].detach().cpu()
         spans_batch = output_dict["spans"].detach().cpu()
+        span_mask_batch = output_dict["span_mask"].detach().cpu().byte()
 
-        res = []
-        for spans, predicted_NERs in zip(spans_batch, predicted_ner_batch):
-            res.append([])
-            for span, ner in zip(spans, predicted_NERs):
-                if ner>0:
-                    res[-1].append([int(span[0]), int(span[1]), int(ner)])
+        res_list = []
+        res_dict = []
+        for spans, span_mask, predicted_NERs in zip(spans_batch, span_mask_batch, predicted_ner_batch):
+            entry_list = []
+            entry_dict = {}
+            for span, ner in zip(spans[span_mask], predicted_NERs[span_mask]):
+                ner = ner.item()
+                if ner > 0:
+                    the_span = (span[0].item(), span[1].item())
+                    the_label = self.vocab.get_token_from_index(ner, "ner_labels")
+                    entry_list.append((the_span[0], the_span[1], the_label))
+                    entry_dict[the_span] = the_label
+            res_list.append(entry_list)
+            res_dict.append(entry_dict)
 
-        return res
+        output_dict["decoded_ner"] = res_list
+        output_dict["decoded_ner_dict"] = res_dict
+        return output_dict
 
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         ner_precision, ner_recall, ner_f1 = self._ner_metrics.get_metric(reset)
-
         return {"ner_precision": ner_precision,
                 "ner_recall": ner_recall,
                 "ner_f1": ner_f1}

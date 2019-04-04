@@ -1,6 +1,6 @@
+from os import path
 import logging
-import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import torch
 import torch.nn.functional as F
@@ -8,21 +8,18 @@ from overrides import overrides
 
 from allennlp.data import Vocabulary
 from allennlp.models.model import Model
-from allennlp.modules.token_embedders import Embedding
-from allennlp.modules import FeedForward
-from allennlp.modules import Seq2SeqEncoder, TimeDistributed, TextFieldEmbedder, Pruner
+from allennlp.modules import Seq2SeqEncoder, TextFieldEmbedder
 from allennlp.modules.span_extractors import SelfAttentiveSpanExtractor, EndpointSpanExtractor
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
-from allennlp.training.metrics import MentionRecall, ConllCorefScores
 
 # Import submodules.
 from dygie.models.coref import CorefResolver
 from dygie.models.ner import NERTagger
 from dygie.models.relation import RelationExtractor
+from dygie.models.events import EventExtractor
+from dygie.training.joint_metrics import JointMetrics
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
-
 
 
 @Model.register("dygie")
@@ -61,9 +58,11 @@ class DyGIE(Model):
                  max_span_width: int,
                  loss_weights,  # TOOD(dwadden) Add type.
                  lexical_dropout: float = 0.2,
+                 use_attentive_span_extractor: bool = True,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
-                 display_metrics: List[str] = None) -> None:
+                 display_metrics: List[str] = None,
+                 valid_events_dir: str = None) -> None:
         super(DyGIE, self).__init__(vocab, regularizer)
 
         self._text_field_embedder = text_field_embedder
@@ -82,16 +81,26 @@ class DyGIE(Model):
                                                        feature_size=feature_size,
                                                        ner_scorer=self._ner.final_network,
                                                        params=modules.pop("relation"))
+        self._events = EventExtractor.from_params(vocab=vocab,
+                                                  feature_size=feature_size,
+                                                  params=modules.pop("events"))
 
         self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
                                                               combination="x,y",
                                                               num_width_embeddings=max_span_width,
                                                               span_width_embedding_dim=feature_size,
                                                               bucket_widths=False)
-        self._attentive_span_extractor = SelfAttentiveSpanExtractor(
-            input_dim=text_field_embedder.get_output_dim())
+        if use_attentive_span_extractor:
+            self._attentive_span_extractor = SelfAttentiveSpanExtractor(
+                input_dim=text_field_embedder.get_output_dim())
+        else:
+            self._attentive_span_extractor = None
 
         self._max_span_width = max_span_width
+
+        # Read valid event configurations.
+        self._valid_events = self._read_valid_events(valid_events_dir)
+        self._joint_metrics = JointMetrics(self._valid_events)
 
         self._display_metrics = display_metrics
 
@@ -108,15 +117,20 @@ class DyGIE(Model):
                 ner_labels,
                 coref_labels,
                 relation_labels,
+                trigger_labels,
+                argument_labels,
                 metadata):
         """
         TODO(dwadden) change this.
         """
         # TODO(dwadden) Is there some smarter way to do the batching within a document?
 
+        # In AllenNLP, AdjacencyFields are passed in as floats. This fixes it.
+        relation_labels = relation_labels.long()
+        argument_labels = argument_labels.long()
+
         # Shape: (batch_size, max_sentence_length, embedding_size)
         text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
-        max_sentence_length = text_embeddings.size(1)
 
         # Shape: (batch_size, max_sentence_length)
         text_mask = util.get_text_field_mask(text).float()
@@ -124,7 +138,7 @@ class DyGIE(Model):
         sentence_lengths = text_mask.sum(dim=1).long()
 
         # Shape: (batch_size, num_spans)
-        span_mask = (spans[:, :, 0] >= 0).squeeze(-1).float()
+        span_mask = (spans[:, :, 0] >= 0).float()
         # SpanFields return -1 when they are used as padding. As we do
         # some comparisons based on span widths when we attend over the
         # span representations that we generate from these indices, we
@@ -139,48 +153,56 @@ class DyGIE(Model):
         contextualized_embeddings = self._context_layer(text_embeddings, text_mask)
         # Shape: (batch_size, num_spans, 2 * encoding_dim + feature_size)
         endpoint_span_embeddings = self._endpoint_span_extractor(contextualized_embeddings, spans)
-        # Shape: (batch_size, num_spans, emebedding_size)
-        attended_span_embeddings = self._attentive_span_extractor(text_embeddings, spans)
 
-        # Shape: (batch_size, num_spans, emebedding_size + 2 * encoding_dim + feature_size)
-        span_embeddings = torch.cat([endpoint_span_embeddings, attended_span_embeddings], -1)
+        if self._attentive_span_extractor is not None:
+            # Shape: (batch_size, num_spans, emebedding_size)
+            attended_span_embeddings = self._attentive_span_extractor(text_embeddings, spans)
+            # Shape: (batch_size, num_spans, emebedding_size + 2 * encoding_dim + feature_size)
+            span_embeddings = torch.cat([endpoint_span_embeddings, attended_span_embeddings], -1)
+        else:
+            span_embeddings = endpoint_span_embeddings
 
-        #import ipdb; ipdb.set_trace()
         # Make calls out to the modules to get results.
-
-
-
         output_coref = {'loss': 0}
         output_ner = {'loss': 0}
         output_relation = {'loss': 0}
+        output_events = {'loss': 0}
 
-        if self._loss_weights['coref']>0:
+        if self._loss_weights['coref'] > 0:
             output_coref = self._coref(
                 spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
 
-        if self._loss_weights['ner']>0:
+        if self._loss_weights['ner'] > 0:
             output_ner = self._ner(
-                spans, span_mask, span_embeddings, sentence_lengths, max_sentence_length, ner_labels, metadata)
+                spans, span_mask, span_embeddings, sentence_lengths, ner_labels, metadata)
 
-        if self._loss_weights['relation']>0:
+        if self._loss_weights['relation'] > 0:
             output_relation = self._relation(
-                spans, span_mask, span_embeddings, sentence_lengths, max_sentence_length, relation_labels, metadata)
+                spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
-        # TODO(dwadden) ... and now what?
+        if self._loss_weights['events'] > 0:
+            output_events = self._events(
+                text_mask, contextualized_embeddings, spans, span_mask, span_embeddings,
+                sentence_lengths, trigger_labels, argument_labels, metadata)
 
-        loss = (
-                self._loss_weights['coref'] * output_coref['loss']
-              + self._loss_weights['ner'] * output_ner['loss']
-              + self._loss_weights['relation'] * output_relation['loss']
-        )
+        # TODO(dwadden) just did this part.
+        loss = (self._loss_weights['coref'] * output_coref['loss'] +
+                self._loss_weights['ner'] * output_ner['loss'] +
+                self._loss_weights['relation'] * output_relation['loss'] +
+                self._loss_weights['events'] * output_events['loss'])
 
-        output_dict = dict(
-                    list(output_coref.items())
-                  + list(output_ner.items())
-                  + list(output_relation.items())
-        )
-
+        output_dict = dict(coref=output_coref,
+                           relation=output_relation,
+                           ner=output_ner,
+                           events=output_events)
         output_dict['loss'] = loss
+
+        # Check to see if event predictions are globally compatible (argument labels are compatible
+        # with NER tags and trigger tags).
+        if self._loss_weights["ner"] > 0 and self._loss_weights["events"] > 0:
+            decoded = self.decode(output_dict)
+            self._joint_metrics(decoded["ner"]["decoded_ner_dict"],
+                                decoded["events"]["decoded_events"])
 
         return output_dict
 
@@ -204,8 +226,18 @@ class DyGIE(Model):
             which are in turn comprised of a list of (start, end) inclusive spans into the
             original document.
         """
-        pass
+        # TODO(dwadden) which things are already decoded?
+        res = {}
+        if self._loss_weights["coref"] > 0:
+            res["coref"] = self._coref.decode(output_dict["coref"])
+        if self._loss_weights["ner"] > 0:
+            res["ner"] = self._ner.decode(output_dict["ner"])
+        if self._loss_weights["relation"] > 0:
+            res["relation"] = self._relation.decode(output_dict["relation"])
+        if self._loss_weights["events"] > 0:
+            res["events"] = output_dict["events"]
 
+        return res
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         """
@@ -215,13 +247,23 @@ class DyGIE(Model):
         metrics_coref = self._coref.get_metrics(reset=reset)
         metrics_ner = self._ner.get_metrics(reset=reset)
         metrics_relation = self._relation.get_metrics(reset=reset)
+        metrics_events = self._events.get_metrics(reset=reset)
+        metrics_joint = self._joint_metrics.get_metric(reset=reset)
+
+        # Make sure that there aren't any conflicting names.
+        metric_names = (list(metrics_coref.keys()) + list(metrics_ner.keys()) +
+                        list(metrics_relation.keys()) + list(metrics_events.keys()))
+        assert len(set(metric_names)) == len(metric_names)
         all_metrics = dict(list(metrics_coref.items()) +
                            list(metrics_ner.items()) +
-                           list(metrics_relation.items()))
-        # If no list of desired metrics given, return them all.
+                           list(metrics_relation.items()) +
+                           list(metrics_events.items()) +
+                           list(metrics_joint.items()))
+
+        # If no list of desired metrics given, display them all.
         if self._display_metrics is None:
             return all_metrics
-        # Otherwise return the selected ones.
+        # Otherwise only display the selected ones.
         res = {}
         for k, v in all_metrics.items():
             if k in self._display_metrics:
@@ -230,3 +272,19 @@ class DyGIE(Model):
                 new_k = "_" + k
                 res[new_k] = v
         return res
+
+    @staticmethod
+    def _read_valid_events(valid_events_dir):
+        """
+        Load in the list of valid trigger / arg and ner / arg mappings.
+        """
+        ner_to_arg = []
+        with open(path.join(valid_events_dir, "ner-to-arg.csv"), "r") as f:
+            for line in f:
+                ner_to_arg.append(tuple(line.strip().split(",")))
+        trigger_to_arg = []
+        with open(path.join(valid_events_dir, "trigger-to-arg.csv"), "r") as g:
+            for line in g:
+                trigger_to_arg.append(tuple(line.strip().split(",")))
+        return {"ner_to_arg": set(ner_to_arg),
+                "trigger_to_arg": set(trigger_to_arg)}

@@ -10,8 +10,7 @@ from allennlp.data import Vocabulary
 from allennlp.models.model import Model
 from allennlp.modules.token_embedders import Embedding
 from allennlp.modules import FeedForward
-from allennlp.modules import Seq2SeqEncoder, TimeDistributed, TextFieldEmbedder, Pruner
-from allennlp.modules.span_extractors import SelfAttentiveSpanExtractor, EndpointSpanExtractor
+from allennlp.modules import TimeDistributed, Pruner
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from allennlp.training.metrics import MentionRecall, ConllCorefScores
 
@@ -84,9 +83,53 @@ class CorefResolver(Model):
                 sentence_lengths,
                 coref_labels_batched: torch.IntTensor = None,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
+        """
+        Run the forward pass. Since we can only have coreferences between spans in the same
+        document, we loop over the documents in the batch. This function assumes that the inputs are
+        in order, but may go across documents.
+        """
+        output_docs = {}
+        doc_keys = [entry["doc_key"] for entry in metadata]
+        uniq_keys = []
+        for entry in doc_keys:
+            if entry not in uniq_keys:
+                uniq_keys.append(entry)
+
+        for key in uniq_keys:
+            ix_list = [1 if entry == key else 0 for entry in doc_keys]
+            doc_metadata = [entry for entry in metadata if entry["doc_key"] == key]
+            ix = torch.tensor(ix_list, dtype=torch.uint8)
+            output_docs[key] = self._forward_doc(
+                spans_batched[ix], span_mask_batched[ix], span_embeddings_batched[ix],
+                sentence_lengths[ix], coref_labels_batched[ix], doc_metadata)
+
+        losses = torch.cat([entry["loss"].unsqueeze(0) for entry in output_docs.values()])
+        loss = torch.sum(losses)
+
+        # At train time, return a separate output dict for each document.
+        if self.training:
+            output = {"loss": loss,
+                      "doc": output_docs}
+        # At test time, we evaluate a whole document at a time. Just return the results for that
+        # document.
+        else:
+            assert len(uniq_keys) == 1
+            key = uniq_keys[0]
+            output = output_docs[key]
+            output["loss"] = loss
+        return output
+
+
+    def _forward_doc(self,  # type: ignore
+                     spans_batched: torch.IntTensor,
+                     span_mask_batched,
+                     span_embeddings_batched,  # TODO(dwadden) add type.
+                     sentence_lengths,
+                     coref_labels_batched: torch.IntTensor = None,
+                     metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
         # pylint: disable=arguments-differ
         """
-        TODO(dwadden) Update documentation.
+        Run the forward pass for a single document.
 
         Important: This function assumes that sentences are going to be passed in in sorted order,
         from the same document.
@@ -102,8 +145,9 @@ class CorefResolver(Model):
         document_length = sentence_lengths.sum().item()
         num_spans = spans.size(1)
 
-        # Prune based on mention scores.
+        # Prune based on mention scores. Make sure we keep at least 1.
         num_spans_to_keep = int(math.floor(self._spans_per_word * document_length))
+        num_spans_to_keep = max(num_spans_to_keep, 1)
 
         # Since there's only one minibatch, there aren't any masked spans for us. The span mask is
         # always 1.
@@ -114,11 +158,6 @@ class CorefResolver(Model):
                                                                            num_spans_to_keep)
         top_span_mask = top_span_mask.unsqueeze(-1)
         # Shape: (batch_size * num_spans_to_keep)
-        # torch.index_select only accepts 1D indices, but here
-        # we need to select spans for each element in the batch.
-        # This reformats the indices to take into account their
-        # index into the batch. We precompute this here to make
-        # the multiple calls to util.batched_index_select below more efficient.
         flat_top_span_indices = util.flatten_and_batch_shift_indices(top_span_indices, num_spans)
 
         # Compute final predictions for which spans to consider as mentions.
@@ -129,20 +168,6 @@ class CorefResolver(Model):
 
         # Compute indices for antecedent spans to consider.
         max_antecedents = min(self._max_antecedents, num_spans_to_keep)
-
-        # Now that we have our variables in terms of num_spans_to_keep, we need to
-        # compare span pairs to decide each span's antecedent. Each span can only
-        # have prior spans as antecedents, and we only consider up to max_antecedents
-        # prior spans. So the first thing we do is construct a matrix mapping a span's
-        #  index to the indices of its allowed antecedents. Note that this is independent
-        #  of the batch dimension - it's just a function of the span's position in
-        # top_spans. The spans are in document order, so we can just use the relative
-        # index of the spans to know which other spans are allowed antecedents.
-
-        # Once we have this matrix, we reformat our variables again to get embeddings
-        # for all valid antecedents for each span. This gives us variables with shapes
-        #  like (batch_size, num_spans_to_keep, max_antecedents, embedding_size), which
-        #  we can use to make coreference decisions between valid span pairs.
 
         # Shapes:
         # (num_spans_to_keep, max_antecedents),
@@ -169,9 +194,6 @@ class CorefResolver(Model):
                                                               candidate_antecedent_mention_scores,
                                                               valid_antecedent_log_mask)
 
-        # We now have, for each span which survived the pruning stage,
-        # a predicted antecedent. This implies a clustering if we group
-        # mentions which refer to each other in a chain.
         # Shape: (batch_size, num_spans_to_keep)
         _, predicted_antecedents = coreference_scores.max(2)
         # Subtract one here because index 0 is the "no antecedent" class,
@@ -191,8 +213,7 @@ class CorefResolver(Model):
 
             antecedent_labels = util.flattened_index_select(pruned_gold_labels,
                                                             valid_antecedent_indices).squeeze(-1)
-            # TODO(dwadden) There's an integer wrap-around happening here. It occurs in the original
-            # code. May be worth coming back and looking at this.
+            # There's an integer wrap-around happening here. It occurs in the original code.
             antecedent_labels += valid_antecedent_log_mask.long()
 
             # Compute labels.
@@ -200,15 +221,6 @@ class CorefResolver(Model):
             gold_antecedent_labels = self._compute_antecedent_gold_labels(pruned_gold_labels,
                                                                           antecedent_labels)
             # Now, compute the loss using the negative marginal log-likelihood.
-            # This is equal to the log of the sum of the probabilities of all antecedent predictions
-            # that would be consistent with the data, in the sense that we are minimising, for a
-            # given span, the negative marginal log likelihood of all antecedents which are in the
-            # same gold cluster as the span we are currently considering. Each span i predicts a
-            # single antecedent j, but there might be several prior mentions k in the same
-            # coreference cluster that would be valid antecedents. Our loss is the sum of the
-            # probability assigned to all valid antecedents. This is a valid objective for
-            # clustering as we don't mind which antecedent is predicted, so long as they are in
-            #  the same coreference cluster.
             coreference_log_probs = util.masked_log_softmax(coreference_scores, top_span_mask)
             correct_antecedent_log_probs = coreference_log_probs + gold_antecedent_labels.log()
             negative_marginal_log_likelihood = -util.logsumexp(correct_antecedent_log_probs).sum()
@@ -276,11 +288,6 @@ class CorefResolver(Model):
                     continue
 
                 # Find the right cluster to update with this span.
-                # To do this, we find the row in ``antecedent_indices``
-                # corresponding to this span we are considering.
-                # The predicted antecedent is then an index into this list
-                # of indices, denoting the span from ``top_spans`` which is the
-                # most likely antecedent.
                 predicted_index = antecedent_indices[i, predicted_antecedent]
 
                 antecedent_span = (top_spans[predicted_index, 0].item(),
@@ -314,7 +321,7 @@ class CorefResolver(Model):
         return {"coref_precision": coref_precision,
                 "coref_recall": coref_recall,
                 "coref_f1": coref_f1,
-                "mention_recall": mention_recall}
+                "coref_mention_recall": mention_recall}
 
     @staticmethod
     def _generate_valid_antecedents(num_spans_to_keep: int,
@@ -366,12 +373,6 @@ class CorefResolver(Model):
         # Shape: (num_spans_to_keep, max_antecedents)
         raw_antecedent_indices = target_indices - valid_antecedent_offsets
 
-        # In our matrix of indices, the upper triangular part will be negative
-        # because the offsets will be > the target indices. We want to mask these,
-        # because these are exactly the indices which we don't want to predict, per span.
-        # We're generating a logspace mask here because we will eventually create a
-        # distribution over these indices, so we need the 0 elements of the mask to be -inf
-        # in order to not mess up the normalisation of the distribution.
         # Shape: (1, num_spans_to_keep, max_antecedents)
         valid_antecedent_log_mask = (raw_antecedent_indices >= 0).float().unsqueeze(0).log()
 
