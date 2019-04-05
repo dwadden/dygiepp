@@ -98,6 +98,7 @@ class EventExtractor(Model):
                 ner_scores,
                 trigger_labels,
                 argument_labels,
+                epoch,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
         """
         TODO(dwadden) Write documentation.
@@ -178,8 +179,11 @@ class EventExtractor(Model):
             self._metrics(predictions, metadata)
             self._argument_stats(predictions)
 
-            loss = (self._loss_weights["trigger"] * trigger_loss +
-                    self._loss_weights["arguments"] * argument_loss)
+            # Only make the arguments part of the loss after the 10th epoch. That way, it won't get
+            # noisy NER and trigger scores. When evaluating, just include it anyhow; no gradient.
+            loss = self._loss_weights["trigger"] * trigger_loss
+            if epoch is None or epoch >= 10:
+                loss += self._loss_weights["arguments"] * argument_loss
 
             output_dict["loss"] = loss
 
