@@ -109,6 +109,8 @@ class DyGIE(Model):
         else:
             self._lexical_dropout = lambda x: x
 
+        # Big gotcha: PyTorch doesn't add dropout to the LSTM's output layer. We need to do this
+        # manually.
         if lstm_dropout > 0:
             self._lstm_dropout = torch.nn.Dropout(p=lstm_dropout)
         else:
