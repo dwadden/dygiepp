@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 # length.
 class RelationExtractor(Model):
     """
-    Named entity recognition module of DyGIE model.
+    Relation extraction module of DyGIE model.
     """
     # TODO(dwadden) add option to make `mention_feedforward` be the NER tagger.
     def __init__(self,
