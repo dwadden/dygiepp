@@ -8,16 +8,17 @@ local template = import "template.libsonnet";
 
 local params = {
   // Primary prediction target. Watch metrics associated with this target.
-  target: "events",
+  target: "ner",
 
   // If debugging, don't load expensive embedding files.
   debug: false,
 
   // Specifies the token-level features that will be created.
-  use_glove: true,
-  use_char: true,
-  use_elmo: true,
+  use_glove: false,
+  use_char: false,
+  use_elmo: false,
   use_attentive_span_extractor: false,
+  use_bert: true,
 
   // Specifies the model parameters.
   lstm_hidden_size: 200,
@@ -32,9 +33,9 @@ local params = {
   lstm_dropout: 0.4,
   loss_weights: {          // Loss weights for the modules.
     ner: 1.0,
-    relation: 0.0,
-    coref: 0.0,
-    events: 1.0
+    relation: 1.0,
+    coref: 1.0,
+    events: 0.0
   },
   loss_weights_events: {   // Loss weights for trigger and argument ID in events.
     trigger: 1.0,
@@ -68,7 +69,7 @@ local params = {
   // }
   learning_rate_scheduler:  {
     type: "reduce_on_plateau",
-    factor: 0.5,
+    factor: 0.9,
     mode: "max",
     patience: 2
   }
