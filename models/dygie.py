@@ -126,8 +126,8 @@ class DyGIE(Model):
                 relation_labels,
                 trigger_labels,
                 argument_labels,
-                epoch,
-                metadata):
+                metadata,
+                epoch=None):
         """
         TODO(dwadden) change this.
         """
