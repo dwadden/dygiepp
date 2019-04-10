@@ -136,8 +136,8 @@ class EventExtractor(Model):
                                                   top_arg_indices)
 
         # The NER and trigger labels scores for the candidates selected by the beam scorer.
-        top_event_label_scores = util.batched_index_select(trigger_scores, top_trig_indices)
-        top_ner_scores = util.batched_index_select(ner_scores, top_arg_indices)
+        top_event_label_scores = util.batched_index_select(trigger_scores, top_trig_indices).detach()
+        top_ner_scores = util.batched_index_select(ner_scores, top_arg_indices).detach()
 
         # The pairwise embeddings.
         trig_arg_embeddings = self._compute_trig_arg_embeddings(top_trig_embeddings,
@@ -171,7 +171,10 @@ class EventExtractor(Model):
             gold_arguments = self._get_pruned_gold_arguments(
                 argument_labels, top_trig_indices, top_arg_indices, top_trig_mask, top_arg_mask)
 
+            # Don't backprop thru argument loss till epoch 10.
             argument_loss = self._get_argument_loss(argument_scores, gold_arguments)
+            if epoch is not None and epoch < 10:
+                argument_loss = argument_loss.detach()
 
             # Compute F1.
             predictions = self.decode(output_dict)["decoded_events"]
@@ -179,11 +182,8 @@ class EventExtractor(Model):
             self._metrics(predictions, metadata)
             self._argument_stats(predictions)
 
-            # Only make the arguments part of the loss after the 10th epoch. That way, it won't get
-            # noisy NER and trigger scores. When evaluating, just include it anyhow; no gradient.
-            loss = self._loss_weights["trigger"] * trigger_loss
-            if epoch is None or epoch >= 10:
-                loss += self._loss_weights["arguments"] * argument_loss
+            loss = (self._loss_weights["trigger"] * trigger_loss +
+                    self._loss_weights["arguments"] * argument_loss)
 
             output_dict["loss"] = loss
 
