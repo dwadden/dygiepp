@@ -137,7 +137,9 @@ class EventExtractor(Model):
 
         # The NER and trigger labels scores for the candidates selected by the beam scorer.
         top_event_label_scores = util.batched_index_select(trigger_scores, top_trig_indices).detach()
+        top_event_label_scores = torch.zeros_like(top_event_label_scores)
         top_ner_scores = util.batched_index_select(ner_scores, top_arg_indices).detach()
+        top_ner_scores = torch.zeros_like(top_ner_scores)
 
         # The pairwise embeddings.
         trig_arg_embeddings = self._compute_trig_arg_embeddings(top_trig_embeddings,
