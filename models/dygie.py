@@ -99,8 +99,8 @@ class DyGIE(Model):
         self._max_span_width = max_span_width
 
         # Read valid event configurations.
-        self._valid_events = self._read_valid_events(valid_events_dir)
-        self._joint_metrics = JointMetrics(self._valid_events)
+        #self._valid_events = self._read_valid_events(valid_events_dir)
+        #self._joint_metrics = JointMetrics(self._valid_events)
 
         self._display_metrics = display_metrics
 
@@ -115,6 +115,26 @@ class DyGIE(Model):
             self._lstm_dropout = torch.nn.Dropout(p=lstm_dropout)
         else:
             self._lstm_dropout = lambda x: x
+
+        self.rel_prop = False
+        if self.rel_prop:
+            from allennlp.modules import FeedForward
+            self.d = 2 * self._endpoint_span_extractor._input_dim
+            if use_attentive_span_extractor:
+                self.d += self._attentive_span_extractor._input_dim 
+            self.d += 20
+            self._A_network = FeedForward(self.vocab.get_vocab_size("relation_labels"),
+                                          1,
+                                          self.d,
+                                          lambda x: x)
+            self._f_network = FeedForward(2 * self.d,
+                                          1,
+                                          self.d,
+                                          torch.nn.Sigmoid())
+                
+                                        
+
+
         initializer(self)
 
     @overrides
@@ -185,12 +205,45 @@ class DyGIE(Model):
 
         if self._loss_weights['relation'] > 0:
             output_relation = self._relation(
-                spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
+                spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata, predict=not self.rel_prop)
 
         if self._loss_weights['events'] > 0:
             output_events = self._events(
                 text_mask, contextualized_embeddings, spans, span_mask, span_embeddings,
                 sentence_lengths, trigger_labels, argument_labels, metadata)
+
+            
+        if self.rel_prop and self._loss_weights['relation'] > 0:
+            T = 2
+            rel_scores = output_relation['relation_scores']
+            span_num = rel_scores.shape[1]
+            top_span_embeddings = output_relation["top_span_embeddings"]
+            for t in range(T):
+                # We want to do this T times, where T is a hyper-parameter
+                # I think we should do an average instead of a sum, or some kind of normalization of the score distribution.
+
+                rel_scores = F.relu(rel_scores[:,:,:,1:], inplace=False) #Normalize every relu and then also take mean instead of sum
+
+                # This normalization below is not in the paper
+                #rel_scores /= (torch.sum(rel_scores, dim=[2,3]).view(-1,span_num,1,1).repeat(1,1,span_num,7) + 0.0000001)
+
+                rel_embs = self._A_network(rel_scores)
+                top_embs = top_span_embeddings.unsqueeze(2).repeat(1, 1, span_num, 1)
+                entity_embs = torch.sum(rel_embs * top_embs, dim=2)
+
+                f_network_input = torch.cat([top_span_embeddings, entity_embs], dim=-1)
+                f_weights = self._f_network(f_network_input)
+                new_embs = f_weights * top_span_embeddings + (1.0 - f_weights) * entity_embs
+
+                #span_pair_embeddings = self._relation._compute_span_pair_embeddings(entity_embs)
+                #relation_scores = self._relation._compute_relation_scores(span_pair_embeddings, self._relation._mention_pruner._scorer(entity_embs))
+                #rel_scores = self._compute_rel_scores(entity_embs)
+                rel_scores = self._relation.get_rel_scores(new_embs, self._relation._mention_pruner._scorer(new_embs))
+                top_span_embeddings = new_embs
+
+
+
+            output_relation = self._relation.predict_labels(rel_scores, relation_labels, output_relation["top_span_indices"], output_relation["top_span_mask"], output_relation, metadata)
 
         # TODO(dwadden) just did this part.
         loss = (self._loss_weights['coref'] * output_coref['loss'] +
@@ -254,18 +307,18 @@ class DyGIE(Model):
         metrics_coref = self._coref.get_metrics(reset=reset)
         metrics_ner = self._ner.get_metrics(reset=reset)
         metrics_relation = self._relation.get_metrics(reset=reset)
-        metrics_events = self._events.get_metrics(reset=reset)
-        metrics_joint = self._joint_metrics.get_metric(reset=reset)
+        #metrics_events = self._events.get_metrics(reset=reset)
+        #metrics_joint = self._joint_metrics.get_metric(reset=reset)
 
         # Make sure that there aren't any conflicting names.
         metric_names = (list(metrics_coref.keys()) + list(metrics_ner.keys()) +
-                        list(metrics_relation.keys()) + list(metrics_events.keys()))
+                        list(metrics_relation.keys()))# + list(metrics_events.keys()))
         assert len(set(metric_names)) == len(metric_names)
         all_metrics = dict(list(metrics_coref.items()) +
                            list(metrics_ner.items()) +
-                           list(metrics_relation.items()) +
-                           list(metrics_events.items()) +
-                           list(metrics_joint.items()))
+                           list(metrics_relation.items()))# +
+                           #list(metrics_events.items()) +
+                           #list(metrics_joint.items()))
 
         # If no list of desired metrics given, display them all.
         if self._display_metrics is None:
