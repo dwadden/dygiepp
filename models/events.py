@@ -14,7 +14,7 @@ from allennlp.modules import TimeDistributed
 
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
 from dygie.training.event_metrics import EventMetrics, ArgumentStats
-from dygie.models.shared import fields_to_batches
+from dygie.models.shared import fields_to_batches, one_hot
 from dygie.models.entity_beam_pruner import make_pruner
 
 # TODO(dwadden) rename NERMetrics
@@ -40,12 +40,14 @@ class EventExtractor(Model):
                  trigger_spans_per_word: float,
                  argument_spans_per_word: float,
                  loss_weights,
+                 event_args_use_labels: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  positive_label_weight: float = 1.0,
                  entity_beam: bool = False,
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(EventExtractor, self).__init__(vocab, regularizer)
 
+        self._n_ner_labels = vocab.get_vocab_size("ner_labels")
         self._n_trigger_labels = vocab.get_vocab_size("trigger_labels")
         self._n_argument_labels = vocab.get_vocab_size("argument_labels")
 
@@ -66,6 +68,7 @@ class EventExtractor(Model):
         self._trigger_pruner = make_pruner(trigger_candidate_feedforward, entity_beam)
 
         # Argument scorer.
+        self._event_args_use_labels = event_args_use_labels  # If True, use ner and trigger labels to predict args.
         self._argument_feedforward = argument_feedforward
         self._argument_scorer = torch.nn.Linear(argument_feedforward.get_output_dim(), self._n_argument_labels)
 
@@ -92,6 +95,7 @@ class EventExtractor(Model):
                 ner_scores,     # Needed if we're using entity beam approach.
                 trigger_labels,
                 argument_labels,
+                ner_labels,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
         """
         TODO(dwadden) Write documentation.
@@ -126,12 +130,16 @@ class EventExtractor(Model):
         top_arg_spans = util.batched_index_select(spans,
                                                   top_arg_indices)
 
-        trig_arg_embeddings = self._compute_trig_arg_embeddings(top_trig_embeddings,
-                                                                top_arg_embeddings)
+        # Collect trigger and ner labels, in case they're included as features to the argument
+        # classifier.
+        top_trig_labels = trigger_labels.gather(1, top_trig_indices)
+        top_ner_labels = ner_labels.gather(1, top_arg_indices)
 
-        argument_scores = self._compute_argument_scores(trig_arg_embeddings,
-                                                        top_trig_scores,
-                                                        top_arg_scores)
+        trig_arg_embeddings = self._compute_trig_arg_embeddings(
+            top_trig_embeddings, top_arg_embeddings, top_trig_labels, top_ner_labels)
+
+        argument_scores = self._compute_argument_scores(
+            trig_arg_embeddings, top_trig_scores, top_arg_scores)
 
         _, predicted_triggers = trigger_scores.max(-1)
         _, predicted_arguments = argument_scores.max(-1)
@@ -236,28 +244,39 @@ class EventExtractor(Model):
         # Give large negative scores to the masked-out values.
         return trigger_scores
 
-    @staticmethod
-    def _compute_trig_arg_embeddings(top_trig_embeddings: torch.FloatTensor,
-                                     top_arg_embeddings: torch.FloatTensor):
+    def _compute_trig_arg_embeddings(self,
+                                     top_trig_embeddings: torch.FloatTensor,
+                                     top_arg_embeddings: torch.FloatTensor,
+                                     top_trig_labels: torch.FloatTensor,
+                                     top_ner_labels: torch.FloatTensor):
         """
         TODO(dwadden) document me and add comments.
         """
         # TODO(dwadden) this is the same pattern as in the relation module. Maybe this should be
         # refactored somehow?
-        num_trigs = top_trig_embeddings.size(1)
-        num_args = top_arg_embeddings.size(1)
 
-        trig_emb_expanded = top_trig_embeddings.unsqueeze(2)
+        if self._event_args_use_labels:
+            trig_emb = torch.cat(
+                [top_trig_embeddings, one_hot(top_trig_labels, self._n_trigger_labels)], dim=-1)
+            arg_emb = torch.cat(
+                [top_arg_embeddings, one_hot(top_ner_labels, self._n_ner_labels)], dim=-1)
+        else:
+            trig_emb = top_trig_embeddings
+            arg_emb = top_arg_embeddings
+
+        num_trigs = trig_emb.size(1)
+        num_args = arg_emb.size(1)
+
+        trig_emb_expanded = trig_emb.unsqueeze(2)
         trig_emb_tiled = trig_emb_expanded.repeat(1, 1, num_args, 1)
 
-        arg_emb_expanded = top_arg_embeddings.unsqueeze(1)
+        arg_emb_expanded = arg_emb.unsqueeze(1)
         arg_emb_tiled = arg_emb_expanded.repeat(1, num_trigs, 1, 1)
 
         pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled]
         pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
 
         return pair_embeddings
-
 
     def _compute_argument_scores(self, pairwise_embeddings, top_trig_scores, top_arg_scores):
         batch_size = pairwise_embeddings.size(0)

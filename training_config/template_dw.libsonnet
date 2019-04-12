@@ -37,7 +37,15 @@ function(p) {
 
   ////////////////////////////////////////////////////////////////////////////////
 
+  // Helper function.
+  // Get the attribute from the object. If the object doesn't have that attribute, return default.
+  local getattr(obj, attrname, default) = if attrname in obj then p[attrname] else default,
+
   // Calculating dimensions.
+
+  // If true, use ner and trigger labels as features to predict event arguments.
+  // TODO(dwadden) At some point I should make arguments like this mandatory.
+  local event_args_use_labels = getattr(p, "event_args_use_labels", false),
 
   local token_embedding_dim = ((if p.use_glove then glove_dim else 0) +
     (if p.use_char then p.char_n_filters else 0) +
@@ -49,14 +57,13 @@ function(p) {
   local relation_scorer_dim = pair_emb_dim,
   local coref_scorer_dim = pair_emb_dim + p.feature_size,
   local trigger_scorer_dim = 2 * p.lstm_hidden_size,  // Triggers are single contextualized tokens.
-  local argument_scorer_dim = trigger_scorer_dim + span_emb_dim, // Trigger embeddings  and span embeddings.
+  // The parameter file must store the number of trigger labels and ner labels.
+  local argument_scorer_dim = (trigger_scorer_dim + span_emb_dim +
+    (if event_args_use_labels then p.n_trigger_labels + p.n_ner_labels else 0)),
 
   ////////////////////////////////////////////////////////////////////////////////
 
   // Function definitions
-
-  // Get the attribute from the object. If the object doesn't have that attribute, return default.
-  local getattr(obj, attrname, default) = if attrname in obj then p[attrname] else default,
 
   local make_feedforward(input_dim) = {
     input_dim: input_dim,
@@ -125,6 +132,10 @@ function(p) {
   train_data_path: std.extVar("ie_train_data_path"),
   validation_data_path: std.extVar("ie_dev_data_path"),
   test_data_path: std.extVar("ie_test_data_path"),
+  // If provided, use pre-defined vocabulary. Else compute on the fly.
+  [if "vocab_path" in p then "vocabulary"]: {
+    directory_path: p.vocab_path
+  },
   model: {
     type: "dygie",
     text_field_embedder: text_field_embedder,
@@ -172,6 +183,7 @@ function(p) {
         trigger_candidate_feedforward: make_feedforward(trigger_scorer_dim),
         mention_feedforward: make_feedforward(span_emb_dim),
         argument_feedforward: make_feedforward(argument_scorer_dim),
+        event_args_use_labels: event_args_use_labels,
         initializer: module_initializer,
         loss_weights: p.loss_weights_events,
         entity_beam: getattr(p, "events_entity_beam", false)

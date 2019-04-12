@@ -42,3 +42,18 @@ def fields_to_batches(d):
     keys = d.keys()
     res = [{k: d[k][i] for k in keys} for i in range(length)]
     return res
+
+
+# Got this one from https://discuss.pytorch.org/t/convert-int-into-one-hot-format/507/33, under
+# posting "A batch version that works".
+def one_hot(x, num_classes):
+    """
+    Given an integer matrix of size (batch_size x n_tokens), convert to a one-hot matrix of size
+    (batch_size x n_tokens x n_classes).
+    Assumes that null class has label 0 (not -1).
+    """
+    assert x.min().item() == 0
+    batch_size, seq_length = x.size()
+    res = torch.zeros(batch_size, seq_length, num_classes, device=x.device)
+    res.scatter_(2, x.unsqueeze(2), 1)
+    return res
