@@ -9,9 +9,10 @@ from allennlp.data import Vocabulary
 from allennlp.models.model import Model
 from allennlp.modules import FeedForward
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
-from allennlp.modules import TimeDistributed, Pruner
+from allennlp.modules import TimeDistributed
 
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
+from dygie.models.entity_beam_pruner import Pruner
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 

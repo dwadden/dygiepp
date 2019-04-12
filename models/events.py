@@ -10,11 +10,12 @@ from allennlp.data import Vocabulary
 from allennlp.models.model import Model
 from allennlp.modules import FeedForward
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
-from allennlp.modules import TimeDistributed, Pruner
+from allennlp.modules import TimeDistributed
 
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
 from dygie.training.event_metrics import EventMetrics, ArgumentStats
-from dygie.models.shared import fields_to_batches, make_pruner
+from dygie.models.shared import fields_to_batches
+from dygie.models.entity_beam_pruner import make_pruner
 
 # TODO(dwadden) rename NERMetrics
 
@@ -226,12 +227,13 @@ class EventExtractor(Model):
         Compute trigger scores for all tokens.
         """
         trigger_scores = self._trigger_scorer(trigger_embeddings)
+        # Give large negative scores to masked-out elements.
+        mask = trigger_mask.unsqueeze(-1)
+        trigger_scores = util.replace_masked_values(trigger_scores, mask, -1e20)
         dummy_dims = [trigger_scores.size(0), trigger_scores.size(1), 1]
         dummy_scores = trigger_scores.new_zeros(*dummy_dims)
         trigger_scores = torch.cat((dummy_scores, trigger_scores), -1)
         # Give large negative scores to the masked-out values.
-        mask = trigger_mask.unsqueeze(-1)
-        trigger_scores = util.replace_masked_values(trigger_scores, mask, -1e20)
         return trigger_scores
 
     @staticmethod

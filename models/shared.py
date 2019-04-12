@@ -4,8 +4,6 @@ Short utility functions.
 
 import torch
 
-from allennlp.modules import TimeDistributed, Pruner
-
 
 def cumsum_shifted(xs):
     """
@@ -44,16 +42,3 @@ def fields_to_batches(d):
     keys = d.keys()
     res = [{k: d[k][i] for k in keys} for i in range(length)]
     return res
-
-
-def make_pruner(scorer, entity_beam):
-    """
-    Create a pruner that either takes outputs of other scorers (i.e. entity beam), or uses its own
-    scorer (the `default_scorer`).
-    """
-    item_scorer = torch.nn.Sequential(
-        TimeDistributed(scorer),
-        TimeDistributed(torch.nn.Linear(scorer.get_output_dim(), 1)))
-    min_score_to_keep = 1e-10 if entity_beam else None
-
-    return Pruner(item_scorer, entity_beam, min_score_to_keep)
