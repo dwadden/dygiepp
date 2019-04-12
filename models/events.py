@@ -13,9 +13,9 @@ from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from allennlp.modules import TimeDistributed, Pruner
 
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
-from dygie.models.entity_beam_scorer import make_pruner
 from dygie.training.event_metrics import EventMetrics, ArgumentStats
-from dygie.models.shared import fields_to_batches
+from dygie.models.shared import fields_to_batches, make_pruner
+
 # TODO(dwadden) rename NERMetrics
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -34,7 +34,6 @@ class EventExtractor(Model):
                  trigger_feedforward: FeedForward,
                  trigger_candidate_feedforward: FeedForward,
                  mention_feedforward: FeedForward,  # Used if entity beam is off.
-                 ner_scorer: torch.nn,              # Used if entity beam is on.
                  argument_feedforward: FeedForward,
                  feature_size: int,
                  trigger_spans_per_word: float,
@@ -62,8 +61,8 @@ class EventExtractor(Model):
 
         # Make pruners. If `entity_beam` is true, use NER and trigger scorers to construct the beam
         # and only keep candidates that the model predicts are actual entities or triggers.
-        self._mention_pruner = make_pruner(mention_feedforward, ner_scorer, entity_beam)
-        self._trigger_pruner = make_pruner(trigger_candidate_feedforward, self._trigger_scorer, entity_beam)
+        self._mention_pruner = make_pruner(mention_feedforward, entity_beam)
+        self._trigger_pruner = make_pruner(trigger_candidate_feedforward, entity_beam)
 
         # Argument scorer.
         self._argument_feedforward = argument_feedforward
@@ -89,6 +88,7 @@ class EventExtractor(Model):
                 span_mask,
                 span_embeddings,  # TODO(dwadden) add type.
                 sentence_lengths,
+                ner_scores,     # Needed if we're using entity beam approach.
                 trigger_labels,
                 argument_labels,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
@@ -108,7 +108,7 @@ class EventExtractor(Model):
 
         (top_trig_embeddings, top_trig_mask,
          top_trig_indices, top_trig_scores, num_trigs_kept) = self._trigger_pruner(
-             trigger_embeddings, trigger_mask, num_trigs_to_keep)
+             trigger_embeddings, trigger_mask, num_trigs_to_keep, trigger_scores)
         top_trig_mask = top_trig_mask.unsqueeze(-1)
 
         # Compute the number of argument spans to keep.
@@ -119,7 +119,7 @@ class EventExtractor(Model):
 
         (top_arg_embeddings, top_arg_mask,
          top_arg_indices, top_arg_scores, num_arg_spans_kept) = self._mention_pruner(
-             span_embeddings, span_mask, num_arg_spans_to_keep)
+             span_embeddings, span_mask, num_arg_spans_to_keep, ner_scores)
 
         top_arg_mask = top_arg_mask.unsqueeze(-1)
         top_arg_spans = util.batched_index_select(spans,
