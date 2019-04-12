@@ -55,6 +55,9 @@ function(p) {
 
   // Function definitions
 
+  // Get the attribute from the object. If the object doesn't have that attribute, return default.
+  local getattr(obj, attrname, default) = if attrname in obj then p[attrname] else default,
+
   local make_feedforward(input_dim) = {
     input_dim: input_dim,
     num_layers: p.feedforward_layers,
@@ -170,7 +173,8 @@ function(p) {
         mention_feedforward: make_feedforward(span_emb_dim),
         argument_feedforward: make_feedforward(argument_scorer_dim),
         initializer: module_initializer,
-        loss_weights: p.loss_weights_events
+        loss_weights: p.loss_weights_events,
+        entity_beam: getattr(p, "events_entity_beam", false)
       }
     }
   },

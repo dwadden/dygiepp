@@ -59,7 +59,7 @@ class DyGIE(Model):
                  loss_weights,  # TOOD(dwadden) Add type.
                  lexical_dropout: float = 0.2,
                  lstm_dropout: float = 0.4,
-                 use_attentive_span_extractor: bool = True,
+                 use_attentive_span_extractor: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
                  display_metrics: List[str] = None,
@@ -83,6 +83,7 @@ class DyGIE(Model):
                                                        params=modules.pop("relation"))
         self._events = EventExtractor.from_params(vocab=vocab,
                                                   feature_size=feature_size,
+                                                  ner_scorer=self._ner._ner_scorer,
                                                   params=modules.pop("events"))
 
         self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
