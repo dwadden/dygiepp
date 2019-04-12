@@ -8,7 +8,7 @@ from overrides import overrides
 
 from allennlp.data import Vocabulary
 from allennlp.models.model import Model
-from allennlp.modules import Seq2SeqEncoder, TextFieldEmbedder
+from allennlp.modules import Seq2SeqEncoder, TextFieldEmbedder, FeedForward
 from allennlp.modules.span_extractors import SelfAttentiveSpanExtractor, EndpointSpanExtractor
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 
@@ -116,21 +116,19 @@ class DyGIE(Model):
         else:
             self._lstm_dropout = lambda x: x
 
-        self.rel_prop = False
-        if self.rel_prop:
-            from allennlp.modules import FeedForward
-            self.d = 2 * self._endpoint_span_extractor._input_dim
-            if use_attentive_span_extractor:
-                self.d += self._attentive_span_extractor._input_dim 
-            self.d += 20
-            self._A_network = FeedForward(self.vocab.get_vocab_size("relation_labels"),
-                                          1,
-                                          self.d,
-                                          lambda x: x)
-            self._f_network = FeedForward(2 * self.d,
-                                          1,
-                                          self.d,
-                                          torch.nn.Sigmoid())
+        self.rel_prop = 2
+        if self.rel_prop > 0:
+            self.d = int(self._relation._relation_feedforward.get_input_dim()/3)
+            self._A_network = FeedForward(input_dim=self.vocab.get_vocab_size("relation_labels"),
+                                          num_layers=1,
+                                          hidden_dims=self.d,
+                                          activations=lambda x: x,
+                                          dropout=0.4)
+            self._f_network = FeedForward(input_dim=2*self.d,
+                                          num_layers=1,
+                                          hidden_dims=self.d,
+                                          activations=torch.nn.Sigmoid(),
+                                          dropout=0.4)
                 
                                         
 
@@ -195,6 +193,10 @@ class DyGIE(Model):
         output_relation = {'loss': 0}
         output_events = {'loss': 0}
 
+        if self._loss_weights['relation'] > 0:
+            output_relation = self._relation(
+                spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata, predict=not self.rel_prop)
+
         if self._loss_weights['coref'] > 0:
             output_coref = self._coref(
                 spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
@@ -203,47 +205,33 @@ class DyGIE(Model):
             output_ner = self._ner(
                 spans, span_mask, span_embeddings, sentence_lengths, ner_labels, metadata)
 
-        if self._loss_weights['relation'] > 0:
-            output_relation = self._relation(
-                spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata, predict=not self.rel_prop)
-
         if self._loss_weights['events'] > 0:
             output_events = self._events(
                 text_mask, contextualized_embeddings, spans, span_mask, span_embeddings,
                 sentence_lengths, trigger_labels, argument_labels, metadata)
 
             
-        if self.rel_prop and self._loss_weights['relation'] > 0:
-            T = 2
-            rel_scores = output_relation['relation_scores']
-            span_num = rel_scores.shape[1]
+        # Move relation propagation up
+
+        if self.rel_prop > 0 and self._loss_weights['relation'] > 0:
+            relation_scores = output_relation['relation_scores']
+            span_num = relation_scores.shape[1]
             top_span_embeddings = output_relation["top_span_embeddings"]
-            for t in range(T):
-                # We want to do this T times, where T is a hyper-parameter
+            for t in range(self.rel_prop):
                 # I think we should do an average instead of a sum, or some kind of normalization of the score distribution.
-
-                rel_scores = F.relu(rel_scores[:,:,:,1:], inplace=False) #Normalize every relu and then also take mean instead of sum
-
+                relation_scores = F.relu(relation_scores[:,:,:,1:], inplace=False) #Normalize every relu and then also take mean instead of sum
                 # This normalization below is not in the paper
-                #rel_scores /= (torch.sum(rel_scores, dim=[2,3]).view(-1,span_num,1,1).repeat(1,1,span_num,7) + 0.0000001)
-
-                rel_embs = self._A_network(rel_scores)
-                top_embs = top_span_embeddings.unsqueeze(2).repeat(1, 1, span_num, 1)
-                entity_embs = torch.sum(rel_embs * top_embs, dim=2)
+                #relation_scores /= (torch.sum(relation_scores, dim=[2,3]).view(-1,span_num,1,1).repeat(1,1,span_num,7) + 0.0000001)
+                relation_embeddings = self._A_network(relation_scores)
+                top_span_embeddings_repeated = top_span_embeddings.unsqueeze(2).repeat(1, 1, span_num, 1)
+                entity_embs = torch.sum(relation_embeddings * top_span_embeddings_repeated, dim=2)
 
                 f_network_input = torch.cat([top_span_embeddings, entity_embs], dim=-1)
                 f_weights = self._f_network(f_network_input)
-                new_embs = f_weights * top_span_embeddings + (1.0 - f_weights) * entity_embs
+                top_span_embeddings = f_weights * top_span_embeddings + (1.0 - f_weights) * entity_embs
+                relation_scores = self._relation.get_rel_scores(top_span_embeddings, self._relation._mention_pruner._scorer(top_span_embeddings))
 
-                #span_pair_embeddings = self._relation._compute_span_pair_embeddings(entity_embs)
-                #relation_scores = self._relation._compute_relation_scores(span_pair_embeddings, self._relation._mention_pruner._scorer(entity_embs))
-                #rel_scores = self._compute_rel_scores(entity_embs)
-                rel_scores = self._relation.get_rel_scores(new_embs, self._relation._mention_pruner._scorer(new_embs))
-                top_span_embeddings = new_embs
-
-
-
-            output_relation = self._relation.predict_labels(rel_scores, relation_labels, output_relation["top_span_indices"], output_relation["top_span_mask"], output_relation, metadata)
+            output_relation = self._relation.predict_labels(relation_scores, relation_labels, output_relation["top_span_indices"], output_relation["top_span_mask"], output_relation, metadata)
 
         # TODO(dwadden) just did this part.
         loss = (self._loss_weights['coref'] * output_coref['loss'] +
