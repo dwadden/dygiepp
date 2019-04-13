@@ -54,8 +54,11 @@ class CorefResolver(Model):
                  spans_per_word: float,
                  max_antecedents: int,
                  initializer: InitializerApplicator = InitializerApplicator(), # TODO(dwadden add this).
-                 regularizer: Optional[RegularizerApplicator] = None) -> None:
+                 regularizer: Optional[RegularizerApplicator] = None,
+                 check: bool = False) -> None:
         super(CorefResolver, self).__init__(vocab, regularizer)
+
+        self._check = check
 
         self._antecedent_feedforward = TimeDistributed(antecedent_feedforward)
         feedforward_scorer = torch.nn.Sequential(

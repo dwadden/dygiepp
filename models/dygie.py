@@ -63,8 +63,11 @@ class DyGIE(Model):
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
                  display_metrics: List[str] = None,
-                 valid_events_dir: str = None) -> None:
+                 valid_events_dir: str = None,
+                 check: bool = False) -> None:
         super(DyGIE, self).__init__(vocab, regularizer)
+
+        self._check = check
 
         self._text_field_embedder = text_field_embedder
         self._context_layer = context_layer
@@ -74,15 +77,19 @@ class DyGIE(Model):
         # TODO(dwadden) Figure out the parameters that need to get passed in.
         self._coref = CorefResolver.from_params(vocab=vocab,
                                                 feature_size=feature_size,
+                                                check=check,
                                                 params=modules.pop("coref"))
         self._ner = NERTagger.from_params(vocab=vocab,
                                           feature_size=feature_size,
+                                          check=check,
                                           params=modules.pop("ner"))
         self._relation = RelationExtractor.from_params(vocab=vocab,
                                                        feature_size=feature_size,
+                                                       check=check,
                                                        params=modules.pop("relation"))
         self._events = EventExtractor.from_params(vocab=vocab,
                                                   feature_size=feature_size,
+                                                  check=check,
                                                   params=modules.pop("events"))
 
         self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),

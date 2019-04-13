@@ -44,8 +44,11 @@ class EventExtractor(Model):
                  initializer: InitializerApplicator = InitializerApplicator(),
                  positive_label_weight: float = 1.0,
                  entity_beam: bool = False,
-                 regularizer: Optional[RegularizerApplicator] = None) -> None:
+                 regularizer: Optional[RegularizerApplicator] = None,
+                 check: bool = False) -> None:
         super(EventExtractor, self).__init__(vocab, regularizer)
+
+        self._check = check
 
         self._n_ner_labels = vocab.get_vocab_size("ner_labels")
         self._n_trigger_labels = vocab.get_vocab_size("trigger_labels")

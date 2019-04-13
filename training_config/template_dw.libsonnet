@@ -148,6 +148,7 @@ function(p) {
     max_span_width: p.max_span_width,
     display_metrics: display_metrics[p.target],
     valid_events_dir: valid_events_dir,
+    check: getattr(p, "check", false), // If true, run a bunch of correctness assertions in the code.
     context_layer: {
       type: "lstm",
       bidirectional: true,
@@ -186,7 +187,7 @@ function(p) {
         event_args_use_labels: event_args_use_labels,
         initializer: module_initializer,
         loss_weights: p.loss_weights_events,
-        entity_beam: getattr(p, "events_entity_beam", false)
+        entity_beam: getattr(p, "events_entity_beam", false),
       }
     }
   },

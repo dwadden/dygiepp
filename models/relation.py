@@ -33,8 +33,11 @@ class RelationExtractor(Model):
                  spans_per_word: float,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  positive_label_weight: float = 1.0,
-                 regularizer: Optional[RegularizerApplicator] = None) -> None:
+                 regularizer: Optional[RegularizerApplicator] = None,
+                 check: bool = False) -> None:
         super(RelationExtractor, self).__init__(vocab, regularizer)
+
+        self._check = check
 
         self._n_labels = vocab.get_vocab_size("relation_labels")
 
