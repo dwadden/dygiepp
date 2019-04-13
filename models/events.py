@@ -41,6 +41,7 @@ class EventExtractor(Model):
                  argument_spans_per_word: float,
                  loss_weights,
                  event_args_use_labels: bool = False,
+                 context_window: int = 0,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  positive_label_weight: float = 1.0,
                  entity_beam: bool = False,
@@ -72,6 +73,7 @@ class EventExtractor(Model):
 
         # Argument scorer.
         self._event_args_use_labels = event_args_use_labels  # If True, use ner and trigger labels to predict args.
+        self._context_window = context_window                # If greater than 0, concatenate context as features.
         self._argument_feedforward = argument_feedforward
         self._argument_scorer = torch.nn.Linear(argument_feedforward.get_output_dim(), self._n_argument_labels)
 
@@ -139,7 +141,8 @@ class EventExtractor(Model):
         top_ner_labels = ner_labels.gather(1, top_arg_indices)
 
         trig_arg_embeddings = self._compute_trig_arg_embeddings(
-            top_trig_embeddings, top_arg_embeddings, top_trig_labels, top_ner_labels)
+            top_trig_embeddings, top_arg_embeddings, top_trig_labels, top_ner_labels,
+            top_trig_indices, top_arg_spans, trigger_embeddings)
 
         argument_scores = self._compute_argument_scores(
             trig_arg_embeddings, top_trig_scores, top_arg_scores)
@@ -248,15 +251,15 @@ class EventExtractor(Model):
         return trigger_scores
 
     def _compute_trig_arg_embeddings(self,
-                                     top_trig_embeddings: torch.FloatTensor,
-                                     top_arg_embeddings: torch.FloatTensor,
-                                     top_trig_labels: torch.FloatTensor,
-                                     top_ner_labels: torch.FloatTensor):
+                                     top_trig_embeddings, top_arg_embeddings, top_trig_labels,
+                                     top_ner_labels, top_trig_indices, top_arg_spans, text_emb):
         """
         TODO(dwadden) document me and add comments.
         """
         # TODO(dwadden) this is the same pattern as in the relation module. Maybe this should be
         # refactored somehow?
+        if self._context_window > 0:
+            trigger_context = self._get_trigger_context(top_trig_indices, text_emb)
 
         if self._event_args_use_labels:
             trig_emb = torch.cat(
@@ -280,6 +283,58 @@ class EventExtractor(Model):
         pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
 
         return pair_embeddings
+
+    def _get_trigger_context(self, top_trig_indices, text_emb):
+        """
+        Grab a context window around each trigger, padding with zeros on either end.
+        """
+        def checkit():
+            assert tuple(pad_batch.size()) == (batch_size, num_candidates, emb_size * 2 * self._context_window)
+            if batch_size > 2 and seq_length > 6:  # Make sure the batch is big enough to check.
+                # Spot-check an entry from the left pad.
+                expected_left = pad_batch[1, 4, 13]
+                actual_ix_left = (top_trig_indices[1, 4] - self._context_window).item()
+                actual_left = text_emb[1, actual_ix_left, 13]
+                assert torch.allclose(expected_left, actual_left)
+                # And one from the right pad.
+                expected_right = pad_batch[2, 6, -4]
+                actual_ix_right = (top_trig_indices[2, 6] + self._context_window).item()
+                actual_right = text_emb[2, actual_ix_right, -4]
+                assert torch.allclose(expected_right, actual_right)
+
+        # The text_emb are already zero-padded on the right, which is correct.
+        batch_size, seq_length, emb_size = text_emb.size()
+        num_candidates = top_trig_indices.size(1)
+        padding = torch.zeros(batch_size, self._context_window, emb_size, device=text_emb.device)
+        # [batch_size, seq_length + 2 x context_window, emb_size]
+        padded_emb = torch.cat([padding, text_emb, padding], dim=1)
+
+        pad_batch = []
+        for batch_ix, trig_ixs in enumerate(top_trig_indices):
+            pad_entry = []
+            for trig_ix in trig_ixs:
+                # The starts are inclusive, ends are exclusive.
+                left_start = trig_ix
+                left_end = trig_ix + self._context_window
+                right_start = trig_ix + self._context_window + 1
+                right_end = trig_ix + 2 * self._context_window + 1
+                left_pad = padded_emb[batch_ix, left_start:left_end]
+                right_pad = padded_emb[batch_ix, right_start:right_end]
+                if self._check:
+                    assert (tuple(left_pad.size()) ==
+                            tuple(right_pad.size()) ==
+                            (self._context_window, emb_size))
+                pad = torch.cat([left_pad, right_pad], dim=0).view(-1).unsqueeze(0)
+                pad_entry.append(pad)
+
+            pad_entry = torch.cat(pad_entry, dim=0).unsqueeze(0)
+            pad_batch.append(pad_entry)
+
+        pad_batch = torch.cat(pad_batch, dim=0)
+        if self._check:
+            checkit()
+
+        return pad_batch
 
     def _compute_argument_scores(self, pairwise_embeddings, top_trig_scores, top_arg_scores):
         batch_size = pairwise_embeddings.size(0)
