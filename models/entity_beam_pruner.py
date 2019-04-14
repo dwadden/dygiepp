@@ -101,8 +101,6 @@ class Pruner(torch.nn.Module):
             num_items_to_keep = num_items_to_keep * torch.ones([batch_size], dtype=torch.long,
                                                                device=mask.device)
 
-        max_items_to_keep = num_items_to_keep.max()
-
         mask = mask.unsqueeze(-1)
         num_items = embeddings.size(1)
 
@@ -119,6 +117,8 @@ class Pruner(torch.nn.Module):
         if self._min_score_to_keep is not None:
             num_good_items = torch.sum(scores > self._min_score_to_keep, dim=1).squeeze()
             num_items_to_keep = torch.min(num_items_to_keep, num_good_items)
+
+        max_items_to_keep = num_items_to_keep.max()
 
         if scores.size(-1) != 1 or scores.dim() != 3:
             raise ValueError(f"The scorer passed to Pruner must produce a tensor of shape"
