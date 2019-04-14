@@ -46,6 +46,7 @@ function(p) {
   // If true, use ner and trigger labels as features to predict event arguments.
   // TODO(dwadden) At some point I should make arguments like this mandatory.
   local event_args_use_labels = getattr(p, "event_args_use_labels", false),
+  local events_context_window = getattr(p, "events_context_window", 0),
 
   local token_embedding_dim = ((if p.use_glove then glove_dim else 0) +
     (if p.use_char then p.char_n_filters else 0) +
@@ -57,9 +58,15 @@ function(p) {
   local relation_scorer_dim = pair_emb_dim,
   local coref_scorer_dim = pair_emb_dim + p.feature_size,
   local trigger_scorer_dim = 2 * p.lstm_hidden_size,  // Triggers are single contextualized tokens.
-  // The parameter file must store the number of trigger labels and ner labels.
+
+  // Calculation of argument scorer dim is a bit tricky. First, there's the triggers and the span
+  // embeddings. Then, if we're using labels, include those. Then, if we're using a context window,
+  // there are 2 x context_window extra entries for both arg and trigger, which makes 4 x total. The
+  // dimension of each entry is twice the lstm hidden size.
+  //
   local argument_scorer_dim = (trigger_scorer_dim + span_emb_dim +
-    (if event_args_use_labels then p.n_trigger_labels + p.n_ner_labels else 0)),
+    (if event_args_use_labels then p.n_trigger_labels + p.n_ner_labels else 0) +
+    (if events_context_window > 0 then 8 * events_context_window * p.lstm_hidden_size else 0)),
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -188,7 +195,7 @@ function(p) {
         initializer: module_initializer,
         loss_weights: p.loss_weights_events,
         entity_beam: getattr(p, "events_entity_beam", false),
-        context_window: getattr(p, "events_context_window", 0)
+        context_window: events_context_window
       }
     }
   },

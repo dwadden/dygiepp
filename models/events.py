@@ -254,21 +254,30 @@ class EventExtractor(Model):
                                      top_trig_embeddings, top_arg_embeddings, top_trig_labels,
                                      top_ner_labels, top_trig_indices, top_arg_spans, text_emb):
         """
-        TODO(dwadden) document me and add comments.
+        Create trigger / argument pair embeddings, consisting of:
+        - The embeddings of the trigger and argument pair.
+        - Optionally, the embeddings of the trigger and argument labels.
+        - Optionally, embeddings of the words surrounding the trigger and argument.
         """
-        # TODO(dwadden) this is the same pattern as in the relation module. Maybe this should be
-        # refactored somehow?
+        trig_emb_list = [top_trig_embeddings]
+        arg_emb_list = [top_arg_embeddings]
+
         if self._context_window > 0:
-            trigger_context = self._get_trigger_context(top_trig_indices, text_emb)
+            # Include words in a window around trigger and argument.
+            # For triggers, the span start and end indices are the same.
+            trigger_context = self._get_context(top_trig_indices, top_trig_indices, text_emb)
+            argument_context = self._get_context(
+                top_arg_spans[:, :, 0], top_arg_spans[:, :, 1], text_emb)
+            trig_emb_list.append(trigger_context)
+            arg_emb_list.append(argument_context)
 
         if self._event_args_use_labels:
-            trig_emb = torch.cat(
-                [top_trig_embeddings, one_hot(top_trig_labels, self._n_trigger_labels)], dim=-1)
-            arg_emb = torch.cat(
-                [top_arg_embeddings, one_hot(top_ner_labels, self._n_ner_labels)], dim=-1)
-        else:
-            trig_emb = top_trig_embeddings
-            arg_emb = top_arg_embeddings
+            # Include one-hot-encoded trigger and argument labels.
+            trig_emb_list.append(one_hot(top_trig_labels, self._n_trigger_labels))
+            arg_emb_list.append(one_hot(top_ner_labels, self._n_ner_labels))
+
+        trig_emb = torch.cat(trig_emb_list, dim=-1)
+        arg_emb = torch.cat(arg_emb_list, dim=-1)
 
         num_trigs = trig_emb.size(1)
         num_args = arg_emb.size(1)
@@ -284,40 +293,45 @@ class EventExtractor(Model):
 
         return pair_embeddings
 
-    def _get_trigger_context(self, top_trig_indices, text_emb):
+    def _get_context(self, span_starts, span_ends, text_emb):
         """
-        Grab a context window around each trigger, padding with zeros on either end.
+        Given span start and end (inclusive), get the context on either side.
         """
         def checkit():
             assert tuple(pad_batch.size()) == (batch_size, num_candidates, emb_size * 2 * self._context_window)
             if batch_size > 2 and seq_length > 6:  # Make sure the batch is big enough to check.
                 # Spot-check an entry from the left pad.
                 expected_left = pad_batch[1, 4, 13]
-                actual_ix_left = (top_trig_indices[1, 4] - self._context_window).item()
-                actual_left = text_emb[1, actual_ix_left, 13]
-                assert torch.allclose(expected_left, actual_left)
+                actual_ix_left = (span_starts[1, 4] - self._context_window).item()
+                # If left endpoint of context window is off the end of the array, don't check.
+                if actual_ix_left >= 0:
+                    actual_left = text_emb[1, actual_ix_left, 13]
+                    assert torch.allclose(expected_left, actual_left)
                 # And one from the right pad.
                 expected_right = pad_batch[2, 6, -4]
-                actual_ix_right = (top_trig_indices[2, 6] + self._context_window).item()
-                actual_right = text_emb[2, actual_ix_right, -4]
-                assert torch.allclose(expected_right, actual_right)
+                actual_ix_right = (span_ends[2, 6] + self._context_window).item()
+                # If right endpoint of context window is off the end of the array, don't check.
+                if actual_ix_right < seq_length:
+                    actual_right = text_emb[2, actual_ix_right, -4]
+                    assert torch.allclose(expected_right, actual_right)
 
         # The text_emb are already zero-padded on the right, which is correct.
+        assert span_starts.size() == span_ends.size()
         batch_size, seq_length, emb_size = text_emb.size()
-        num_candidates = top_trig_indices.size(1)
+        num_candidates = span_starts.size(1)
         padding = torch.zeros(batch_size, self._context_window, emb_size, device=text_emb.device)
         # [batch_size, seq_length + 2 x context_window, emb_size]
         padded_emb = torch.cat([padding, text_emb, padding], dim=1)
 
         pad_batch = []
-        for batch_ix, trig_ixs in enumerate(top_trig_indices):
+        for batch_ix, (start_ixs, end_ixs) in enumerate(zip(span_starts, span_ends)):
             pad_entry = []
-            for trig_ix in trig_ixs:
+            for start_ix, end_ix in zip(start_ixs, end_ixs):
                 # The starts are inclusive, ends are exclusive.
-                left_start = trig_ix
-                left_end = trig_ix + self._context_window
-                right_start = trig_ix + self._context_window + 1
-                right_end = trig_ix + 2 * self._context_window + 1
+                left_start = start_ix
+                left_end = start_ix + self._context_window
+                right_start = end_ix + self._context_window + 1
+                right_end = end_ix + 2 * self._context_window + 1
                 left_pad = padded_emb[batch_ix, left_start:left_end]
                 right_pad = padded_emb[batch_ix, right_start:right_end]
                 if self._check:
@@ -359,30 +373,6 @@ class EventExtractor(Model):
 
         argument_scores = torch.cat([dummy_scores, argument_scores], -1)
         return argument_scores
-
-
-    def _compute_relation_scores(self, pairwise_embeddings, top_span_mention_scores):
-        batch_size = pairwise_embeddings.size(0)
-        max_num_spans = pairwise_embeddings.size(1)
-        feature_dim = self._relation_feedforward.input_dim
-
-        embeddings_flat = pairwise_embeddings.view(-1, feature_dim)
-
-        relation_projected_flat = self._relation_feedforward(embeddings_flat)
-        relation_scores_flat = self._relation_scorer(relation_projected_flat)
-
-        relation_scores = relation_scores_flat.view(batch_size, max_num_spans, max_num_spans, -1)
-
-        # Add the mention scores for each of the candidates.
-
-        relation_scores += (top_span_mention_scores.unsqueeze(-1) +
-                            top_span_mention_scores.transpose(1, 2).unsqueeze(-1))
-
-        shape = [relation_scores.size(0), relation_scores.size(1), relation_scores.size(2), 1]
-        dummy_scores = relation_scores.new_zeros(*shape)
-
-        relation_scores = torch.cat([dummy_scores, relation_scores], -1)
-        return relation_scores
 
     @staticmethod
     def _get_pruned_gold_arguments(argument_labels, top_trig_indices, top_arg_indices,
