@@ -41,6 +41,7 @@ class EventExtractor(Model):
                  argument_spans_per_word: float,
                  loss_weights,
                  event_args_use_labels: bool = False,
+                 event_args_label_emb: int = 10,
                  event_args_label_predictor: str = "hard",
                  context_window: int = 0,
                  initializer: InitializerApplicator = InitializerApplicator(),
@@ -55,6 +56,12 @@ class EventExtractor(Model):
         self._n_ner_labels = vocab.get_vocab_size("ner_labels")
         self._n_trigger_labels = vocab.get_vocab_size("trigger_labels")
         self._n_argument_labels = vocab.get_vocab_size("argument_labels")
+
+        # Embeddings for trigger labels and ner labels, to be used by argument scorer.
+        self._ner_label_emb = torch.nn.Embedding(num_embeddings=self._n_ner_labels,
+                                                 embedding_dim=event_args_label_emb)
+        self._trigger_label_emb = torch.nn.Embedding(num_embeddings=self._n_trigger_labels,
+                                                     embedding_dim=event_args_label_emb)
 
         # Weight on trigger labeling and argument labeling.
         self._loss_weights = loss_weights.as_dict()
@@ -161,11 +168,13 @@ class EventExtractor(Model):
                 top_ner_labels = util.batched_index_select(softmax_ner, top_arg_indices)
                 if self._check:
                     # Make sure we're doing the indexing correctly and softmax is normalized.
-                    trig_ix = top_trig_indices[2, 5]
-                    expected = softmax_triggers[2, trig_ix, :]
-                    actual = top_trig_labels[2, 5]
-                    assert torch.abs(actual.sum() - 1) < 0.0001
-                    assert torch.allclose(expected, actual)
+                    batch_size, num_candidates = top_trig_indices.size()
+                    if batch_size > 2 and num_candidates > 5:
+                        trig_ix = top_trig_indices[2, 5]
+                        expected = softmax_triggers[2, trig_ix, :]
+                        actual = top_trig_labels[2, 5]
+                        assert torch.abs(actual.sum() - 1) < 0.0001
+                        assert torch.allclose(expected, actual)
 
         trig_arg_embeddings = self._compute_trig_arg_embeddings(
             top_trig_embeddings, top_arg_embeddings, top_trig_labels, top_ner_labels,
@@ -299,13 +308,16 @@ class EventExtractor(Model):
 
         if self._event_args_use_labels:
             if self._event_args_label_predictor == "softmax" and not self.training:
-                # If we're doing softmax prediction and model is predicting, no need to one-hot encode.
-                trig_emb_list.append(top_trig_labels)
-                arg_emb_list.append(top_ner_labels)
+                # If we're doing softmax prediction and model is predicting, take weighted average
+                # of label embeddings, weighted by softmax scores.
+                top_trig_embs = torch.matmul(top_trig_labels, self._trigger_label_emb.weight)
+                top_ner_embs = torch.matmul(top_ner_labels, self._ner_label_emb.weight)
+                trig_emb_list.append(top_trig_embs)
+                arg_emb_list.append(top_ner_embs)
             else:
-                # Otherwise, one-hot encode.
-                trig_emb_list.append(one_hot(top_trig_labels, self._n_trigger_labels))
-                arg_emb_list.append(one_hot(top_ner_labels, self._n_ner_labels))
+                # Otherwise, just return the embeddings.
+                trig_emb_list.append(self._trigger_label_emb(top_trig_labels))
+                arg_emb_list.append(self._ner_label_emb(top_ner_labels))
 
         trig_emb = torch.cat(trig_emb_list, dim=-1)
         arg_emb = torch.cat(arg_emb_list, dim=-1)
