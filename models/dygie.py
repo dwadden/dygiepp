@@ -197,7 +197,7 @@ class DyGIE(Model):
         if self._loss_weights['events'] > 0:
             output_events = self._events(
                 text_mask, contextualized_embeddings, spans, span_mask, span_embeddings,
-                sentence_lengths, output_ner["ner_scores"], trigger_labels, argument_labels,
+                sentence_lengths, output_ner, trigger_labels, argument_labels,
                 ner_labels, metadata)
 
         # TODO(dwadden) just did this part.

@@ -97,7 +97,7 @@ class EventExtractor(Model):
                 span_mask,
                 span_embeddings,  # TODO(dwadden) add type.
                 sentence_lengths,
-                ner_scores,     # Needed if we're using entity beam approach.
+                output_ner,     # Needed if we're using entity beam approach.
                 trigger_labels,
                 argument_labels,
                 ner_labels,
@@ -107,8 +107,12 @@ class EventExtractor(Model):
         The trigger embeddings are just the contextualized token embeddings, and the trigger mask is
         the text mask. For the arguments, we consider all the spans.
         """
+        ner_scores = output_ner["ner_scores"]
+        predicted_ner = output_ner["predicted_ner"]
+
         # Compute trigger scores.
         trigger_scores = self._compute_trigger_scores(trigger_embeddings, trigger_mask)
+        _, predicted_triggers = trigger_scores.max(-1)
 
         # Get trigger candidates for event argument labeling.
         num_trigs_to_keep = torch.floor(
@@ -137,8 +141,13 @@ class EventExtractor(Model):
 
         # Collect trigger and ner labels, in case they're included as features to the argument
         # classifier.
-        top_trig_labels = trigger_labels.gather(1, top_trig_indices)
-        top_ner_labels = ner_labels.gather(1, top_arg_indices)
+        # At train time, use the gold labels. At test time, use the labels predicted by the model.
+        if self.training:
+            top_trig_labels = trigger_labels.gather(1, top_trig_indices)
+            top_ner_labels = ner_labels.gather(1, top_arg_indices)
+        else:
+            top_trig_labels = predicted_triggers.gather(1, top_trig_indices)
+            top_ner_labels = predicted_ner.gather(1, top_arg_indices)
 
         trig_arg_embeddings = self._compute_trig_arg_embeddings(
             top_trig_embeddings, top_arg_embeddings, top_trig_labels, top_ner_labels,
@@ -147,7 +156,6 @@ class EventExtractor(Model):
         argument_scores = self._compute_argument_scores(
             trig_arg_embeddings, top_trig_scores, top_arg_scores)
 
-        _, predicted_triggers = trigger_scores.max(-1)
         _, predicted_arguments = argument_scores.max(-1)
         predicted_arguments -= 1  # The null argument has label -1.
 
