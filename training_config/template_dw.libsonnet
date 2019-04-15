@@ -203,12 +203,15 @@ function(p) {
     }
   },
   iterator: {
-    type: "ie_batch",
-    batch_size: p.batch_size
+    // type: "ie_batch",
+    // batch_size: p.batch_size
+    "type": "bucket",
+    "sorting_keys": [["text", "num_tokens"]],
+    "batch_size" : p.batch_size
   },
-  validation_iterator: {
-    type: "ie_document",
-  },
+  // validation_iterator: {
+  //   type: "ie_document",
+  // },
   trainer: {
     num_epochs: p.num_epochs,
     grad_norm: 5.0,
