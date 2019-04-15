@@ -41,6 +41,7 @@ class EventExtractor(Model):
                  argument_spans_per_word: float,
                  loss_weights,
                  event_args_use_labels: bool = False,
+                 event_args_label_predictor: str = "hard",
                  context_window: int = 0,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  positive_label_weight: float = 1.0,
@@ -73,6 +74,8 @@ class EventExtractor(Model):
 
         # Argument scorer.
         self._event_args_use_labels = event_args_use_labels  # If True, use ner and trigger labels to predict args.
+        assert event_args_label_predictor in ["hard", "softmax"]  # Method for predicting labels at test time.
+        self._event_args_label_predictor = event_args_label_predictor
         self._context_window = context_window                # If greater than 0, concatenate context as features.
         self._argument_feedforward = argument_feedforward
         self._argument_scorer = torch.nn.Linear(argument_feedforward.get_output_dim(), self._n_argument_labels)
@@ -146,8 +149,23 @@ class EventExtractor(Model):
             top_trig_labels = trigger_labels.gather(1, top_trig_indices)
             top_ner_labels = ner_labels.gather(1, top_arg_indices)
         else:
-            top_trig_labels = predicted_triggers.gather(1, top_trig_indices)
-            top_ner_labels = predicted_ner.gather(1, top_arg_indices)
+            # Hard predictions.
+            if self._event_args_label_predictor == "hard":
+                top_trig_labels = predicted_triggers.gather(1, top_trig_indices)
+                top_ner_labels = predicted_ner.gather(1, top_arg_indices)
+            # Softmax predictions.
+            else:
+                softmax_triggers = trigger_scores.softmax(dim=-1)
+                softmax_ner = ner_scores.softmax(dim=-1)
+                top_trig_labels = util.batched_index_select(softmax_triggers, top_trig_indices)
+                top_ner_labels = util.batched_index_select(softmax_ner, top_arg_indices)
+                if self._check:
+                    # Make sure we're doing the indexing correctly and softmax is normalized.
+                    trig_ix = top_trig_indices[2, 5]
+                    expected = softmax_triggers[2, trig_ix, :]
+                    actual = top_trig_labels[2, 5]
+                    assert torch.abs(actual.sum() - 1) < 0.0001
+                    assert torch.allclose(expected, actual)
 
         trig_arg_embeddings = self._compute_trig_arg_embeddings(
             top_trig_embeddings, top_arg_embeddings, top_trig_labels, top_ner_labels,
@@ -280,9 +298,14 @@ class EventExtractor(Model):
             arg_emb_list.append(argument_context)
 
         if self._event_args_use_labels:
-            # Include one-hot-encoded trigger and argument labels.
-            trig_emb_list.append(one_hot(top_trig_labels, self._n_trigger_labels))
-            arg_emb_list.append(one_hot(top_ner_labels, self._n_ner_labels))
+            if self._event_args_label_predictor == "softmax" and not self.training:
+                # If we're doing softmax prediction and model is predicting, no need to one-hot encode.
+                trig_emb_list.append(top_trig_labels)
+                arg_emb_list.append(top_ner_labels)
+            else:
+                # Otherwise, one-hot encode.
+                trig_emb_list.append(one_hot(top_trig_labels, self._n_trigger_labels))
+                arg_emb_list.append(one_hot(top_ner_labels, self._n_ner_labels))
 
         trig_emb = torch.cat(trig_emb_list, dim=-1)
         arg_emb = torch.cat(arg_emb_list, dim=-1)

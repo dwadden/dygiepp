@@ -46,6 +46,8 @@ function(p) {
   // If true, use ner and trigger labels as features to predict event arguments.
   // TODO(dwadden) At some point I should make arguments like this mandatory.
   local event_args_use_labels = getattr(p, "event_args_use_labels", false),
+  // If predicting labels, can either do "hard" prediction or "softmax". Default is hard.
+  local event_args_label_predictor = getattr(p, "event_args_label_predictor", "hard"),
   local events_context_window = getattr(p, "events_context_window", 0),
 
   local token_embedding_dim = ((if p.use_glove then glove_dim else 0) +
@@ -192,6 +194,7 @@ function(p) {
         mention_feedforward: make_feedforward(span_emb_dim),
         argument_feedforward: make_feedforward(argument_scorer_dim),
         event_args_use_labels: event_args_use_labels,
+        event_args_label_predictor: event_args_label_predictor,
         initializer: module_initializer,
         loss_weights: p.loss_weights_events,
         entity_beam: getattr(p, "events_entity_beam", false),
