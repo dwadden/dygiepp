@@ -330,7 +330,7 @@ class EventExtractor(Model):
         """
         def checkit():
             assert tuple(pad_batch.size()) == (batch_size, num_candidates, emb_size * 2 * self._context_window)
-            if batch_size > 2 and seq_length > 6:  # Make sure the batch is big enough to check.
+            if batch_size > 2 and num_candidates > 6:  # Make sure the batch is big enough to check.
                 # Spot-check an entry from the left pad.
                 expected_left = pad_batch[1, 4, 13]
                 actual_ix_left = (span_starts[1, 4] - self._context_window).item()
