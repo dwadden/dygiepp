@@ -2,7 +2,7 @@
 
 function(p) {
   // Location of ACE valid event configs
-  local valid_events_dir = "/data/dave/proj/dygie/dygie-experiments/datasets/ace-event/valid-configurations",
+  local valid_events_dir = "/homes/gws/dwadden/proj/dygie/dygie-experiments/datasets/ace-event/valid-configurations",
 
   // Storing constants.
 
@@ -42,7 +42,7 @@ function(p) {
 
   local token_embedding_dim = ((if p.use_glove then glove_dim else 0) +
     (if p.use_char then p.char_n_filters else 0) +
-    (if p.use_elmo then elmo_dim else 0) + 
+    (if p.use_elmo then elmo_dim else 0) +
     (if p.use_bert then bert_dim else 0)),
   local endpoint_span_emb_dim = 4 * p.lstm_hidden_size + p.feature_size,
   local attended_span_emb_dim = if p.use_attentive_span_extractor then token_embedding_dim else 0,
