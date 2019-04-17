@@ -40,7 +40,8 @@ class EventExtractor(Model):
                  trigger_spans_per_word: float,
                  argument_spans_per_word: float,
                  loss_weights,
-                 event_args_use_labels: bool = False,
+                 event_args_use_trigger_labels: bool = False,
+                 event_args_use_ner_labels: bool = False,
                  event_args_label_emb: int = 10,
                  event_args_label_predictor: str = "hard",
                  context_window: int = 0,
@@ -80,7 +81,8 @@ class EventExtractor(Model):
         self._trigger_pruner = make_pruner(trigger_candidate_feedforward, entity_beam)
 
         # Argument scorer.
-        self._event_args_use_labels = event_args_use_labels  # If True, use ner and trigger labels to predict args.
+        self._event_args_use_trigger_labels = event_args_use_trigger_labels  # If True, use trigger labels.
+        self._event_args_use_ner_labels = event_args_use_ner_labels  # If True, use ner labels to predict args.
         assert event_args_label_predictor in ["hard", "softmax"]  # Method for predicting labels at test time.
         self._event_args_label_predictor = event_args_label_predictor
         self._context_window = context_window                # If greater than 0, concatenate context as features.
@@ -306,17 +308,20 @@ class EventExtractor(Model):
             trig_emb_list.append(trigger_context)
             arg_emb_list.append(argument_context)
 
-        if self._event_args_use_labels:
+        if self._event_args_use_trigger_labels:
             if self._event_args_label_predictor == "softmax" and not self.training:
                 # If we're doing softmax prediction and model is predicting, take weighted average
                 # of label embeddings, weighted by softmax scores.
                 top_trig_embs = torch.matmul(top_trig_labels, self._trigger_label_emb.weight)
-                top_ner_embs = torch.matmul(top_ner_labels, self._ner_label_emb.weight)
                 trig_emb_list.append(top_trig_embs)
+            else:
+                trig_emb_list.append(self._trigger_label_emb(top_trig_labels))
+        if self._event_args_use_ner_labels:
+            if self._event_args_label_predictor == "softmax" and not self.training:
+                top_ner_embs = torch.matmul(top_ner_labels, self._ner_label_emb.weight)
                 arg_emb_list.append(top_ner_embs)
             else:
                 # Otherwise, just return the embeddings.
-                trig_emb_list.append(self._trigger_label_emb(top_trig_labels))
                 arg_emb_list.append(self._ner_label_emb(top_ner_labels))
 
         trig_emb = torch.cat(trig_emb_list, dim=-1)

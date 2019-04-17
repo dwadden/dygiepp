@@ -45,7 +45,8 @@ function(p) {
 
   // If true, use ner and trigger labels as features to predict event arguments.
   // TODO(dwadden) At some point I should make arguments like this mandatory.
-  local event_args_use_labels = getattr(p, "event_args_use_labels", false),
+  local event_args_use_ner_labels = getattr(p, "event_args_use_ner_labels", false),
+  local event_args_use_trigger_labels = getattr(p, "event_args_use_trigger_labels", false),
   // Embedding dim for labels used as features for argument prediction.
   local event_args_label_emb = getattr(p, "event_args_label_emb", 10),
   // If predicting labels, can either do "hard" prediction or "softmax". Default is hard.
@@ -73,7 +74,8 @@ function(p) {
   //   (if events_context_window > 0 then 8 * events_context_window * p.lstm_hidden_size else 0)),
   // Using embeddings of the labels, instead of the labels themselves.
   local argument_scorer_dim = (trigger_scorer_dim + span_emb_dim +
-    (if event_args_use_labels then 2 * event_args_label_emb else 0) +
+    (if event_args_use_ner_labels then event_args_label_emb else 0) +
+    (if event_args_use_trigger_labels then event_args_label_emb else 0) +
     (if events_context_window > 0 then 8 * events_context_window * p.lstm_hidden_size else 0)),
 
   ////////////////////////////////////////////////////////////////////////////////
@@ -199,7 +201,8 @@ function(p) {
         trigger_candidate_feedforward: make_feedforward(trigger_scorer_dim),
         mention_feedforward: make_feedforward(span_emb_dim),
         argument_feedforward: make_feedforward(argument_scorer_dim),
-        event_args_use_labels: event_args_use_labels,
+        event_args_use_trigger_labels: event_args_use_trigger_labels,
+        event_args_use_ner_labels: event_args_use_ner_labels,
         event_args_label_predictor: event_args_label_predictor,
         event_args_label_emb: event_args_label_emb,
         initializer: module_initializer,
