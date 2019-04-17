@@ -46,6 +46,7 @@ class EventExtractor(Model):
                  event_args_label_emb: int,
                  label_embedding_method: str,
                  event_args_label_predictor: str,
+                 event_args_gold: bool = False,  # If True, use gold argument labels and candidates.
                  context_window: int = 0,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  positive_label_weight: float = 1.0,
@@ -83,14 +84,17 @@ class EventExtractor(Model):
 
         # Make pruners. If `entity_beam` is true, use NER and trigger scorers to construct the beam
         # and only keep candidates that the model predicts are actual entities or triggers.
-        self._mention_pruner = make_pruner(mention_feedforward, entity_beam)
-        self._trigger_pruner = make_pruner(trigger_candidate_feedforward, entity_beam)
+        self._mention_pruner = make_pruner(mention_feedforward, entity_beam=entity_beam,
+                                           gold_beam=event_args_gold)
+        self._trigger_pruner = make_pruner(trigger_candidate_feedforward, entity_beam=entity_beam,
+                                           gold_beam=False)
 
         # Argument scorer.
         self._event_args_use_trigger_labels = event_args_use_trigger_labels  # If True, use trigger labels.
         self._event_args_use_ner_labels = event_args_use_ner_labels  # If True, use ner labels to predict args.
         assert event_args_label_predictor in ["hard", "softmax"]  # Method for predicting labels at test time.
         self._event_args_label_predictor = event_args_label_predictor
+        self._event_args_gold = event_args_gold
         self._context_window = context_window                # If greater than 0, concatenate context as features.
         self._argument_feedforward = argument_feedforward
         self._argument_scorer = torch.nn.Linear(argument_feedforward.get_output_dim(), self._n_argument_labels)
@@ -149,9 +153,11 @@ class EventExtractor(Model):
         num_arg_spans_to_keep = torch.max(num_arg_spans_to_keep,
                                           torch.ones_like(num_arg_spans_to_keep))
 
+        # If we're using gold event arguments, include the gold labels.
+        gold_labels = ner_labels if self._event_args_gold else None
         (top_arg_embeddings, top_arg_mask,
          top_arg_indices, top_arg_scores, num_arg_spans_kept) = self._mention_pruner(
-             span_embeddings, span_mask, num_arg_spans_to_keep, ner_scores)
+             span_embeddings, span_mask, num_arg_spans_to_keep, ner_scores, gold_labels)
 
         top_arg_mask = top_arg_mask.unsqueeze(-1)
         top_arg_spans = util.batched_index_select(spans,
@@ -167,13 +173,19 @@ class EventExtractor(Model):
             # Hard predictions.
             if self._event_args_label_predictor == "hard":
                 top_trig_labels = predicted_triggers.gather(1, top_trig_indices)
-                top_ner_labels = predicted_ner.gather(1, top_arg_indices)
+                if self._event_args_gold:
+                    top_ner_labels = ner_labels.gather(1, top_arg_indices)
+                else:
+                    top_ner_labels = predicted_ner.gather(1, top_arg_indices)
             # Softmax predictions.
             else:
                 softmax_triggers = trigger_scores.softmax(dim=-1)
-                softmax_ner = ner_scores.softmax(dim=-1)
                 top_trig_labels = util.batched_index_select(softmax_triggers, top_trig_indices)
-                top_ner_labels = util.batched_index_select(softmax_ner, top_arg_indices)
+                if self._event_args_gold:
+                    top_ner_labels = ner_labels.gather(1, top_arg_indices).float()  # Float for compatibility with softmax.
+                else:
+                    softmax_ner = ner_scores.softmax(dim=-1)
+                    top_ner_labels = util.batched_index_select(softmax_ner, top_arg_indices)
                 if self._check:
                     # Make sure we're doing the indexing correctly and softmax is normalized.
                     batch_size, num_candidates = top_trig_indices.size()

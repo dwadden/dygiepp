@@ -11,7 +11,7 @@ from allennlp.nn import util
 from allennlp.modules import TimeDistributed
 
 
-def make_pruner(scorer, entity_beam):
+def make_pruner(scorer, entity_beam, gold_beam):
     """
     Create a pruner that either takes outputs of other scorers (i.e. entity beam), or uses its own
     scorer (the `default_scorer`).
@@ -21,7 +21,7 @@ def make_pruner(scorer, entity_beam):
         TimeDistributed(torch.nn.Linear(scorer.get_output_dim(), 1)))
     min_score_to_keep = 1e-10 if entity_beam else None
 
-    return Pruner(item_scorer, entity_beam, min_score_to_keep)
+    return Pruner(item_scorer, entity_beam, gold_beam, min_score_to_keep)
 
 
 class Pruner(torch.nn.Module):
@@ -37,14 +37,19 @@ class Pruner(torch.nn.Module):
         per item in the tensor.
     entity_beam: bool, optional.
         If True, use class scores output from another module instead of using own scorer.
+    gold_beam: bool, optional.
+       If True, use gold arguments.
     min_score_to_keep : float, optional.
         If given, only keep items that score at least this high.
     """
-    def __init__(self, scorer: torch.nn.Module, entity_beam: bool = False,
+    def __init__(self, scorer: torch.nn.Module, entity_beam: bool = False, gold_beam: bool = False,
                  min_score_to_keep: float = None) -> None:
         super().__init__()
+        # If gold beam is on, then entity beam must be off and min_score_to_keep must be None.
+        assert not (gold_beam and ((min_score_to_keep is not None) or entity_beam))
         self._scorer = scorer
         self._entity_beam = entity_beam
+        self._gold_beam = gold_beam
         self._min_score_to_keep = min_score_to_keep
 
     @overrides
@@ -52,8 +57,9 @@ class Pruner(torch.nn.Module):
                 embeddings: torch.FloatTensor,
                 mask: torch.LongTensor,
                 num_items_to_keep: Union[int, torch.LongTensor],
-                class_scores: torch.FloatTensor = None) -> Tuple[torch.FloatTensor, torch.LongTensor,
-                                                                 torch.LongTensor, torch.FloatTensor]:
+                class_scores: torch.FloatTensor = None,
+                gold_labels: torch.long = None) -> Tuple[torch.FloatTensor, torch.LongTensor,
+                                                         torch.LongTensor, torch.FloatTensor]:
         """
         Extracts the top-k scoring items with respect to the scorer. We additionally return
         the indices of the top-k in their original order, not ordered by score, so that downstream
@@ -75,6 +81,7 @@ class Pruner(torch.nn.Module):
             If an int, keep the same number of items for all sentences.
         class_scores:
            Class scores to be used with entity beam.
+        candidate_labels: If in debugging mode, use gold labels to get beam.
 
         Returns
         -------
@@ -109,6 +116,13 @@ class Pruner(torch.nn.Module):
         if self._entity_beam:
             scores, _ = class_scores.max(dim=-1)
             scores = scores.unsqueeze(-1)
+        # If gold beam is one, give a score of 0 wherever the gold label is non-zero (indicating a
+        # non-null label), otherwise give a large negative number.
+        elif self._gold_beam:
+            scores = torch.where(gold_labels > 0,
+                                 torch.zeros_like(gold_labels, dtype=torch.float),
+                                 -1e20 * torch.ones_like(gold_labels, dtype=torch.float))
+            scores = scores.unsqueeze(-1)
         else:
             scores = self._scorer(embeddings)
 
@@ -117,6 +131,9 @@ class Pruner(torch.nn.Module):
         if self._min_score_to_keep is not None:
             num_good_items = torch.sum(scores > self._min_score_to_keep, dim=1).squeeze()
             num_items_to_keep = torch.min(num_items_to_keep, num_good_items)
+        # If gold beam is on, keep the gold items.
+        if self._gold_beam:
+            num_items_to_keep = torch.sum(gold_labels > 0, dim=1)
 
         max_items_to_keep = num_items_to_keep.max()
 

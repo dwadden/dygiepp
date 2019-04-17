@@ -211,6 +211,7 @@ function(p) {
         event_args_label_predictor: event_args_label_predictor,
         event_args_label_emb: event_args_label_emb,
         label_embedding_method: label_embedding_method,
+        event_args_gold: getattr(p, "event_args_gold", false),
         initializer: module_initializer,
         loss_weights: p.loss_weights_events,
         entity_beam: getattr(p, "events_entity_beam", false),
