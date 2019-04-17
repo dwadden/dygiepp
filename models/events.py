@@ -14,7 +14,8 @@ from allennlp.modules import TimeDistributed
 
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
 from dygie.training.event_metrics import EventMetrics, ArgumentStats
-from dygie.models.shared import fields_to_batches, one_hot
+from dygie.models.shared import fields_to_batches
+from dygie.models.one_hot import make_embedder
 from dygie.models.entity_beam_pruner import make_pruner
 
 # TODO(dwadden) rename NERMetrics
@@ -40,10 +41,11 @@ class EventExtractor(Model):
                  trigger_spans_per_word: float,
                  argument_spans_per_word: float,
                  loss_weights,
-                 event_args_use_trigger_labels: bool = False,
-                 event_args_use_ner_labels: bool = False,
-                 event_args_label_emb: int = 10,
-                 event_args_label_predictor: str = "hard",
+                 event_args_use_trigger_labels: bool,
+                 event_args_use_ner_labels: bool,
+                 event_args_label_emb: int,
+                 label_embedding_method: str,
+                 event_args_label_predictor: str,
                  context_window: int = 0,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  positive_label_weight: float = 1.0,
@@ -59,10 +61,14 @@ class EventExtractor(Model):
         self._n_argument_labels = vocab.get_vocab_size("argument_labels")
 
         # Embeddings for trigger labels and ner labels, to be used by argument scorer.
-        self._ner_label_emb = torch.nn.Embedding(num_embeddings=self._n_ner_labels,
-                                                 embedding_dim=event_args_label_emb)
-        self._trigger_label_emb = torch.nn.Embedding(num_embeddings=self._n_trigger_labels,
-                                                     embedding_dim=event_args_label_emb)
+        # These will be either one-hot encodings or learned embeddings, depending on "kind".
+        self._ner_label_emb = make_embedder(kind=label_embedding_method,
+                                            num_embeddings=self._n_ner_labels,
+                                            embedding_dim=event_args_label_emb)
+        self._trigger_label_emb = make_embedder(kind=label_embedding_method,
+                                                num_embeddings=self._n_trigger_labels,
+                                                embedding_dim=event_args_label_emb)
+        self._label_embedding_method = label_embedding_method
 
         # Weight on trigger labeling and argument labeling.
         self._loss_weights = loss_weights.as_dict()
@@ -308,17 +314,25 @@ class EventExtractor(Model):
             trig_emb_list.append(trigger_context)
             arg_emb_list.append(argument_context)
 
+        # TODO(dwadden) refactor this. Way too many conditionals.
         if self._event_args_use_trigger_labels:
             if self._event_args_label_predictor == "softmax" and not self.training:
-                # If we're doing softmax prediction and model is predicting, take weighted average
-                # of label embeddings, weighted by softmax scores.
-                top_trig_embs = torch.matmul(top_trig_labels, self._trigger_label_emb.weight)
+                if self._label_embedding_method == "one_hot":
+                    # If we're using one-hot encoding, just return the scores for each class.
+                    top_trig_embs = top_trig_labels
+                else:
+                    # Otherwise take the average of the embeddings, weighted by softmax scores.
+                    top_trig_embs = torch.matmul(top_trig_labels, self._trigger_label_emb.weight)
                 trig_emb_list.append(top_trig_embs)
             else:
                 trig_emb_list.append(self._trigger_label_emb(top_trig_labels))
         if self._event_args_use_ner_labels:
             if self._event_args_label_predictor == "softmax" and not self.training:
-                top_ner_embs = torch.matmul(top_ner_labels, self._ner_label_emb.weight)
+                # Same deal as for trigger labels.
+                if self._label_embedding_method == "one_hot":
+                    top_ner_embs = top_ner_labels
+                else:
+                    top_ner_embs = torch.matmul(top_ner_labels, self._ner_label_emb.weight)
                 arg_emb_list.append(top_ner_embs)
             else:
                 # Otherwise, just return the embeddings.

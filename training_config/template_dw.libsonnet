@@ -68,14 +68,19 @@ function(p) {
   // embeddings. Then, if we're using labels, include those. Then, if we're using a context window,
   // there are 2 x context_window extra entries for both arg and trigger, which makes 4 x total. The
   // dimension of each entry is twice the lstm hidden size.
-  //
-  // local argument_scorer_dim = (trigger_scorer_dim + span_emb_dim +
-  //   (if event_args_use_labels then p.n_trigger_labels + p.n_ner_labels else 0) +
-  //   (if events_context_window > 0 then 8 * events_context_window * p.lstm_hidden_size else 0)),
-  // Using embeddings of the labels, instead of the labels themselves.
+  // For the labels, we look at ner and trigger separately, and we can either do one-hot encodings
+  // or learned embeddings.
+  // Allowed values are `one_hot` and `learned`.
+  local label_embedding_method = getattr(p, "label_embedding_method", "one_hot"),
+  local trigger_label_dim = (if event_args_use_trigger_labels
+    then (if label_embedding_method == "one_hot" then p.n_trigger_labels else event_args_label_emb)
+    else 0),
+  local ner_label_dim = (if event_args_use_ner_labels
+    then (if label_embedding_method == "one_hot" then p.n_ner_labels else event_args_label_emb)
+    else 0),
   local argument_scorer_dim = (trigger_scorer_dim + span_emb_dim +
-    (if event_args_use_ner_labels then event_args_label_emb else 0) +
-    (if event_args_use_trigger_labels then event_args_label_emb else 0) +
+    (if event_args_use_ner_labels then ner_label_dim else 0) +
+    (if event_args_use_trigger_labels then trigger_label_dim else 0) +
     (if events_context_window > 0 then 8 * events_context_window * p.lstm_hidden_size else 0)),
 
   ////////////////////////////////////////////////////////////////////////////////
@@ -205,6 +210,7 @@ function(p) {
         event_args_use_ner_labels: event_args_use_ner_labels,
         event_args_label_predictor: event_args_label_predictor,
         event_args_label_emb: event_args_label_emb,
+        label_embedding_method: label_embedding_method,
         initializer: module_initializer,
         loss_weights: p.loss_weights_events,
         entity_beam: getattr(p, "events_entity_beam", false),
