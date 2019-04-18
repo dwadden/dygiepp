@@ -135,7 +135,8 @@ class Pruner(torch.nn.Module):
         if self._gold_beam:
             num_items_to_keep = torch.sum(gold_labels > 0, dim=1)
 
-        max_items_to_keep = num_items_to_keep.max()
+        # Always keep at least one item to avoid edge case with empty matrix.
+        max_items_to_keep = max(num_items_to_keep.max().item(), 1)
 
         if scores.size(-1) != 1 or scores.dim() != 3:
             raise ValueError(f"The scorer passed to Pruner must produce a tensor of shape"
