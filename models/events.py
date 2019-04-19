@@ -280,14 +280,21 @@ class EventExtractor(Model):
 
     def _decode_arguments(self, output):
         argument_dict = {}
-        for i, j in itertools.product(range(output["num_triggers_kept"]),
-                                      range(output["num_argument_spans_kept"])):
-            trig_ix = output["top_trigger_indices"][i].item()
+        # for i, j in itertools.product(range(output["num_triggers_kept"]),
+        #                               range(output["num_argument_spans_kept"])):
+        for j in range(output["num_argument_spans_kept"]):
             arg_span = tuple(output["top_argument_spans"][j].tolist())
-            arg_label = output["predicted_arguments"][i, j].item()
-            if arg_label >= 0:
-                label_name = self.vocab.get_token_from_index(arg_label, namespace="argument_labels")
-                argument_dict[(trig_ix, arg_span)] = label_name
+            scores = output["argument_scores"][:, j]
+            best_scores, best_ix = scores.max(dim=1)
+            very_best_score = best_scores == best_scores.max()
+            best_ix[~very_best_score] = 0
+            predicted_args = best_ix - 1
+            for i in range(output["num_triggers_kept"]):
+                trig_ix = output["top_trigger_indices"][i].item()
+                arg_label = predicted_args[i].item()
+                if arg_label >= 0:
+                    label_name = self.vocab.get_token_from_index(arg_label, namespace="argument_labels")
+                    argument_dict[(trig_ix, arg_span)] = label_name
 
         return argument_dict
 
