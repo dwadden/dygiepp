@@ -22,6 +22,7 @@ function(p) {
 
   local glove_dim = 300,
   local elmo_dim = 1024,
+  local bert_dim = 768,
 
   local module_initializer = [
     [".*linear_layers.*weight", {"type": "xavier_normal"}],
@@ -55,7 +56,8 @@ function(p) {
 
   local token_embedding_dim = ((if p.use_glove then glove_dim else 0) +
     (if p.use_char then p.char_n_filters else 0) +
-    (if p.use_elmo then elmo_dim else 0)),
+    (if p.use_elmo then elmo_dim else 0) +
+    (if p.use_bert then bert_dim else 0)),
   local endpoint_span_emb_dim = 4 * p.lstm_hidden_size + p.feature_size,
   local attended_span_emb_dim = if p.use_attentive_span_extractor then token_embedding_dim else 0,
   local span_emb_dim = endpoint_span_emb_dim + attended_span_emb_dim,
@@ -108,10 +110,21 @@ function(p) {
     },
     [if p.use_elmo then "elmo"]: {
       type: "elmo_characters"
+    },
+    [if p.use_bert then "bert"]: {
+      type: "bert-pretrained",
+      pretrained_model: "bert-base-cased",
+      do_lowercase: false,
+      use_starting_offsets: true
     }
   },
 
   local text_field_embedder = {
+    [if p.use_bert then "allow_unmatched_keys"]: true,
+    [if p.use_bert then "embedder_to_indexer_map"]: {
+      bert: ["bert", "bert-offsets"],
+      token_characters: ["token_characters"],
+    },
     token_embedders: {
       [if p.use_glove then "tokens"]: {
         type: "embedding",
@@ -138,6 +151,10 @@ function(p) {
         weight_file: "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5",
         do_layer_norm: false,
         dropout: 0.5
+      },
+      [if p.use_bert then "bert"]: {
+        type: "bert-pretrained",
+        pretrained_model: "bert-base-cased"
       }
     }
   },
