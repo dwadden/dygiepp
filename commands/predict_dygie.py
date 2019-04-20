@@ -85,7 +85,7 @@ def cleanup_event(decoded, sentence_starts):
     res = []
     for sentence, sentence_start in zip(decoded, sentence_starts):
         trigger_dict = sentence["trigger_dict"]
-        argument_dict = sentence["argument_dict"]
+        argument_dict = sentence["argument_dict_with_scores"]
         this_sentence = []
         for trigger_ix, trigger_label in trigger_dict.items():
             this_event = []
@@ -93,7 +93,7 @@ def cleanup_event(decoded, sentence_starts):
             event_arguments = {k: v for k, v in argument_dict.items() if k[0] == trigger_ix}
             this_event_args = []
             for k, v in event_arguments.items():
-                entry = [x + sentence_start for x in k[1]] + [v]
+                entry = [x + sentence_start for x in k[1]] + list(v)
                 this_event_args.append(entry)
             this_event_args = sorted(this_event_args, key=lambda entry: entry[0])
             this_event.extend(this_event_args)
