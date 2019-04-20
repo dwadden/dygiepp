@@ -62,6 +62,7 @@ class DyGIE(Model):
                  use_attentive_span_extractor: bool = True,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
+                 rel_prop: int = 0,
                  display_metrics: List[str] = None,
                  valid_events_dir: str = None) -> None:
         super(DyGIE, self).__init__(vocab, regularizer)
@@ -116,23 +117,8 @@ class DyGIE(Model):
         else:
             self._lstm_dropout = lambda x: x
 
-        self.rel_prop = 2
-        if self.rel_prop > 0:
-            self.d = int(self._relation._relation_feedforward.get_input_dim()/3)
-            self._A_network = FeedForward(input_dim=self.vocab.get_vocab_size("relation_labels"),
-                                          num_layers=1,
-                                          hidden_dims=self.d,
-                                          activations=lambda x: x,
-                                          dropout=0.4)
-            self._f_network = FeedForward(input_dim=2*self.d,
-                                          num_layers=1,
-                                          hidden_dims=self.d,
-                                          activations=torch.nn.Sigmoid(),
-                                          dropout=0.4)
+        self.rel_prop = rel_prop
                 
-                                        
-
-
         initializer(self)
 
     @overrides
@@ -154,13 +140,14 @@ class DyGIE(Model):
         relation_labels = relation_labels.long()
         argument_labels = argument_labels.long()
 
-        # Shape: (batch_size, max_sentence_length, embedding_size)
-        text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
-
         # Shape: (batch_size, max_sentence_length)
         text_mask = util.get_text_field_mask(text).float()
-
         sentence_lengths = text_mask.sum(dim=1).long()
+
+        sentences = [meta['sentence'] for meta in metadata]
+
+        # Shape: (batch_size, max_sentence_length, embedding_size)
+        text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
 
         # Shape: (batch_size, num_spans)
         span_mask = (spans[:, :, 0] >= 0).float()
@@ -193,17 +180,22 @@ class DyGIE(Model):
         output_relation = {'loss': 0}
         output_events = {'loss': 0}
 
-        if self._loss_weights['relation'] > 0:
-            output_relation = self._relation(
-                spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata, predict=not self.rel_prop)
+        output_relation = self._relation.compute_representations(
+            spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
-        if self._loss_weights['coref'] > 0:
-            output_coref = self._coref(
-                spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
+        if self.rel_prop > 0:
+            relation_scores, top_span_embeddings = self._relation.relation_propagation(output_relation['relation_scores'], output_relation["top_span_embeddings"])
+            span_embeddings = self.update_span_embeddings(span_embeddings, span_mask, top_span_embeddings, output_relation["top_span_mask"], output_relation["top_span_indices"])
+
+        output_relation = self._relation.predict_labels(relation_scores, relation_labels, output_relation["top_span_indices"], output_relation["top_span_mask"], output_relation, metadata)
 
         if self._loss_weights['ner'] > 0:
             output_ner = self._ner(
                 spans, span_mask, span_embeddings, sentence_lengths, ner_labels, metadata)
+
+        if self._loss_weights['coref'] > 0:
+            output_coref = self._coref(
+                spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
 
         if self._loss_weights['events'] > 0:
             output_events = self._events(
@@ -212,26 +204,6 @@ class DyGIE(Model):
 
             
         # Move relation propagation up
-
-        if self.rel_prop > 0 and self._loss_weights['relation'] > 0:
-            relation_scores = output_relation['relation_scores']
-            span_num = relation_scores.shape[1]
-            top_span_embeddings = output_relation["top_span_embeddings"]
-            for t in range(self.rel_prop):
-                # I think we should do an average instead of a sum, or some kind of normalization of the score distribution.
-                relation_scores = F.relu(relation_scores[:,:,:,1:], inplace=False) #Normalize every relu and then also take mean instead of sum
-                # This normalization below is not in the paper
-                #relation_scores /= (torch.sum(relation_scores, dim=[2,3]).view(-1,span_num,1,1).repeat(1,1,span_num,7) + 0.0000001)
-                relation_embeddings = self._A_network(relation_scores)
-                top_span_embeddings_repeated = top_span_embeddings.unsqueeze(2).repeat(1, 1, span_num, 1)
-                entity_embs = torch.sum(relation_embeddings * top_span_embeddings_repeated, dim=2)
-
-                f_network_input = torch.cat([top_span_embeddings, entity_embs], dim=-1)
-                f_weights = self._f_network(f_network_input)
-                top_span_embeddings = f_weights * top_span_embeddings + (1.0 - f_weights) * entity_embs
-                relation_scores = self._relation.get_rel_scores(top_span_embeddings, self._relation._mention_pruner._scorer(top_span_embeddings))
-
-            output_relation = self._relation.predict_labels(relation_scores, relation_labels, output_relation["top_span_indices"], output_relation["top_span_mask"], output_relation, metadata)
 
         # TODO(dwadden) just did this part.
         loss = (self._loss_weights['coref'] * output_coref['loss'] +
@@ -253,6 +225,16 @@ class DyGIE(Model):
                                 decoded["events"]["decoded_events"])
 
         return output_dict
+
+    def update_span_embeddings(self, span_embeddings, span_mask, top_span_embeddings, top_span_mask, top_span_indices):
+
+        new_span_embeddings = span_embeddings.clone()
+        for sample_nr in range(len(top_span_mask)):
+            for top_span_nr, span_nr in enumerate(top_span_indices[sample_nr]):
+                if top_span_mask[sample_nr, top_span_nr] == 0 or span_mask[sample_nr, span_nr] == 0:
+                    break
+                new_span_embeddings[sample_nr, span_nr] = top_span_embeddings[sample_nr, top_span_nr].clone()
+        return new_span_embeddings
 
     @overrides
     def decode(self, output_dict: Dict[str, torch.Tensor]):
