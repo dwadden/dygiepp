@@ -253,7 +253,7 @@ class EventExtractor(Model):
         # Collect predictions for each sentence in minibatch.
         for output in outputs:
             decoded_trig = self._decode_trigger(output)
-            decoded_args = self._decode_arguments(output)
+            decoded_args = self._decode_arguments(output, decoded_trig)
             entry = dict(trigger_dict=decoded_trig, argument_dict=decoded_args)
             res.append(entry)
 
@@ -278,14 +278,15 @@ class EventExtractor(Model):
 
         return trigger_dict
 
-    def _decode_arguments(self, output):
+    def _decode_arguments(self, output, decoded_trig):
         argument_dict = {}
         for i, j in itertools.product(range(output["num_triggers_kept"]),
                                       range(output["num_argument_spans_kept"])):
             trig_ix = output["top_trigger_indices"][i].item()
             arg_span = tuple(output["top_argument_spans"][j].tolist())
             arg_label = output["predicted_arguments"][i, j].item()
-            if arg_label >= 0:
+            # Only include the argument if its putative trigger is predicted as a real trigger.
+            if arg_label >= 0 and trig_ix in decoded_trig:
                 label_name = self.vocab.get_token_from_index(arg_label, namespace="argument_labels")
                 argument_dict[(trig_ix, arg_span)] = label_name
 
