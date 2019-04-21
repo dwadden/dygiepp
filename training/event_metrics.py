@@ -31,7 +31,12 @@ class EventMetrics(Metric):
 
     @overrides
     def __call__(self, predicted_events_list, metadata_list):
-        for predicted_events, metadata in zip(predicted_events_list, metadata_list):
+        import pickle as pkl
+        import numpy as np
+        from os import path
+        to_save = []
+
+        for i, (predicted_events, metadata) in enumerate(zip(predicted_events_list, metadata_list)):
             # Trigger scoring.
             predicted_triggers = predicted_events["trigger_dict"]
             gold_triggers = metadata["trigger_dict"]
@@ -40,7 +45,25 @@ class EventMetrics(Metric):
             # Argument scoring.
             predicted_arguments = _invert_arguments(predicted_events["argument_dict"], predicted_triggers)
             gold_arguments = _invert_arguments(metadata["argument_dict"], gold_triggers)
+            this_entry = dict(predicted_arguments=predicted_arguments,
+                              gold_arguments=gold_arguments,
+                              predicted_triggers=predicted_triggers,
+                              gold_triggers=gold_triggers)
+
+            to_save.append(this_entry)
             self._score_arguments(predicted_arguments, gold_arguments)
+
+        out_path = "/homes/gws/dwadden/proj/dygie/dygie-experiments/dwadden/chronological/2019-04-20/event_metrics_outputs"
+        out_file = path.join(out_path, "{0:02d}".format(self._doc) + ".pkl")
+        # with open(out_file, "wb") as f:
+        #     pkl.dump(to_save, f, protocol=-1)
+        print()
+        print(self._doc)
+        print(self._gold_arguments)
+        print(self._predicted_arguments)
+        print(self._matched_argument_ids)
+        print(self._matched_argument_classes)
+        self._doc += 1
 
     def _score_triggers(self, predicted_triggers, gold_triggers):
         self._gold_triggers += len(gold_triggers)
@@ -90,6 +113,7 @@ class EventMetrics(Metric):
 
     @overrides
     def reset(self):
+        self._doc = 0
         self._gold_triggers = 0
         self._predicted_triggers = 0
         self._matched_trigger_ids = 0
