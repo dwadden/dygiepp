@@ -60,18 +60,17 @@ class RelationExtractor(Model):
         self._loss = torch.nn.CrossEntropyLoss(reduction="sum", ignore_index=-1, weight=class_weights)
         self.rel_prop = rel_prop
         if self.rel_prop > 0:
-            dropout_parameter = 0.4
             self.d = int(self._relation_feedforward.get_input_dim()/3)
             self._A_network = FeedForward(input_dim=self.vocab.get_vocab_size("relation_labels"),
                                           num_layers=1,
                                           hidden_dims=self.d,
                                           activations=lambda x: x,
-                                          dropout=dropout_parameter)
+                                          dropout=0.2)
             self._f_network = FeedForward(input_dim=2*self.d,
                                           num_layers=1,
                                           hidden_dims=self.d,
                                           activations=torch.nn.Sigmoid(),
-                                          dropout=dropout_parameter)
+                                          dropout=0.4)
         initializer(self)
 
     def compute_representations(self,  # type: ignore
@@ -99,7 +98,10 @@ class RelationExtractor(Model):
 
         return output_dict
 
-    def relation_propagation(self, relation_scores, top_span_embeddings):
+    def relation_propagation(self, output_dict):
+        relation_scores = output_dict["relation_scores"]
+        top_span_embeddings = output_dict["top_span_embeddings"]
+
         span_num = relation_scores.shape[1]
         for t in range(self.rel_prop):
             relation_scores = F.relu(relation_scores[:,:,:,1:], inplace=False) #Normalize every relu and then also take mean instead of sum
@@ -112,7 +114,10 @@ class RelationExtractor(Model):
             f_weights = self._f_network(f_network_input)
             top_span_embeddings = f_weights * top_span_embeddings + (1.0 - f_weights) * entity_embs
             relation_scores = self.get_rel_scores(top_span_embeddings, self._mention_pruner._scorer(top_span_embeddings))
-        return relation_scores, top_span_embeddings
+
+        output_dict["relation_scores"] = relation_scores
+        output_dict["top_span_embeddings"] = top_span_embeddings
+        return output_dict
 
     @overrides
     def forward(self,  # type: ignore
@@ -125,6 +130,9 @@ class RelationExtractor(Model):
         """
         TODO(dwadden) Write documentation.
         """
+
+        # TODO(Ulme) Make it so that this function is still working
+        # It's not being used currently since we have splitted the forward() method up completely
 
         (top_span_embeddings, top_span_mention_scores,
          num_spans_to_keep, top_span_mask,
@@ -144,7 +152,7 @@ class RelationExtractor(Model):
                        "top_span_indices": top_span_indices,
                        "top_span_mask": top_span_mask}
 
-        output_dict = self.predict_labels(relation_scores, relation_labels, top_span_indices, top_span_mask, output_dict, metadata)
+        output_dict = self.predict_labels(relation_labels, output_dict, metadata)
         return output_dict
 
     def prune_spans(self, spans, span_mask, span_embeddings, sentence_lengths):
@@ -168,7 +176,8 @@ class RelationExtractor(Model):
 
         return top_span_embeddings, top_span_mention_scores, num_spans_to_keep, top_span_mask, top_span_indices, top_spans
 
-    def predict_labels(self, relation_scores, relation_labels, top_span_indices, top_span_mask, output_dict, metadata):
+    def predict_labels(self, relation_labels, output_dict, metadata):
+        relation_scores = output_dict["relation_scores"]
 
         # Subtract 1 so that the "null" relation corresponds to -1.
         _, predicted_relations = relation_scores.max(-1)
@@ -180,7 +189,7 @@ class RelationExtractor(Model):
         if relation_labels is not None:
             # Compute cross-entropy loss.
             gold_relations = self._get_pruned_gold_relations(
-                relation_labels, top_span_indices, top_span_mask)
+                relation_labels, output_dict["top_span_indices"], output_dict["top_span_mask"])
 
             cross_entropy = self._get_cross_entropy_loss(relation_scores, gold_relations)
 
