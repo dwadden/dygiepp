@@ -124,11 +124,11 @@ class IEJsonReader(DatasetReader):
     def __init__(self,
                  max_span_width: int,
                  token_indexers: Dict[str, TokenIndexer] = None,
-                 context_window: int = 1,
+                 context_width: int = 1,
                  lazy: bool = False) -> None:
         super().__init__(lazy)
-        assert (context_window % 2 == 1) and (context_window > 0)
-        self.k = int( (context_window - 1) / 2)
+        assert (context_width % 2 == 1) and (context_width > 0)
+        self.k = int( (context_width - 1) / 2)
         self._max_span_width = max_span_width
         self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
 
@@ -151,7 +151,6 @@ class IEJsonReader(DatasetReader):
                 js["sentence_groups"] = [[self._normalize_word(word) for sentence in js["sentences"][max(0, i-self.k):min(n_sentences, i + self.k + 1)] for word in sentence] for i in range(n_sentences)]
                 js["sentence_start_index"] = [sum(len(js["sentences"][i-j-1]) for j in range(min(self.k, i))) if i > 0 else 0 for i in range(n_sentences)]
                 js["sentence_end_index"] = [js["sentence_start_index"][i] + len(js["sentences"][i]) for i in range(n_sentences)]
-                #import ipdb; ipdb.set_trace()
                 if "clusters" not in js:
                     js["clusters"] = []
                 for field in ["ner", "relations", "events"]:
