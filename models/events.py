@@ -11,6 +11,7 @@ from allennlp.models.model import Model
 from allennlp.modules import FeedForward
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from allennlp.modules import TimeDistributed
+from allennlp.modules.matrix_attention.bilinear_matrix_attention import BilinearMatrixAttention
 
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
 from dygie.training.event_metrics import EventMetrics, ArgumentStats
@@ -37,6 +38,7 @@ class EventExtractor(Model):
                  trigger_candidate_feedforward: FeedForward,
                  mention_feedforward: FeedForward,  # Used if entity beam is off.
                  argument_feedforward: FeedForward,
+                 context_attention: BilinearMatrixAttention,
                  feature_size: int,
                  trigger_spans_per_word: float,
                  argument_spans_per_word: float,
@@ -101,6 +103,9 @@ class EventExtractor(Model):
 
         self._trigger_spans_per_word = trigger_spans_per_word
         self._argument_spans_per_word = argument_spans_per_word
+
+        # Context attention for event argument scorer.
+        self._context_attention = context_attention
 
         # TODO(dwadden) Add metrics.
         self._metrics = EventMetrics()
@@ -203,7 +208,7 @@ class EventExtractor(Model):
 
         trig_arg_embeddings = self._compute_trig_arg_embeddings(
             top_trig_embeddings, top_arg_embeddings, top_trig_labels, top_ner_labels,
-            top_trig_indices, top_arg_spans, trigger_embeddings)
+            top_trig_indices, top_arg_spans, trigger_embeddings, trigger_mask)
 
         argument_scores = self._compute_argument_scores(
             trig_arg_embeddings, top_trig_scores, top_arg_scores)
@@ -319,7 +324,8 @@ class EventExtractor(Model):
 
     def _compute_trig_arg_embeddings(self,
                                      top_trig_embeddings, top_arg_embeddings, top_trig_labels,
-                                     top_ner_labels, top_trig_indices, top_arg_spans, text_emb):
+                                     top_ner_labels, top_trig_indices, top_arg_spans, text_emb,
+                                     text_mask):
         """
         Create trigger / argument pair embeddings, consisting of:
         - The embeddings of the trigger and argument pair.
@@ -377,7 +383,41 @@ class EventExtractor(Model):
         pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled]
         pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
 
+        attended_context = self._get_attended_context(pair_embeddings, text_emb, text_mask)
+        pair_embeddings = torch.cat([pair_embeddings, attended_context], dim=3)
+
         return pair_embeddings
+
+    def _get_shared_context(self, pair_embeddings, text_emb, text_mask):
+        def checkit():
+            # Check to make sure it did the right thing.
+            batch_ix, trig_ix, arg_ix = (2, 1, 3)
+
+            if batch_size > batch_ix and n_triggers > trig_ix and n_args > arg_ix:
+                emb_check = pair_embeddings[batch_ix, trig_ix, arg_ix].unsqueeze(0).unsqueeze(0)
+                text_check = text_emb[batch_ix].unsqueeze(0)
+                mask_check = text_mask[batch_ix].unsqueeze(0)
+
+                check_unnorm = self._context_attention(emb_check, text_check)
+                # assert torch.allclose(check_unnorm.squeeze(), attn_unnorm[batch_ix, 0])
+
+                check_weights = util.masked_softmax(check_unnorm, mask_check)
+                # assert torch.allclose(check_weights.squeeze(), attn_weights[batch_ix, 0])
+
+                context_check = util.weighted_sum(text_check, check_weights)
+                assert torch.allclose(context_check.squeeze(), context[batch_ix, trig_ix, arg_ix])
+
+        batch_size, n_triggers, n_args, emb_dim = pair_embeddings.size()
+        pair_emb_flat = pair_embeddings.view([batch_size, -1, emb_dim])
+        attn_unnorm = self._context_attention(pair_emb_flat, text_emb)
+        attn_weights = util.masked_softmax(attn_unnorm, text_mask)
+        context = util.weighted_sum(text_emb, attn_weights)
+        context = context.view(batch_size, n_triggers, n_args, -1)
+
+        if self._check:
+            checkit()
+
+        return context
 
     def _get_context(self, span_starts, span_ends, text_emb):
         """

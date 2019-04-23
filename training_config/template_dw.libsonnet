@@ -80,10 +80,11 @@ function(p) {
   local ner_label_dim = (if event_args_use_ner_labels
     then (if label_embedding_method == "one_hot" then p.n_ner_labels else event_args_label_emb)
     else 0),
-  local argument_scorer_dim = (trigger_scorer_dim + span_emb_dim +
+  local context_attention_dim = (trigger_scorer_dim + span_emb_dim +
     (if event_args_use_ner_labels then ner_label_dim else 0) +
     (if event_args_use_trigger_labels then trigger_label_dim else 0) +
     (if events_context_window > 0 then 8 * events_context_window * p.lstm_hidden_size else 0)),
+  local argument_scorer_dim = context_attention_dim + trigger_scorer_dim,
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -232,7 +233,11 @@ function(p) {
         initializer: module_initializer,
         loss_weights: p.loss_weights_events,
         entity_beam: getattr(p, "events_entity_beam", false),
-        context_window: events_context_window
+        context_window: events_context_window,
+        context_attention: {
+          matrix_1_dim: context_attention_dim,
+          matrix_2_dim: trigger_scorer_dim,
+        },
       }
     }
   },
