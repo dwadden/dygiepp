@@ -46,6 +46,7 @@ class EventExtractor(Model):
                  event_args_use_trigger_labels: bool,
                  event_args_use_ner_labels: bool,
                  event_args_label_emb: int,
+                 shared_attention_context: bool,
                  label_embedding_method: str,
                  event_args_label_predictor: str,
                  event_args_gold_candidates: bool = False,  # If True, use gold argument candidates.
@@ -97,6 +98,8 @@ class EventExtractor(Model):
         assert event_args_label_predictor in ["hard", "softmax", "gold"]  # Method for predicting labels at test time.
         self._event_args_label_predictor = event_args_label_predictor
         self._event_args_gold_candidates = event_args_gold_candidates
+        # If set to True, then construct a context vector from a bilinear attention over the trigger
+        # / argument pair embeddings and the text.
         self._context_window = context_window                # If greater than 0, concatenate context as features.
         self._argument_feedforward = argument_feedforward
         self._argument_scorer = torch.nn.Linear(argument_feedforward.get_output_dim(), self._n_argument_labels)
@@ -105,7 +108,9 @@ class EventExtractor(Model):
         self._argument_spans_per_word = argument_spans_per_word
 
         # Context attention for event argument scorer.
-        self._context_attention = context_attention
+        self._shared_attention_context = shared_attention_context
+        if self._shared_attention_context:
+            self.shared_attention_context_module = context_attention
 
         # TODO(dwadden) Add metrics.
         self._metrics = EventMetrics()
@@ -383,12 +388,13 @@ class EventExtractor(Model):
         pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled]
         pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
 
-        attended_context = self._get_attended_context(pair_embeddings, text_emb, text_mask)
-        pair_embeddings = torch.cat([pair_embeddings, attended_context], dim=3)
+        if self._shared_attention_context:
+            attended_context = self._get_shared_attention_context(pair_embeddings, text_emb, text_mask)
+            pair_embeddings = torch.cat([pair_embeddings, attended_context], dim=3)
 
         return pair_embeddings
 
-    def _get_shared_context(self, pair_embeddings, text_emb, text_mask):
+    def _get_shared_attention_context(self, pair_embeddings, text_emb, text_mask):
         def checkit():
             # Check to make sure it did the right thing.
             batch_ix, trig_ix, arg_ix = (2, 1, 3)
@@ -398,7 +404,7 @@ class EventExtractor(Model):
                 text_check = text_emb[batch_ix].unsqueeze(0)
                 mask_check = text_mask[batch_ix].unsqueeze(0)
 
-                check_unnorm = self._context_attention(emb_check, text_check)
+                check_unnorm = self.shared_attention_context_module(emb_check, text_check)
                 # assert torch.allclose(check_unnorm.squeeze(), attn_unnorm[batch_ix, 0])
 
                 check_weights = util.masked_softmax(check_unnorm, mask_check)
@@ -409,7 +415,7 @@ class EventExtractor(Model):
 
         batch_size, n_triggers, n_args, emb_dim = pair_embeddings.size()
         pair_emb_flat = pair_embeddings.view([batch_size, -1, emb_dim])
-        attn_unnorm = self._context_attention(pair_emb_flat, text_emb)
+        attn_unnorm = self.shared_attention_context_module(pair_emb_flat, text_emb)
         attn_weights = util.masked_softmax(attn_unnorm, text_mask)
         context = util.weighted_sum(text_emb, attn_weights)
         context = context.view(batch_size, n_triggers, n_args, -1)

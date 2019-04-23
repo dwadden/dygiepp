@@ -53,6 +53,7 @@ function(p) {
   // If predicting labels, can either do "hard" prediction or "softmax". Default is hard.
   local event_args_label_predictor = getattr(p, "event_args_label_predictor", "hard"),
   local events_context_window = getattr(p, "events_context_window", 0),
+  local shared_attention_context = getattr(p, "shared_attention_context", false),
 
   local token_embedding_dim = ((if p.use_glove then glove_dim else 0) +
     (if p.use_char then p.char_n_filters else 0) +
@@ -80,11 +81,12 @@ function(p) {
   local ner_label_dim = (if event_args_use_ner_labels
     then (if label_embedding_method == "one_hot" then p.n_ner_labels else event_args_label_emb)
     else 0),
-  local context_attention_dim = (trigger_scorer_dim + span_emb_dim +
+  local argument_pair_dim = (trigger_scorer_dim + span_emb_dim +
     (if event_args_use_ner_labels then ner_label_dim else 0) +
     (if event_args_use_trigger_labels then trigger_label_dim else 0) +
     (if events_context_window > 0 then 8 * events_context_window * p.lstm_hidden_size else 0)),
-  local argument_scorer_dim = context_attention_dim + trigger_scorer_dim,
+  local argument_scorer_dim = (argument_pair_dim +
+    (if shared_attention_context then trigger_scorer_dim else 0)),
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -234,8 +236,9 @@ function(p) {
         loss_weights: p.loss_weights_events,
         entity_beam: getattr(p, "events_entity_beam", false),
         context_window: events_context_window,
+        shared_attention_context: shared_attention_context,
         context_attention: {
-          matrix_1_dim: context_attention_dim,
+          matrix_1_dim: argument_pair_dim,
           matrix_2_dim: trigger_scorer_dim,
         },
       }
