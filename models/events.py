@@ -8,7 +8,7 @@ from overrides import overrides
 
 from allennlp.data import Vocabulary
 from allennlp.models.model import Model
-from allennlp.modules import FeedForward
+from allennlp.modules import FeedForward, Seq2SeqEncoder
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from allennlp.modules import TimeDistributed
 from allennlp.modules.matrix_attention.bilinear_matrix_attention import BilinearMatrixAttention
@@ -39,10 +39,12 @@ class EventExtractor(Model):
                  mention_feedforward: FeedForward,  # Used if entity beam is off.
                  argument_feedforward: FeedForward,
                  context_attention: BilinearMatrixAttention,
+                 trigger_attention: Seq2SeqEncoder,
                  feature_size: int,
                  trigger_spans_per_word: float,
                  argument_spans_per_word: float,
                  loss_weights,
+                 trigger_attention_context: bool,
                  event_args_use_trigger_labels: bool,
                  event_args_use_ner_labels: bool,
                  event_args_label_emb: int,
@@ -80,10 +82,15 @@ class EventExtractor(Model):
         # Trigger candidate scorer.
         null_label = vocab.get_token_index("", "trigger_labels")
         assert null_label == 0  # If not, the dummy class won't correspond to the null label.
+
         self._trigger_scorer = torch.nn.Sequential(
             TimeDistributed(trigger_feedforward),
             TimeDistributed(torch.nn.Linear(trigger_feedforward.get_output_dim(),
                                             self._n_trigger_labels - 1)))
+
+        self._trigger_attention_context = trigger_attention_context
+        if self._trigger_attention_context:
+            self._trigger_attention = trigger_attention
 
         # Make pruners. If `entity_beam` is true, use NER and trigger scorers to construct the beam
         # and only keep candidates that the model predicts are actual entities or triggers.
@@ -317,6 +324,9 @@ class EventExtractor(Model):
         """
         Compute trigger scores for all tokens.
         """
+        if self._trigger_attention_context:
+            context = self._trigger_attention(trigger_embeddings, trigger_mask)
+            trigger_embeddings = torch.cat([trigger_embeddings, context], dim=2)
         trigger_scores = self._trigger_scorer(trigger_embeddings)
         # Give large negative scores to masked-out elements.
         mask = trigger_mask.unsqueeze(-1)
