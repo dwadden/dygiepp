@@ -31,7 +31,10 @@ class RelationExtractor(Model):
                  relation_feedforward: FeedForward,
                  feature_size: int,
                  spans_per_word: float,
+                 span_emb_dim: int,
                  rel_prop: int = 0,
+                 rel_prop_dropout_A: float = 0.0,
+                 rel_prop_dropout_f: float = 0.0,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  positive_label_weight: float = 1.0,
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
@@ -59,18 +62,18 @@ class RelationExtractor(Model):
         class_weights = torch.cat([torch.tensor([1.0]), positive_label_weight * torch.ones(self._n_labels)])
         self._loss = torch.nn.CrossEntropyLoss(reduction="sum", ignore_index=-1, weight=class_weights)
         self.rel_prop = rel_prop
-        if self.rel_prop > 0:
-            self.d = int(self._relation_feedforward.get_input_dim()/3)
-            self._A_network = FeedForward(input_dim=self.vocab.get_vocab_size("relation_labels"),
-                                          num_layers=1,
-                                          hidden_dims=self.d,
-                                          activations=lambda x: x,
-                                          dropout=0.2)
-            self._f_network = FeedForward(input_dim=2*self.d,
-                                          num_layers=1,
-                                          hidden_dims=self.d,
-                                          activations=torch.nn.Sigmoid(),
-                                          dropout=0.4)
+
+        # Relation Propagation
+        self._A_network = FeedForward(input_dim=self._n_labels,
+                                      num_layers=1,
+                                      hidden_dims=span_emb_dim,
+                                      activations=lambda x: x,
+                                      dropout=rel_prop_dropout_A)
+        self._f_network = FeedForward(input_dim=2*span_emb_dim,
+                                      num_layers=1,
+                                      hidden_dims=span_emb_dim,
+                                      activations=torch.nn.Sigmoid(),
+                                      dropout=rel_prop_dropout_f)
         initializer(self)
 
     def compute_representations(self,  # type: ignore
@@ -101,15 +104,16 @@ class RelationExtractor(Model):
     def relation_propagation(self, output_dict):
         relation_scores = output_dict["relation_scores"]
         top_span_embeddings = output_dict["top_span_embeddings"]
-
+        var = output_dict["top_span_mask"]
+        top_span_mask_tensor = (var.repeat(1,1,var.shape[1]) * var.view(var.shape[0], 1, var.shape[1]).repeat(1,var.shape[1],1)).unsqueeze(3).repeat(1,1,1, self._n_labels).float()
         span_num = relation_scores.shape[1]
         for t in range(self.rel_prop):
-            relation_scores = F.relu(relation_scores[:,:,:,1:], inplace=False) #Normalize every relu and then also take mean instead of sum
-            #relation_scores /= (torch.sum(relation_scores, dim=[2,3]).view(-1,span_num,1,1).repeat(1,1,span_num,7) + 0.0000001)
+            relation_scores = F.relu(relation_scores[:, :, :, 1:], inplace=False) * top_span_mask_tensor
+            # relation_scores /= (torch.sum(relation_scores, dim=[2,3]).view(-1,span_num,1,1).repeat(1,1,span_num,7) + 0.0000001)
             relation_embeddings = self._A_network(relation_scores)
             top_span_embeddings_repeated = top_span_embeddings.unsqueeze(2).repeat(1, 1, span_num, 1)
             entity_embs = torch.sum(relation_embeddings * top_span_embeddings_repeated, dim=2)
-            entity_embs /= float(span_num)
+            # entity_embs /= float(span_num)
             f_network_input = torch.cat([top_span_embeddings, entity_embs], dim=-1)
             f_weights = self._f_network(f_network_input)
             top_span_embeddings = f_weights * top_span_embeddings + (1.0 - f_weights) * entity_embs
@@ -138,8 +142,8 @@ class RelationExtractor(Model):
          num_spans_to_keep, top_span_mask,
          top_span_indices, top_spans) = self.prune_spans(spans, span_mask, span_embeddings, sentence_lengths)
 
-        #span_pair_embeddings = self._compute_span_pair_embeddings(top_span_embeddings)
-        #relation_scores = self._compute_relation_scores(span_pair_embeddings,
+        # span_pair_embeddings = self._compute_span_pair_embeddings(top_span_embeddings)
+        # relation_scores = self._compute_relation_scores(span_pair_embeddings,
         #                                                top_span_mention_scores)
         relation_scores = self.get_rel_scores(top_span_embeddings,
                                               top_span_mention_scores)
