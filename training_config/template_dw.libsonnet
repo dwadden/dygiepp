@@ -25,9 +25,8 @@ function(p) {
   local bert_dim = 768,
 
   local module_initializer = [
-    [".*linear_layers.*weight", {"type": "xavier_normal"}],
-    [".*scorer._module.weight", {"type": "xavier_normal"}],
-    ["_distance_embedding.weight", {"type": "xavier_normal"}]],
+    [".*weight", {"type": "xavier_normal"}],
+    [".*weight_matrix", {"type": "xavier_normal"}]],
 
   local dygie_initializer = [
     ["_span_width_embedding.weight", {"type": "xavier_normal"}],

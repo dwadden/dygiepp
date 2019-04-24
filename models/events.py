@@ -110,7 +110,7 @@ class EventExtractor(Model):
         # Context attention for event argument scorer.
         self._shared_attention_context = shared_attention_context
         if self._shared_attention_context:
-            self.shared_attention_context_module = context_attention
+            self._shared_attention_context_module = context_attention
 
         # TODO(dwadden) Add metrics.
         self._metrics = EventMetrics()
@@ -404,7 +404,7 @@ class EventExtractor(Model):
                 text_check = text_emb[batch_ix].unsqueeze(0)
                 mask_check = text_mask[batch_ix].unsqueeze(0)
 
-                check_unnorm = self.shared_attention_context_module(emb_check, text_check)
+                check_unnorm = self._shared_attention_context_module(emb_check, text_check)
                 # assert torch.allclose(check_unnorm.squeeze(), attn_unnorm[batch_ix, 0])
 
                 check_weights = util.masked_softmax(check_unnorm, mask_check)
@@ -415,7 +415,7 @@ class EventExtractor(Model):
 
         batch_size, n_triggers, n_args, emb_dim = pair_embeddings.size()
         pair_emb_flat = pair_embeddings.view([batch_size, -1, emb_dim])
-        attn_unnorm = self.shared_attention_context_module(pair_emb_flat, text_emb)
+        attn_unnorm = self._shared_attention_context_module(pair_emb_flat, text_emb)
         attn_weights = util.masked_softmax(attn_unnorm, text_mask)
         context = util.weighted_sum(text_emb, attn_weights)
         context = context.view(batch_size, n_triggers, n_args, -1)
