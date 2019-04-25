@@ -153,7 +153,7 @@ class DyGIE(Model):
         text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
 
         # TODO(Ulme) Speed this up by tensorizing
-        new_text_embeddings = 0*text_embeddings.clone()
+        new_text_embeddings = torch.zeros(text_embeddings.shape, device=text_embeddings.device)
         for i in range(len(new_text_embeddings)):
             new_text_embeddings[i][0:metadata[i]["end_ix"] - metadata[i]["start_ix"]] = text_embeddings[i][metadata[i]["start_ix"]:metadata[i]["end_ix"]]
         text_embeddings = new_text_embeddings
