@@ -4,7 +4,6 @@ from typing import Optional
 import torch
 
 from allennlp.training.metrics.metric import Metric
-from allennlp.training.metrics.f1_measure import F1Measure
 
 class NERMetrics(Metric):
     """
@@ -13,7 +12,6 @@ class NERMetrics(Metric):
     def __init__(self, number_of_classes: int, none_label: int=0):
         self.number_of_classes = number_of_classes
         self.none_label = none_label
-        self._single_class_ner_metrics = [F1Measure(i) for i in range(self.number_of_classes) if i != self.none_label]
         self.reset()
 
     @overrides
@@ -21,8 +19,13 @@ class NERMetrics(Metric):
                  predictions: torch.Tensor,
                  gold_labels: torch.Tensor,
                  mask: Optional[torch.Tensor] = None):
-        for metric in self._single_class_ner_metrics:
-            metric(predictions, gold_labels, mask)
+        for i in range(self.number_of_classes):
+            if i == self.none_label:
+                continue
+            self._true_positives += ((predictions==i)*(gold_labels==i)*mask.byte()).sum()
+            self._false_positives += ((predictions==i)*(gold_labels!=i)*mask.byte()).sum()
+            self._true_negatives += ((predictions!=i)*(gold_labels!=i)*mask.byte()).sum()
+            self._false_negatives += ((predictions!=i)*(gold_labels==i)*mask.byte()).sum()
 
     @overrides
     def get_metric(self, reset=False):
@@ -34,11 +37,6 @@ class NERMetrics(Metric):
         recall : float
         f1-measure : float
         """
-        self._true_positives = sum(metric._true_positives for metric in self._single_class_ner_metrics)
-        self._false_positives = sum(metric._false_positives for metric in self._single_class_ner_metrics)
-        self._true_negatives = sum(metric._true_negatives for metric in self._single_class_ner_metrics)
-        self._false_negatives = sum(metric._false_negatives for metric in self._single_class_ner_metrics)
-
         precision = float(self._true_positives) / float(self._true_positives + self._false_positives + 1e-13)
         recall = float(self._true_positives) / float(self._true_positives + self._false_negatives + 1e-13)
         f1_measure = 2. * ((precision * recall) / (precision + recall + 1e-13))
@@ -55,5 +53,3 @@ class NERMetrics(Metric):
         self._false_positives = 0
         self._true_negatives = 0
         self._false_negatives = 0
-        for metric in self._single_class_ner_metrics:
-            metric.reset()
