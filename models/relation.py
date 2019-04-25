@@ -76,53 +76,6 @@ class RelationExtractor(Model):
                                       dropout=rel_prop_dropout_f)
         initializer(self)
 
-    def compute_representations(self,  # type: ignore
-                                spans: torch.IntTensor,
-                                span_mask,
-                                span_embeddings,  # TODO(dwadden) add type.
-                                sentence_lengths,
-                                relation_labels: torch.IntTensor = None,
-                                metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
-
-        (top_span_embeddings, top_span_mention_scores,
-         num_spans_to_keep, top_span_mask,
-         top_span_indices, top_spans) = self.prune_spans(spans, span_mask, span_embeddings, sentence_lengths)
-
-        relation_scores = self.get_rel_scores(top_span_embeddings,
-                                              top_span_mention_scores)
-
-        output_dict = {"top_spans": top_spans,
-                       "top_span_embeddings": top_span_embeddings,
-                       "top_span_mention_scores": top_span_mention_scores,
-                       "relation_scores": relation_scores,
-                       "num_spans_to_keep": num_spans_to_keep,
-                       "top_span_indices": top_span_indices,
-                       "top_span_mask": top_span_mask}
-
-        return output_dict
-
-    def relation_propagation(self, output_dict):
-        relation_scores = output_dict["relation_scores"]
-        top_span_embeddings = output_dict["top_span_embeddings"]
-        var = output_dict["top_span_mask"]
-        top_span_mask_tensor = (var.repeat(1,1,var.shape[1]) * var.view(var.shape[0], 1, var.shape[1]).repeat(1,var.shape[1],1)).unsqueeze(3).repeat(1,1,1, self._n_labels).float()
-        span_num = relation_scores.shape[1]
-        for t in range(self.rel_prop):
-            relation_scores = F.relu(relation_scores[:, :, :, 1:], inplace=False) * top_span_mask_tensor
-            # relation_scores /= (torch.sum(relation_scores, dim=[2,3]).view(-1,span_num,1,1).repeat(1,1,span_num,7) + 0.0000001)
-            relation_embeddings = self._A_network(relation_scores)
-            top_span_embeddings_repeated = top_span_embeddings.unsqueeze(2).repeat(1, 1, span_num, 1)
-            entity_embs = torch.sum(relation_embeddings * top_span_embeddings_repeated, dim=2)
-            # entity_embs /= float(span_num)
-            f_network_input = torch.cat([top_span_embeddings, entity_embs], dim=-1)
-            f_weights = self._f_network(f_network_input)
-            top_span_embeddings = f_weights * top_span_embeddings + (1.0 - f_weights) * entity_embs
-            relation_scores = self.get_rel_scores(top_span_embeddings, self._mention_pruner._scorer(top_span_embeddings))
-
-        output_dict["relation_scores"] = relation_scores
-        output_dict["top_span_embeddings"] = top_span_embeddings
-        return output_dict
-
     @overrides
     def forward(self,  # type: ignore
                 spans: torch.IntTensor,
@@ -135,17 +88,30 @@ class RelationExtractor(Model):
         TODO(dwadden) Write documentation.
         """
 
-        # TODO(Ulme) Make it so that this function is still working
-        # It's not being used currently since we have splitted the forward() method up completely
+        output_dict = self.compute_representations(
+            spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
+
+        if self.rel_prop > 0:
+            output_dict = self.relation_propagation(output_dict)
+
+        if self._loss_weights['relation'] > 0:
+            output_dict = self.predict_labels(relation_labels, output_dict, metadata)
+
+        return output_dict
+
+    def compute_representations(self,  # type: ignore
+                                spans: torch.IntTensor,
+                                span_mask,
+                                span_embeddings,  # TODO(dwadden) add type.
+                                sentence_lengths,
+                                relation_labels: torch.IntTensor = None,
+                                metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
 
         (top_span_embeddings, top_span_mention_scores,
          num_spans_to_keep, top_span_mask,
-         top_span_indices, top_spans) = self.prune_spans(spans, span_mask, span_embeddings, sentence_lengths)
+         top_span_indices, top_spans) = self._prune_spans(spans, span_mask, span_embeddings, sentence_lengths)
 
-        # span_pair_embeddings = self._compute_span_pair_embeddings(top_span_embeddings)
-        # relation_scores = self._compute_relation_scores(span_pair_embeddings,
-        #                                                top_span_mention_scores)
-        relation_scores = self.get_rel_scores(top_span_embeddings,
+        relation_scores = self.get_relation_scores(top_span_embeddings,
                                               top_span_mention_scores)
 
         output_dict = {"top_spans": top_spans,
@@ -156,10 +122,9 @@ class RelationExtractor(Model):
                        "top_span_indices": top_span_indices,
                        "top_span_mask": top_span_mask}
 
-        output_dict = self.predict_labels(relation_labels, output_dict, metadata)
         return output_dict
 
-    def prune_spans(self, spans, span_mask, span_embeddings, sentence_lengths):
+    def _prune_spans(self, spans, span_mask, span_embeddings, sentence_lengths):
         # Prune
         num_spans = spans.size(1)  # Max number of spans for the minibatch.
 
@@ -179,6 +144,28 @@ class RelationExtractor(Model):
                                               flat_top_span_indices)
 
         return top_span_embeddings, top_span_mention_scores, num_spans_to_keep, top_span_mask, top_span_indices, top_spans
+
+    def relation_propagation(self, output_dict):
+        relation_scores = output_dict["relation_scores"]
+        top_span_embeddings = output_dict["top_span_embeddings"]
+        var = output_dict["top_span_mask"]
+        top_span_mask_tensor = (var.repeat(1,1,var.shape[1]) * var.view(var.shape[0], 1, var.shape[1]).repeat(1,var.shape[1],1)).unsqueeze(3).repeat(1,1,1, self._n_labels).float()
+        span_num = relation_scores.shape[1]
+        for t in range(self.rel_prop):
+            relation_scores = F.relu(relation_scores[:, :, :, 1:], inplace=False) * top_span_mask_tensor
+            # relation_scores /= (torch.sum(relation_scores, dim=[2,3]).view(-1,span_num,1,1).repeat(1,1,span_num,7) + 0.0000001)
+            relation_embeddings = self._A_network(relation_scores)
+            top_span_embeddings_repeated = top_span_embeddings.unsqueeze(2).repeat(1, 1, span_num, 1)
+            entity_embs = torch.sum(relation_embeddings * top_span_embeddings_repeated, dim=2)
+            # entity_embs /= float(span_num)
+            f_network_input = torch.cat([top_span_embeddings, entity_embs], dim=-1)
+            f_weights = self._f_network(f_network_input)
+            top_span_embeddings = f_weights * top_span_embeddings + (1.0 - f_weights) * entity_embs
+            relation_scores = self.get_relation_scores(top_span_embeddings, self._mention_pruner._scorer(top_span_embeddings))
+
+        output_dict["relation_scores"] = relation_scores
+        output_dict["top_span_embeddings"] = top_span_embeddings
+        return output_dict
 
     def predict_labels(self, relation_labels, output_dict, metadata):
         relation_scores = output_dict["relation_scores"]
@@ -282,7 +269,7 @@ class RelationExtractor(Model):
 
         return pair_embeddings
 
-    def get_rel_scores(self, top_span_embeddings, top_span_mention_scores):
+    def get_relation_scores(self, top_span_embeddings, top_span_mention_scores):
         return self._compute_relation_scores(self._compute_span_pair_embeddings(top_span_embeddings),
                                              top_span_mention_scores)
 
