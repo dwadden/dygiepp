@@ -74,6 +74,7 @@ class RelationExtractor(Model):
                                       hidden_dims=span_emb_dim,
                                       activations=torch.nn.Sigmoid(),
                                       dropout=rel_prop_dropout_f)
+
         initializer(self)
 
     @overrides
@@ -149,15 +150,18 @@ class RelationExtractor(Model):
         relation_scores = output_dict["relation_scores"]
         top_span_embeddings = output_dict["top_span_embeddings"]
         var = output_dict["top_span_mask"]
-        top_span_mask_tensor = (var.repeat(1,1,var.shape[1]) * var.view(var.shape[0], 1, var.shape[1]).repeat(1,var.shape[1],1)).unsqueeze(3).repeat(1,1,1, self._n_labels).float()
+        top_span_mask_tensor = (var.repeat(1, 1, var.shape[1]) * var.view(var.shape[0], 1, var.shape[1]).repeat(1, var.shape[1], 1)).unsqueeze(3).repeat(1, 1, 1, top_span_embeddings.shape[-1]).float()
         span_num = relation_scores.shape[1]
+        normalization_factor = var.view(var.shape[0], span_num).sum(dim=1).unsqueeze(1).unsqueeze(2).repeat(1, span_num, top_span_embeddings.shape[-1]).float()
         for t in range(self.rel_prop):
-            relation_scores = F.relu(relation_scores[:, :, :, 1:], inplace=False) * top_span_mask_tensor
+            # TODO(Ulme) There is currently an implicit assumption that the null label is in the 0-th index.
+            # Come up with how to deal with this
+            relation_scores = F.relu(relation_scores[:, :, :, 1:], inplace=False)
             # relation_scores /= (torch.sum(relation_scores, dim=[2,3]).view(-1,span_num,1,1).repeat(1,1,span_num,7) + 0.0000001)
             relation_embeddings = self._A_network(relation_scores)
             top_span_embeddings_repeated = top_span_embeddings.unsqueeze(2).repeat(1, 1, span_num, 1)
-            entity_embs = torch.sum(relation_embeddings * top_span_embeddings_repeated, dim=2)
-            # entity_embs /= float(span_num)
+            entity_embs = torch.sum(relation_embeddings * top_span_embeddings_repeated * top_span_mask_tensor, dim=2)
+            entity_embs /= normalization_factor
             f_network_input = torch.cat([top_span_embeddings, entity_embs], dim=-1)
             f_weights = self._f_network(f_network_input)
             top_span_embeddings = f_weights * top_span_embeddings + (1.0 - f_weights) * entity_embs
