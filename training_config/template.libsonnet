@@ -22,7 +22,8 @@ function(p) {
 
   local glove_dim = 300,
   local elmo_dim = 1024,
-  local bert_dim = 768,
+  local bert_base_dim = 768,
+  local bert_large_dim = 1024,
 
   local module_initializer = [
     [".*linear_layers.*weight", {"type": "xavier_normal"}],
@@ -40,11 +41,14 @@ function(p) {
 
   // Calculating dimensions.
 
+  local use_bert = (if p.use_bert_base then true else if p.use_bert_large then true else false),
   local token_embedding_dim = ((if p.use_glove then glove_dim else 0) +
     (if p.use_char then p.char_n_filters else 0) +
     (if p.use_elmo then elmo_dim else 0) + 
-    (if p.use_bert then bert_dim else 0)),
+    (if p.use_bert_base then bert_base_dim else 0) + 
+    (if p.use_bert_large then bert_large_dim else 0)),
   local endpoint_span_emb_dim = 4 * p.lstm_hidden_size + p.feature_size,
+  //local endpoint_span_emb_dim = 2*token_embedding_dim + p.feature_size,
   local attended_span_emb_dim = if p.use_attentive_span_extractor then token_embedding_dim else 0,
   local span_emb_dim = endpoint_span_emb_dim + attended_span_emb_dim,
   local pair_emb_dim = 3 * span_emb_dim,
@@ -79,23 +83,24 @@ function(p) {
     [if p.use_elmo then "elmo"]: {
       type: "elmo_characters"
     },
-    [if p.use_bert then "bert"]: {
+    [if use_bert then "bert"]: {
       type: "bert-pretrained",
-      pretrained_model: "bert-base-cased",
+      pretrained_model: (if p.use_bert_base then "bert-base-cased" else "bert-large-cased"),
       do_lowercase: false,
       use_starting_offsets: true
     }
   },
   local text_field_embedder = {
-    [if p.use_bert then "allow_unmatched_keys"]: true,
-    [if p.use_bert then "embedder_to_indexer_map"]: {
+    [if use_bert then "allow_unmatched_keys"]: true,
+    [if use_bert then "embedder_to_indexer_map"]: {
       bert: ["bert", "bert-offsets"],
       token_characters: ["token_characters"]
     },
     token_embedders: {
-      [if p.use_bert then "bert"]: {
+      [if use_bert then "bert"]: {
         type: "bert-pretrained",
-        pretrained_model: "bert-base-cased"
+        pretrained_model: (if p.use_bert_base then "bert-base-cased" else "bert-large-cased"),
+        requires_grad: p.finetune_bert
       },
       [if p.use_glove then "tokens"]: {
         type: "embedding",
@@ -133,11 +138,19 @@ function(p) {
   dataset_reader: {
     type: "ie_json",
     token_indexers: token_indexers,
-    max_span_width: p.max_span_width
+    max_span_width: p.max_span_width,
+    context_width: p.context_width
   },
   train_data_path: std.extVar("ie_train_data_path"),
   validation_data_path: std.extVar("ie_dev_data_path"),
   test_data_path: std.extVar("ie_test_data_path"),
+  //regularizers: {
+  //should match every layer
+  //  ["*"]: {
+  //    "type": "l2",
+  //    "alpha": 0.001,
+  //  },
+  //},
   model: {
     type: "dygie",
     text_field_embedder: text_field_embedder,
@@ -145,12 +158,15 @@ function(p) {
     loss_weights: p.loss_weights,
     lexical_dropout: p.lexical_dropout,
     lstm_dropout: p.lstm_dropout,
+    rel_prop: p.rel_prop,
     feature_size: p.feature_size,
     use_attentive_span_extractor: p.use_attentive_span_extractor,
     max_span_width: p.max_span_width,
     display_metrics: display_metrics[p.target],
     valid_events_dir: valid_events_dir,
     context_layer: {
+      //type: "pass_through",
+      //input_dim: token_embedding_dim,
       type: "lstm",
       bidirectional: true,
       input_size: token_embedding_dim,
@@ -174,6 +190,10 @@ function(p) {
         positive_label_weight: p.relation_positive_label_weight,
         mention_feedforward: make_feedforward(span_emb_dim),
         relation_feedforward: make_feedforward(relation_scorer_dim),
+        rel_prop_dropout_A: p.rel_prop_dropout_A,
+        rel_prop_dropout_f: p.rel_prop_dropout_f,
+        span_emb_dim: span_emb_dim,
+        rel_prop: p.rel_prop,
         initializer: module_initializer
       },
       events: {
