@@ -80,9 +80,8 @@ class RelationExtractor(Model):
         num_spans_to_keep = torch.max(num_spans_to_keep, torch.ones_like(num_spans_to_keep))
 
         (top_span_embeddings, top_span_mask,
-         top_span_indices, top_span_mention_scores) = self._mention_pruner(span_embeddings,
-                                                                           span_mask,
-                                                                           num_spans_to_keep)
+         top_span_indices, top_span_mention_scores, num_spans_kept) = self._mention_pruner(
+             span_embeddings, span_mask, num_spans_to_keep)
 
         top_span_mask = top_span_mask.unsqueeze(-1)
 
