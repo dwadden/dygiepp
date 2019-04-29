@@ -2,7 +2,7 @@
 
 function(p) {
   // Location of ACE valid event configs
-  local valid_events_dir = "/homes/gws/dwadden/proj/dygie/dygie-experiments/datasets/ace-event/valid-configurations",
+  local valid_events_dir = std.extVar("valid_events_dir"),
 
   // Storing constants.
 
