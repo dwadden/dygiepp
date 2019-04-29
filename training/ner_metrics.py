@@ -19,6 +19,9 @@ class NERMetrics(Metric):
                  predictions: torch.Tensor,
                  gold_labels: torch.Tensor,
                  mask: Optional[torch.Tensor] = None):
+        predictions = predictions.cpu()
+        gold_labels = gold_labels.cpu()
+        mask = mask.cpu()
         for i in range(self.number_of_classes):
             if i == self.none_label:
                 continue
