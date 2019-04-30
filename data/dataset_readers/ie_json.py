@@ -147,7 +147,7 @@ class IEJsonReader(DatasetReader):
                 # If some fields are missing in the data set, fill them with empties.
                 # TODO(dwadden) do this more cleanly once things are running.
                 n_sentences = len(js["sentences"])
-                # TODO(Ulme) Make it so that the 
+                # TODO(Ulme) Make it so that the
                 js["sentence_groups"] = [[self._normalize_word(word) for sentence in js["sentences"][max(0, i-self.k):min(n_sentences, i + self.k + 1)] for word in sentence] for i in range(n_sentences)]
                 js["sentence_start_index"] = [sum(len(js["sentences"][i-j-1]) for j in range(min(self.k, i))) if i > 0 else 0 for i in range(n_sentences)]
                 js["sentence_end_index"] = [js["sentence_start_index"][i] + len(js["sentences"][i]) for i in range(n_sentences)]

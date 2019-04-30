@@ -120,7 +120,7 @@ class DyGIE(Model):
 
         self.rel_prop = rel_prop
         self.coref_prop = coref_prop
-                
+
         initializer(self)
 
     @overrides
@@ -213,7 +213,7 @@ class DyGIE(Model):
 
         # TODO(Ulme) Split the forward method of the coreference module up into parts
         #output_coref = self._coref.compute_representations()
-            
+
         # Propagation of global information to enhance the span embeddings
         if self.coref_prop > 0:
             print("Coref prop is not implemented yet")
@@ -315,18 +315,18 @@ class DyGIE(Model):
         metrics_coref = self._coref.get_metrics(reset=reset)
         metrics_ner = self._ner.get_metrics(reset=reset)
         metrics_relation = self._relation.get_metrics(reset=reset)
-        #metrics_events = self._events.get_metrics(reset=reset)
-        #metrics_joint = self._joint_metrics.get_metric(reset=reset)
+        metrics_events = self._events.get_metrics(reset=reset)
+        metrics_joint = self._joint_metrics.get_metric(reset=reset)
 
         # Make sure that there aren't any conflicting names.
         metric_names = (list(metrics_coref.keys()) + list(metrics_ner.keys()) +
-                        list(metrics_relation.keys()))# + list(metrics_events.keys()))
+                        list(metrics_relation.keys()) + list(metrics_events.keys()))
         assert len(set(metric_names)) == len(metric_names)
         all_metrics = dict(list(metrics_coref.items()) +
                            list(metrics_ner.items()) +
-                           list(metrics_relation.items()))# +
-                           #list(metrics_events.items()) +
-                           #list(metrics_joint.items()))
+                           list(metrics_relation.items()) +
+                           list(metrics_events.items()) +
+                           list(metrics_joint.items()))
 
         # If no list of desired metrics given, display them all.
         if self._display_metrics is None:
