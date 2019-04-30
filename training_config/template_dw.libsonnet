@@ -17,7 +17,7 @@ function(p) {
     "ner": ["ner_precision", "ner_recall", "ner_f1"],
     "rel": ["rel_precision", "rel_recall", "rel_f1", "rel_span_recall"],
     "coref": ["coref_precision", "coref_recall", "coref_f1", "coref_mention_recall"],
-    "events": ["trig_class_f1", "arg_class_f1", "frac_trig_arg", "frac_ner_arg"]
+    "events": ["trig_class_f1", "arg_class_f1"]
   },
 
   local glove_dim = 300,
@@ -82,7 +82,8 @@ function(p) {
   local ner_label_dim = (if event_args_use_ner_labels
     then (if label_embedding_method == "one_hot" then p.n_ner_labels else event_args_label_emb)
     else 0),
-  local argument_pair_dim = (trigger_emb_dim + span_emb_dim +
+  // The extra 1 is for the bit indicating whether the trigger is before or inside the argument.
+  local argument_pair_dim = (trigger_emb_dim + span_emb_dim + p.feature_size + 2 +
     (if event_args_use_ner_labels then ner_label_dim else 0) +
     (if event_args_use_trigger_labels then trigger_label_dim else 0) +
     (if events_context_window > 0 then 8 * events_context_window * p.lstm_hidden_size else 0)),

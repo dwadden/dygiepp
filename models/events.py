@@ -11,6 +11,7 @@ from allennlp.models.model import Model
 from allennlp.modules import FeedForward, Seq2SeqEncoder
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from allennlp.modules import TimeDistributed
+from allennlp.modules.token_embedders import Embedding
 from allennlp.modules.matrix_attention.bilinear_matrix_attention import BilinearMatrixAttention
 
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
@@ -110,6 +111,10 @@ class EventExtractor(Model):
         self._context_window = context_window                # If greater than 0, concatenate context as features.
         self._argument_feedforward = argument_feedforward
         self._argument_scorer = torch.nn.Linear(argument_feedforward.get_output_dim(), self._n_argument_labels)
+
+        # Distance embeddings
+        self._num_distance_buckets = 10  # Just use 10 which is the default.
+        self._distance_embedding = Embedding(self._num_distance_buckets, feature_size)
 
         self._trigger_spans_per_word = trigger_spans_per_word
         self._argument_spans_per_word = argument_spans_per_word
@@ -395,7 +400,9 @@ class EventExtractor(Model):
         arg_emb_expanded = arg_emb.unsqueeze(1)
         arg_emb_tiled = arg_emb_expanded.repeat(1, num_trigs, 1, 1)
 
-        pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled]
+        distance_embeddings = self._compute_distance_embeddings(top_trig_indices, top_arg_spans)
+
+        pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled, distance_embeddings]
         pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
 
         if self._shared_attention_context:
@@ -403,6 +410,47 @@ class EventExtractor(Model):
             pair_embeddings = torch.cat([pair_embeddings, attended_context], dim=3)
 
         return pair_embeddings
+
+    def _compute_distance_embeddings(self, top_trig_indices, top_arg_spans):
+        def check_distance():
+            batch, trig, arg = 2, 1, 6
+            if (top_trig_indices.size(0) > batch and
+                top_trig_indices.size(1) > trig and
+                top_arg_spans.size(1) > arg):
+                trigger_ix = top_trig_indices[batch, trig]
+                arg_span = top_arg_spans[batch, arg]
+                if trigger_ix >= arg_span[0] and trigger_ix <= arg_span[1]:
+                    trigger_check_inside = 1.0
+                    predicted_distance = 0
+                else:
+                    trigger_check_inside = 0.0
+                    predicted_distance = (trigger_ix - arg_span).abs().min().item()
+                trigger_check_before = (trigger_ix < arg_span[0]).float().item()
+                actual_distance = dist[batch, trig, arg].item()
+                assert trigger_check_inside == trigger_inside_feature[batch, trig, arg].item()
+                assert trigger_check_before == trigger_before_feature[batch, trig, arg].item()
+                assert predicted_distance == actual_distance
+
+        top_trig_ixs = top_trig_indices.unsqueeze(2)
+        arg_span_starts = top_arg_spans[:, :, 0].unsqueeze(1)
+        arg_span_ends = top_arg_spans[:, :, 1].unsqueeze(1)
+        dist_from_start = top_trig_ixs - arg_span_starts
+        dist_from_end = top_trig_ixs - arg_span_ends
+        # Distance from trigger to arg.
+        dist = torch.min(dist_from_start.abs(), dist_from_end.abs())
+        # When the trigger is inside the arg span, also set the distance to zero.
+        trigger_inside = (top_trig_ixs >= arg_span_starts) & (top_trig_ixs <= arg_span_ends)
+        dist[trigger_inside] = 0
+        dist_buckets = util.bucket_values(dist, self._num_distance_buckets)
+        dist_emb = self._distance_embedding(dist_buckets)
+        trigger_before_feature = (top_trig_ixs < arg_span_starts).float().unsqueeze(-1)
+        trigger_inside_feature = trigger_inside.float().unsqueeze(-1)
+        res = torch.cat([dist_emb, trigger_before_feature, trigger_inside_feature], dim=-1)
+
+        if self._check:
+            check_distance()
+
+        return res
 
     def _get_shared_attention_context(self, pair_embeddings, text_emb, text_mask):
         def checkit():
