@@ -142,21 +142,33 @@ class DyGIE(Model):
         relation_labels = relation_labels.long()
         argument_labels = argument_labels.long()
 
-        # Shape: (batch_size, max_sentence_length)
-        text_mask = util.get_text_field_mask(text).float()
-        sentence_group_lengths = text_mask.sum(dim=1).long()
-        sentence_lengths = text_mask.sum(dim=1).long()
-        for i in range(len(metadata)):
-            sentence_lengths[i] = metadata[i]["end_ix"] - metadata[i]["start_ix"]
 
         # Shape: (batch_size, max_sentence_length, embedding_size)
         text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
+
+        # Shape: (batch_size, max_sentence_length)
+        text_mask = util.get_text_field_mask(text).float()
+        sentence_group_lengths = text_mask.sum(dim=1).long()
+
+        sentence_lengths = text_mask.sum(dim=1).long()
+        for i in range(len(metadata)):
+            sentence_lengths[i] = metadata[i]["end_ix"] - metadata[i]["start_ix"]
+            for k in range(sentence_lengths[i], sentence_group_lengths[i]):
+                text_mask[i][k] = 0
+
+
 
         # TODO(Ulme) Speed this up by tensorizing
         new_text_embeddings = torch.zeros(text_embeddings.shape, device=text_embeddings.device)
         for i in range(len(new_text_embeddings)):
             new_text_embeddings[i][0:metadata[i]["end_ix"] - metadata[i]["start_ix"]] = text_embeddings[i][metadata[i]["start_ix"]:metadata[i]["end_ix"]]
+        
+        #max_sent_len = max(sentence_lengths)
+        #the_list = [list(k+metadata[i]["start_ix"] if k < max_sent_len else 0 for k in range(text_embeddings.shape[1])) for i in range(len(metadata))]
+        #import ipdb; ipdb.set_trace()
+        #text_embeddings = torch.gather(text_embeddings, 1, torch.tensor(the_list, device=text_embeddings.device).unsqueeze(2).repeat(1, 1, text_embeddings.shape[2]))
         text_embeddings = new_text_embeddings
+        
 
         # Shape: (batch_size, max_sentence_length, encoding_dim)
         contextualized_embeddings = self._lstm_dropout(self._context_layer(text_embeddings, text_mask))
