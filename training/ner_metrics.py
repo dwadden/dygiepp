@@ -40,8 +40,8 @@ class NERMetrics(Metric):
         recall : float
         f1-measure : float
         """
-        precision = float(self._true_positives) / float(self._true_positives + self._false_positives + 1e-13)
-        recall = float(self._true_positives) / float(self._true_positives + self._false_negatives + 1e-13)
+        precision = float(self._true_positives) / (float(self._true_positives + self._false_positives) + 1e-13)
+        recall = float(self._true_positives) / (float(self._true_positives + self._false_negatives) + 1e-13)
         f1_measure = 2. * ((precision * recall) / (precision + recall + 1e-13))
 
         # Reset counts if at end of epoch.
