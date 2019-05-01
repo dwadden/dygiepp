@@ -8,7 +8,7 @@ from overrides import overrides
 
 from allennlp.data import Vocabulary
 from allennlp.models.model import Model
-from allennlp.modules import Seq2SeqEncoder, TextFieldEmbedder
+from allennlp.modules import Seq2SeqEncoder, TextFieldEmbedder, FeedForward
 from allennlp.modules.span_extractors import SelfAttentiveSpanExtractor, EndpointSpanExtractor
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 
@@ -56,12 +56,14 @@ class DyGIE(Model):
                  modules,  # TODO(dwadden) Add type.
                  feature_size: int,
                  max_span_width: int,
-                 loss_weights,  # TOOD(dwadden) Add type.
+                 loss_weights: Dict[str, int],
                  lexical_dropout: float = 0.2,
                  lstm_dropout: float = 0.4,
                  use_attentive_span_extractor: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
+                 rel_prop: int = 0,
+                 coref_prop: int = 0,
                  display_metrics: List[str] = None,
                  valid_events_dir: str = None,
                  check: bool = False) -> None:
@@ -106,8 +108,8 @@ class DyGIE(Model):
         self._max_span_width = max_span_width
 
         # Read valid event configurations.
-        self._valid_events = self._read_valid_events(valid_events_dir)
-        self._joint_metrics = JointMetrics(self._valid_events)
+        #self._valid_events = self._read_valid_events(valid_events_dir)
+        #self._joint_metrics = JointMetrics(self._valid_events)
 
         self._display_metrics = display_metrics
 
@@ -122,6 +124,10 @@ class DyGIE(Model):
             self._lstm_dropout = torch.nn.Dropout(p=lstm_dropout)
         else:
             self._lstm_dropout = lambda x: x
+
+        self.rel_prop = rel_prop
+        self.coref_prop = coref_prop
+
         initializer(self)
 
     @overrides
@@ -143,13 +149,40 @@ class DyGIE(Model):
         relation_labels = relation_labels.long()
         argument_labels = argument_labels.long()
 
+
         # Shape: (batch_size, max_sentence_length, embedding_size)
         text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
 
         # Shape: (batch_size, max_sentence_length)
         text_mask = util.get_text_field_mask(text).float()
+        sentence_group_lengths = text_mask.sum(dim=1).long()
 
         sentence_lengths = text_mask.sum(dim=1).long()
+        for i in range(len(metadata)):
+            sentence_lengths[i] = metadata[i]["end_ix"] - metadata[i]["start_ix"]
+            for k in range(sentence_lengths[i], sentence_group_lengths[i]):
+                text_mask[i][k] = 0
+
+
+
+        # TODO(Ulme) Speed this up by tensorizing
+        new_text_embeddings = torch.zeros(text_embeddings.shape, device=text_embeddings.device)
+        for i in range(len(new_text_embeddings)):
+            new_text_embeddings[i][0:metadata[i]["end_ix"] - metadata[i]["start_ix"]] = text_embeddings[i][metadata[i]["start_ix"]:metadata[i]["end_ix"]]
+        
+        #max_sent_len = max(sentence_lengths)
+        #the_list = [list(k+metadata[i]["start_ix"] if k < max_sent_len else 0 for k in range(text_embeddings.shape[1])) for i in range(len(metadata))]
+        #import ipdb; ipdb.set_trace()
+        #text_embeddings = torch.gather(text_embeddings, 1, torch.tensor(the_list, device=text_embeddings.device).unsqueeze(2).repeat(1, 1, text_embeddings.shape[2]))
+        text_embeddings = new_text_embeddings
+        
+
+        # Shape: (batch_size, max_sentence_length, encoding_dim)
+        contextualized_embeddings = self._lstm_dropout(self._context_layer(text_embeddings, text_mask))
+
+        if self._attentive_span_extractor is not None:
+            # Shape: (batch_size, num_spans, emebedding_size)
+            attended_span_embeddings = self._attentive_span_extractor(text_embeddings, spans)
 
         # Shape: (batch_size, num_spans)
         span_mask = (spans[:, :, 0] >= 0).float()
@@ -163,18 +196,17 @@ class DyGIE(Model):
         # Shape: (batch_size, num_spans, 2)
         spans = F.relu(spans.float()).long()
 
-        # Shape: (batch_size, max_sentence_length, encoding_dim)
-        contextualized_embeddings = self._lstm_dropout(self._context_layer(text_embeddings, text_mask))
         # Shape: (batch_size, num_spans, 2 * encoding_dim + feature_size)
         endpoint_span_embeddings = self._endpoint_span_extractor(contextualized_embeddings, spans)
 
         if self._attentive_span_extractor is not None:
-            # Shape: (batch_size, num_spans, emebedding_size)
-            attended_span_embeddings = self._attentive_span_extractor(text_embeddings, spans)
             # Shape: (batch_size, num_spans, emebedding_size + 2 * encoding_dim + feature_size)
             span_embeddings = torch.cat([endpoint_span_embeddings, attended_span_embeddings], -1)
         else:
             span_embeddings = endpoint_span_embeddings
+
+        # TODO(Ulme) try normalizing span embeddeings
+        #span_embeddings = span_embeddings.abs().sum(dim=-1).unsqueeze(-1)
 
         # Make calls out to the modules to get results.
         output_coref = {'loss': 0}
@@ -182,17 +214,35 @@ class DyGIE(Model):
         output_relation = {'loss': 0}
         output_events = {'loss': 0}
 
-        if self._loss_weights['coref'] > 0:
-            output_coref = self._coref(
-                spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
+        # Prune and compute span representations
+        output_relation = self._relation.compute_representations(
+            spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
+        # TODO(Ulme) Split the forward method of the coreference module up into parts
+        #output_coref = self._coref.compute_representations()
+
+        # Propagation of global information to enhance the span embeddings
+        if self.coref_prop > 0:
+            print("Coref prop is not implemented yet")
+            exit()
+            # TODO(Ulme) Implement Coref Propagation
+            #span_embeddings = self.update_span_embeddings(span_embeddings, span_mask, top_span_embeddings, top_span_mask, top_span_indices)
+
+        if self.rel_prop > 0:
+            output_relation = self._relation.relation_propagation(output_relation)
+            span_embeddings = self.update_span_embeddings(span_embeddings, span_mask, output_relation["top_span_embeddings"], output_relation["top_span_mask"], output_relation["top_span_indices"])
+
+        # Make predictions and compute losses for each module
         if self._loss_weights['ner'] > 0:
             output_ner = self._ner(
                 spans, span_mask, span_embeddings, sentence_lengths, ner_labels, metadata)
 
+        if self._loss_weights['coref'] > 0:
+            output_coref = self._coref(
+                spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
+
         if self._loss_weights['relation'] > 0:
-            output_relation = self._relation(
-                spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
+            output_relation = self._relation.predict_labels(relation_labels, output_relation, metadata)
 
         if self._loss_weights['events'] > 0:
             output_events = self._events(
@@ -220,6 +270,17 @@ class DyGIE(Model):
                                 decoded["events"]["decoded_events"])
 
         return output_dict
+
+    def update_span_embeddings(self, span_embeddings, span_mask, top_span_embeddings, top_span_mask, top_span_indices):
+        # TODO(Ulme) Speed this up by tensorizing
+
+        new_span_embeddings = span_embeddings.clone()
+        for sample_nr in range(len(top_span_mask)):
+            for top_span_nr, span_nr in enumerate(top_span_indices[sample_nr]):
+                if top_span_mask[sample_nr, top_span_nr] == 0 or span_mask[sample_nr, span_nr] == 0:
+                    break
+                new_span_embeddings[sample_nr, span_nr] = top_span_embeddings[sample_nr, top_span_nr]
+        return new_span_embeddings
 
     @overrides
     def decode(self, output_dict: Dict[str, torch.Tensor]):

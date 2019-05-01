@@ -124,8 +124,11 @@ class IEJsonReader(DatasetReader):
     def __init__(self,
                  max_span_width: int,
                  token_indexers: Dict[str, TokenIndexer] = None,
+                 context_width: int = 1,
                  lazy: bool = False) -> None:
         super().__init__(lazy)
+        assert (context_width % 2 == 1) and (context_width > 0)
+        self.k = int( (context_width - 1) / 2)
         self._max_span_width = max_span_width
         self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
 
@@ -144,6 +147,10 @@ class IEJsonReader(DatasetReader):
                 # If some fields are missing in the data set, fill them with empties.
                 # TODO(dwadden) do this more cleanly once things are running.
                 n_sentences = len(js["sentences"])
+                # TODO(Ulme) Make it so that the
+                js["sentence_groups"] = [[self._normalize_word(word) for sentence in js["sentences"][max(0, i-self.k):min(n_sentences, i + self.k + 1)] for word in sentence] for i in range(n_sentences)]
+                js["sentence_start_index"] = [sum(len(js["sentences"][i-j-1]) for j in range(min(self.k, i))) if i > 0 else 0 for i in range(n_sentences)]
+                js["sentence_end_index"] = [js["sentence_start_index"][i] + len(js["sentences"][i]) for i in range(n_sentences)]
                 if "clusters" not in js:
                     js["clusters"] = []
                 for field in ["ner", "relations", "events"]:
@@ -151,13 +158,11 @@ class IEJsonReader(DatasetReader):
                         js[field] = [[] for _ in range(n_sentences)]
 
                 cluster_dict_doc = make_cluster_dict(js["clusters"])
-                for field in ["ner", "relations", "events"]:
-                    if field not in js:
-                        js[field] = [[] for _ in range(n_sentences)]
-                zipped = zip(js["sentences"], js["ner"], js["relations"], js["events"])
+                #zipped = zip(js["sentences"], js["ner"], js["relations"], js["events"])
+                zipped = zip(js["sentences"], js["ner"], js["relations"], js["events"], js["sentence_groups"], js["sentence_start_index"], js["sentence_end_index"])
 
                 # Loop over the sentences.
-                for sentence_num, (sentence, ner, relations, events) in enumerate(zipped):
+                for sentence_num, (sentence, ner, relations, events, groups, start_ix, end_ix) in enumerate(zipped):
 
                     sentence_end = sentence_start + len(sentence) - 1
                     cluster_tmp, cluster_dict_doc = cluster_dict_sentence(
@@ -170,7 +175,7 @@ class IEJsonReader(DatasetReader):
                     sentence_start += len(sentence)
                     instance = self.text_to_instance(
                         sentence, ner_dict, relation_dict, cluster_dict, trigger_dict, argument_dict,
-                        doc_key, sentence_num)
+                        doc_key, sentence_num, groups, start_ix, end_ix)
                     yield instance
 
     @overrides
@@ -182,7 +187,10 @@ class IEJsonReader(DatasetReader):
                          trigger_dict,
                          argument_dict,
                          doc_key: str,
-                         sentence_num: int):
+                         sentence_num: int,
+                         groups: List[str],
+                         start_ix: int,
+                         end_ix: int):
         """
         TODO(dwadden) document me.
         """
@@ -190,6 +198,7 @@ class IEJsonReader(DatasetReader):
         sentence = [self._normalize_word(word) for word in sentence]
 
         text_field = TextField([Token(word) for word in sentence], self._token_indexers)
+        text_field_with_context = TextField([Token(word) for word in groups], self._token_indexers)
 
         # Put together the metadata.
         metadata = dict(sentence=sentence,
@@ -199,6 +208,9 @@ class IEJsonReader(DatasetReader):
                         trigger_dict=trigger_dict,
                         argument_dict=argument_dict,
                         doc_key=doc_key,
+                        groups=groups,
+                        start_ix=start_ix,
+                        end_ix=end_ix,
                         sentence_num=sentence_num)
         metadata_field = MetadataField(metadata)
 
@@ -264,7 +276,7 @@ class IEJsonReader(DatasetReader):
             label_namespace="argument_labels")
 
         # Pull it  all together.
-        fields = dict(text=text_field,
+        fields = dict(text=text_field_with_context,
                       spans=span_field,
                       ner_labels=ner_label_field,
                       coref_labels=coref_label_field,
@@ -278,8 +290,6 @@ class IEJsonReader(DatasetReader):
     @staticmethod
     def _normalize_word(word):
         if word == "/." or word == "/?":
-            print('it was used')
-            exit()
             return word[1:]
         else:
             return word
