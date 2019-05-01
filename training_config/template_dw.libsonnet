@@ -22,7 +22,8 @@ function(p) {
 
   local glove_dim = 300,
   local elmo_dim = 1024,
-  local bert_dim = 768,
+  local bert_base_dim = 768,
+  local bert_large_dim = 1024,
 
   local module_initializer = [
     [".*weight", {"type": "xavier_normal"}],
@@ -42,6 +43,7 @@ function(p) {
   local getattr(obj, attrname, default) = if attrname in obj then p[attrname] else default,
 
   // Calculating dimensions.
+  local use_bert = (if p.use_bert_base then true else if p.use_bert_large then true else false),
 
   // If true, use ner and trigger labels as features to predict event arguments.
   // TODO(dwadden) At some point I should make arguments like this mandatory.
@@ -58,7 +60,8 @@ function(p) {
   local token_embedding_dim = ((if p.use_glove then glove_dim else 0) +
     (if p.use_char then p.char_n_filters else 0) +
     (if p.use_elmo then elmo_dim else 0) +
-    (if p.use_bert then bert_dim else 0)),
+    (if p.use_bert_base then bert_base_dim else 0) +
+    (if p.use_bert_large then bert_large_dim else 0)),
   local endpoint_span_emb_dim = 4 * p.lstm_hidden_size + p.feature_size,
   local attended_span_emb_dim = if p.use_attentive_span_extractor then token_embedding_dim else 0,
   local span_emb_dim = endpoint_span_emb_dim + attended_span_emb_dim,
@@ -116,19 +119,19 @@ function(p) {
     [if p.use_elmo then "elmo"]: {
       type: "elmo_characters"
     },
-    [if p.use_bert then "bert"]: {
+    [if use_bert then "bert"]: {
       type: "bert-pretrained",
-      pretrained_model: "bert-base-cased",
+      pretrained_model: (if p.use_bert_base then "bert-base-cased" else "bert-large-cased"),
       do_lowercase: false,
       use_starting_offsets: true
     }
   },
 
   local text_field_embedder = {
-    [if p.use_bert then "allow_unmatched_keys"]: true,
-    [if p.use_bert then "embedder_to_indexer_map"]: {
+    [if use_bert then "allow_unmatched_keys"]: true,
+    [if use_bert then "embedder_to_indexer_map"]: {
       bert: ["bert", "bert-offsets"],
-      token_characters: ["token_characters"],
+      token_characters: ["token_characters"]
     },
     token_embedders: {
       [if p.use_glove then "tokens"]: {
@@ -157,9 +160,10 @@ function(p) {
         do_layer_norm: false,
         dropout: 0.5
       },
-      [if p.use_bert then "bert"]: {
+      [if use_bert then "bert"]: {
         type: "bert-pretrained",
-        pretrained_model: "bert-base-cased"
+        pretrained_model: (if p.use_bert_base then "bert-base-cased" else "bert-large-cased"),
+        requires_grad: p.finetune_bert
       }
     }
   },
@@ -171,7 +175,8 @@ function(p) {
   dataset_reader: {
     type: "ie_json",
     token_indexers: token_indexers,
-    max_span_width: p.max_span_width
+    max_span_width: p.max_span_width,
+    context_width: p.context_width
   },
   train_data_path: std.extVar("ie_train_data_path"),
   validation_data_path: std.extVar("ie_dev_data_path"),
@@ -187,6 +192,7 @@ function(p) {
     loss_weights: p.loss_weights,
     lexical_dropout: p.lexical_dropout,
     lstm_dropout: p.lstm_dropout,
+    rel_prop: p.rel_prop,
     feature_size: p.feature_size,
     use_attentive_span_extractor: p.use_attentive_span_extractor,
     max_span_width: p.max_span_width,
@@ -218,6 +224,10 @@ function(p) {
         positive_label_weight: p.relation_positive_label_weight,
         mention_feedforward: make_feedforward(span_emb_dim),
         relation_feedforward: make_feedforward(relation_scorer_dim),
+        rel_prop_dropout_A: p.rel_prop_dropout_A,
+        rel_prop_dropout_f: p.rel_prop_dropout_f,
+        rel_prop: p.rel_prop,
+        span_emb_dim: span_emb_dim,
         initializer: module_initializer
       },
       events: {

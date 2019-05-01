@@ -108,8 +108,8 @@ class DyGIE(Model):
         self._max_span_width = max_span_width
 
         # Read valid event configurations.
-        #self._valid_events = self._read_valid_events(valid_events_dir)
-        #self._joint_metrics = JointMetrics(self._valid_events)
+        self._valid_events = self._read_valid_events(valid_events_dir)
+        self._joint_metrics = JointMetrics(self._valid_events)
 
         self._display_metrics = display_metrics
 
@@ -169,13 +169,13 @@ class DyGIE(Model):
         new_text_embeddings = torch.zeros(text_embeddings.shape, device=text_embeddings.device)
         for i in range(len(new_text_embeddings)):
             new_text_embeddings[i][0:metadata[i]["end_ix"] - metadata[i]["start_ix"]] = text_embeddings[i][metadata[i]["start_ix"]:metadata[i]["end_ix"]]
-        
+
         #max_sent_len = max(sentence_lengths)
         #the_list = [list(k+metadata[i]["start_ix"] if k < max_sent_len else 0 for k in range(text_embeddings.shape[1])) for i in range(len(metadata))]
         #import ipdb; ipdb.set_trace()
         #text_embeddings = torch.gather(text_embeddings, 1, torch.tensor(the_list, device=text_embeddings.device).unsqueeze(2).repeat(1, 1, text_embeddings.shape[2]))
         text_embeddings = new_text_embeddings
-        
+
 
         # Shape: (batch_size, max_sentence_length, encoding_dim)
         contextualized_embeddings = self._lstm_dropout(self._context_layer(text_embeddings, text_mask))
