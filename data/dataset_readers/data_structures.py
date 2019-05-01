@@ -44,11 +44,14 @@ class Sentence:
         self.events = Events(entry["events"], self.text, sentence_start)
 
         # Predicted
-        self.predicted_ner = [NER(this_ner, self.text, sentence_start) for
-                              this_ner in entry["predicted_ner"]]
-        self.predicted_relations = [Relation(this_relation, self.text, sentence_start) for
-                                    this_relation in entry["predicted_relations"]]
-        self.predicted_events = Events(entry["predicted_events"], self.text, sentence_start)
+        if "predicted_ner" in entry:
+            self.predicted_ner = [NER(this_ner, self.text, sentence_start) for
+                                  this_ner in entry["predicted_ner"]]
+        if "predicted_relations" in entry:
+            self.predicted_relations = [Relation(this_relation, self.text, sentence_start) for
+                                        this_relation in entry["predicted_relations"]]
+        if "predicted_events" in entry:
+            self.predicted_events = Events(entry["predicted_events"], self.text, sentence_start)
 
     def __repr__(self):
         the_text = " ".join(self.text)
