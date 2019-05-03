@@ -298,7 +298,7 @@ function(p) {
     num_epochs: p.num_epochs,
     grad_norm: 5.0,
     patience : p.patience,
-    cuda_device : std.parseInt(std.extVar("cuda_device")),
+    cuda_device : [std.parseInt(x) for x in std.split(std.extVar("cuda_device"), ",")],
     validation_metric: validation_metrics[p.target],
     learning_rate_scheduler: p.learning_rate_scheduler,
     optimizer: p.optimizer
