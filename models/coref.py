@@ -73,9 +73,38 @@ class CorefResolver(Model):
         self._mention_recall = MentionRecall()
         self._conll_coref_scores = ConllCorefScores()
 
+        span_emb_dim = 820
+        self._f_network = FeedForward(input_dim=2*span_emb_dim,
+                                      num_layers=1,
+                                      hidden_dims=span_emb_dim,
+                                      activations=torch.nn.Sigmoid(),
+                                      dropout=coref_prop_dropout_f)
+
+        self.softmax = torch.nn.SoftMax()
         initializer(self)
 
+    def coref_propagation(self, output_dict):
+        for doc_key in output_dict:
+            output_dict[doc_key] = self.coref_propagation_doc(output_dict[doc_key])
+
+    def coref_propagation_doc(self, output_dict):
+        coreference_scores = output_dict["coreference_scores"]
+        top_span_embeddings = output_dict["top_span_embeddings"]
+        for t in range(self.coref_prop):
+            coreference_probabilities = self.softmax(coreference_scores)[:, :, 1:].unsqueeze(3).repeat(1,1,1,top_span_embeddings.shape[-1])
+            top_span_embeddings_repeated = top_span_embeddings.unsqueeze(2).repeat(1, 1, coreference_probabilities.shape[2], 1)
+            entity_embs = torch.sum(antecedent_distribution * top_span_embeddings_repeated, dim=2)
+            f_network_input = torch.cat([top_span_embeddings, entity_embs], dim=-1)
+            f_weights = self._f_network(f_network_input)
+            top_span_embeddings = f_weights * top_span_embeddings + (1.0 - f_weights) * entity_embs
+            coreference_scores = self.get_coreference_scores(top_span_embeddings, self._mention_pruner._scorer(top_span_embeddings))
+
+        output_dict["coreference_scores"] = coreference_scores
+        output_dict["top_span_embeddings"] = top_span_embeddings
+        return output_dict
+
     @overrides
+    #def create_docs(self,  # type: ignore
     def forward(self,  # type: ignore
                 spans_batched: torch.IntTensor,
                 span_mask_batched,
@@ -103,6 +132,9 @@ class CorefResolver(Model):
                 spans_batched[ix], span_mask_batched[ix], span_embeddings_batched[ix],
                 sentence_lengths[ix], coref_labels_batched[ix], doc_metadata)
 
+        return self.collect_losses(output_docs, uniq_keys)
+
+    def collect_losses(self, output_docs, uniq_keys):
         losses = torch.cat([entry["loss"].unsqueeze(0) for entry in output_docs.values()])
         loss = torch.sum(losses)
 
@@ -146,8 +178,7 @@ class CorefResolver(Model):
         num_spans = spans.size(1)
 
         # Prune based on mention scores. Make sure we keep at least 1.
-        num_spans_to_keep = int(math.floor(self._spans_per_word * document_length))
-        num_spans_to_keep = max(num_spans_to_keep, 1)
+        num_spans_to_keep = int(math.ceil(self._spans_per_word * document_length))
 
         # Since there's only one minibatch, there aren't any masked spans for us. The span mask is
         # always 1.
@@ -175,10 +206,48 @@ class CorefResolver(Model):
         # (1, num_spans_to_keep, max_antecedents)
         valid_antecedent_indices, valid_antecedent_offsets, valid_antecedent_log_mask = \
             self._generate_valid_antecedents(num_spans_to_keep, max_antecedents, util.get_device_of(span_embeddings))
-        # Select tensors relating to the antecedent spans.
-        # Shape: (batch_size, num_spans_to_keep, max_antecedents, embedding_size)
+
+        ## Select tensors relating to the antecedent spans.
+        ## Shape: (batch_size, num_spans_to_keep, max_antecedents, embedding_size)
+        #candidate_antecedent_embeddings = util.flattened_index_select(top_span_embeddings,
+        #                                                              valid_antecedent_indices)
+        ## Shape: (batch_size, num_spans_to_keep, max_antecedents)
+        #candidate_antecedent_mention_scores = util.flattened_index_select(top_span_mention_scores,
+        #                                                                  valid_antecedent_indices).squeeze(-1)
+        ## Compute antecedent scores.
+        ## Shape: (batch_size, num_spans_to_keep, max_antecedents, embedding_size)
+        #span_pair_embeddings = self._compute_span_pair_embeddings(top_span_embeddings,
+        #                                                          candidate_antecedent_embeddings,
+        #                                                          valid_antecedent_offsets)
+        ## Shape: (batch_size, num_spans_to_keep, 1 + max_antecedents)
+        #coreference_scores = self._compute_coreference_scores(span_pair_embeddings,
+        #                                                      top_span_mention_scores,
+        #                                                      candidate_antecedent_mention_scores,
+        #                                                      valid_antecedent_log_mask)
+        coreference_scores = self.get_coref_scores(top_span_embeddings, top_span_mention_scores, valid_antecedent_indices, valid_antecedent_offsets)
+
+        output_dict = {"top_spans": top_spans,
+                       "antecedent_indices": valid_antecedent_indices,
+                       "valid_antecedent_log_mask": valid_antecedent_log_mask,
+                       "top_span_indices": top_span_indices,
+                       "top_span_embeddings": top_span_embeddings,
+                       "flat_top_span_indices", flat_top_span_indices,
+                       "coreference_scores": coreference_scores}
+
+        return self.predict_labels_doc(coref_labels, output_dict)
+
+    # TODO(Ulme) Split up method here?
+
+    def get_coref_scores(self,
+                         top_span_embeddings,
+                         top_span_mention_scores,
+                         valid_antecedent_indices,
+                         valid_antecedent_offsets):
         candidate_antecedent_embeddings = util.flattened_index_select(top_span_embeddings,
                                                                       valid_antecedent_indices)
+
+
+
 
         # Shape: (batch_size, num_spans_to_keep, max_antecedents)
         candidate_antecedent_mention_scores = util.flattened_index_select(top_span_mention_scores,
@@ -194,17 +263,24 @@ class CorefResolver(Model):
                                                               candidate_antecedent_mention_scores,
                                                               valid_antecedent_log_mask)
 
+        return coreference_scores
+
+    def predict_labels_doc(self, coref_labels, output_dict):
         # Shape: (batch_size, num_spans_to_keep)
         _, predicted_antecedents = coreference_scores.max(2)
         # Subtract one here because index 0 is the "no antecedent" class,
         # so this makes the indices line up with actual spans if the prediction
         # is greater than -1.
         predicted_antecedents -= 1
+        
+        output_dict["predicted_antecedents"] = predicted_antecedents
 
-        output_dict = {"top_spans": top_spans,
-                       "antecedent_indices": valid_antecedent_indices,
-                       "coreference_scores": coreference_scores,
-                       "predicted_antecedents": predicted_antecedents}
+        top_span_indices = output_dict["top_span_indices"]
+        flat_top_span_indices = output_dict["flat_top_span_indices"]
+        antecedent_indices = output_dict["valid_antecedent_indices"]
+        valid_antecedent_log_mask = output_dict["valid_antecedent_log_mask"]
+        top_spans = output_dict["top_spans"]
+
         if coref_labels is not None:
             # Find the gold labels for the spans which we kept.
             pruned_gold_labels = util.batched_index_select(coref_labels.unsqueeze(-1),
