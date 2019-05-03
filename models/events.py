@@ -19,8 +19,8 @@ from dygie.training.event_metrics import EventMetrics, ArgumentStats
 from dygie.models.shared import fields_to_batches
 from dygie.models.one_hot import make_embedder
 from dygie.models.entity_beam_pruner import make_pruner
+from dygie.models.graph_attention import GraphAttention
 
-# TODO(dwadden) rename NERMetrics
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -52,6 +52,7 @@ class EventExtractor(Model):
                  shared_attention_context: bool,
                  label_embedding_method: str,
                  event_args_label_predictor: str,
+                 graph_attn_input_dim: int,
                  event_args_gold_candidates: bool = False,  # If True, use gold argument candidates.
                  context_window: int = 0,
                  initializer: InitializerApplicator = InitializerApplicator(),
@@ -123,6 +124,9 @@ class EventExtractor(Model):
         self._shared_attention_context = shared_attention_context
         if self._shared_attention_context:
             self._shared_attention_context_module = context_attention
+
+        self._graph_attention = GraphAttention(
+            graph_attn_input_dim, self._argument_feedforward.get_input_dim())
 
         # TODO(dwadden) Add metrics.
         self._metrics = EventMetrics()
@@ -225,7 +229,8 @@ class EventExtractor(Model):
 
         trig_arg_embeddings = self._compute_trig_arg_embeddings(
             top_trig_embeddings, top_arg_embeddings, top_trig_labels, top_ner_labels,
-            top_trig_indices, top_arg_spans, trigger_embeddings, trigger_mask)
+            top_trig_indices, top_arg_spans, trigger_embeddings, trigger_mask, num_trigs_kept,
+            num_arg_spans_kept)
 
         argument_scores = self._compute_argument_scores(
             trig_arg_embeddings, top_trig_scores, top_arg_scores)
@@ -345,7 +350,7 @@ class EventExtractor(Model):
     def _compute_trig_arg_embeddings(self,
                                      top_trig_embeddings, top_arg_embeddings, top_trig_labels,
                                      top_ner_labels, top_trig_indices, top_arg_spans, text_emb,
-                                     text_mask):
+                                     text_mask, num_trigs_kept, num_arg_spans_kept):
         """
         Create trigger / argument pair embeddings, consisting of:
         - The embeddings of the trigger and argument pair.
@@ -372,6 +377,7 @@ class EventExtractor(Model):
                     top_trig_embs = top_trig_labels
                 else:
                     # Otherwise take the average of the embeddings, weighted by softmax scores.
+
                     top_trig_embs = torch.matmul(top_trig_labels, self._trigger_label_emb.weight)
                 trig_emb_list.append(top_trig_embs)
             else:
@@ -408,6 +414,9 @@ class EventExtractor(Model):
         if self._shared_attention_context:
             attended_context = self._get_shared_attention_context(pair_embeddings, text_emb, text_mask)
             pair_embeddings = torch.cat([pair_embeddings, attended_context], dim=3)
+
+        pair_embeddings = self._graph_attention(
+            pair_embeddings, num_trigs_kept, num_arg_spans_kept)
 
         return pair_embeddings
 

@@ -90,8 +90,9 @@ function(p) {
     (if event_args_use_ner_labels then ner_label_dim else 0) +
     (if event_args_use_trigger_labels then trigger_label_dim else 0) +
     (if events_context_window > 0 then 8 * events_context_window * p.lstm_hidden_size else 0)),
-  local argument_scorer_dim = (argument_pair_dim +
+  local graph_attn_input_dim = (argument_pair_dim +
     (if shared_attention_context then trigger_emb_dim else 0)),
+  local argument_scorer_dim = 1000,
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -237,6 +238,7 @@ function(p) {
         trigger_feedforward: make_feedforward(trigger_scorer_dim), // Factor of 2 because of self attention.
         trigger_candidate_feedforward: make_feedforward(trigger_emb_dim),
         mention_feedforward: make_feedforward(span_emb_dim),
+        graph_attn_input_dim: graph_attn_input_dim,
         argument_feedforward: make_feedforward(argument_scorer_dim),
         event_args_use_trigger_labels: event_args_use_trigger_labels,
         event_args_use_ner_labels: event_args_use_ner_labels,
