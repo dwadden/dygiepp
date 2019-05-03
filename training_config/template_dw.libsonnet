@@ -62,13 +62,17 @@ function(p) {
     (if p.use_elmo then elmo_dim else 0) +
     (if p.use_bert_base then bert_base_dim else 0) +
     (if p.use_bert_large then bert_large_dim else 0)),
-  local endpoint_span_emb_dim = 4 * p.lstm_hidden_size + p.feature_size,
+  // If we're using Bert, no LSTM. We just pass the token embeddings right through.
+  local context_layer_output_size = (if p.finetune_bert
+    then token_embedding_dim
+    else 2 * p.lstm_hidden_size),
+  local endpoint_span_emb_dim = 2 * context_layer_output_size + p.feature_size,
   local attended_span_emb_dim = if p.use_attentive_span_extractor then token_embedding_dim else 0,
   local span_emb_dim = endpoint_span_emb_dim + attended_span_emb_dim,
   local pair_emb_dim = 3 * span_emb_dim,
   local relation_scorer_dim = pair_emb_dim,
   local coref_scorer_dim = pair_emb_dim + p.feature_size,
-  local trigger_emb_dim = 2 * p.lstm_hidden_size,  // Triggers are single contextualized tokens.
+  local trigger_emb_dim = context_layer_output_size,  // Triggers are single contextualized tokens.
   local trigger_scorer_dim = (if trigger_attention_context then 2 * trigger_emb_dim else trigger_emb_dim),
 
   // Calculation of argument scorer dim is a bit tricky. First, there's the triggers and the span
@@ -89,7 +93,7 @@ function(p) {
   local argument_pair_dim = (trigger_emb_dim + span_emb_dim + p.feature_size + 2 +
     (if event_args_use_ner_labels then ner_label_dim else 0) +
     (if event_args_use_trigger_labels then trigger_label_dim else 0) +
-    (if events_context_window > 0 then 8 * events_context_window * p.lstm_hidden_size else 0)),
+    (if events_context_window > 0 then 4 * events_context_window * context_layer_output_size else 0)),
   local graph_attn_input_dim = (argument_pair_dim +
     (if shared_attention_context then trigger_emb_dim else 0)),
   local argument_scorer_dim = 1000,
@@ -171,6 +175,28 @@ function(p) {
 
   ////////////////////////////////////////////////////////////////////////////////
 
+  // Modules
+
+  // If finetuning Bert, no LSTM. Just pass through.
+  local context_layer = (if p.finetune_bert
+    then {
+      type: "pass_through",
+      input_dim: token_embedding_dim
+    }
+    else {
+      type: "lstm",
+      bidirectional: true,
+      input_size: token_embedding_dim,
+      hidden_size: p.lstm_hidden_size,
+      num_layers: p.lstm_n_layers,
+      dropout: p.lstm_dropout
+    }
+  ),
+
+
+  ////////////////////////////////////////////////////////////////////////////////
+
+
   // The model
 
   dataset_reader: {
@@ -200,14 +226,7 @@ function(p) {
     display_metrics: display_metrics[p.target],
     valid_events_dir: valid_events_dir,
     check: getattr(p, "check", false), // If true, run a bunch of correctness assertions in the code.
-    context_layer: {
-      type: "lstm",
-      bidirectional: true,
-      input_size: token_embedding_dim,
-      hidden_size: p.lstm_hidden_size,
-      num_layers: p.lstm_n_layers,
-      dropout: p.lstm_dropout
-    },
+    context_layer: context_layer,
     modules: {
       coref: {
         spans_per_word: p.coref_spans_per_word,
@@ -281,7 +300,7 @@ function(p) {
     num_epochs: p.num_epochs,
     grad_norm: 5.0,
     patience : p.patience,
-    cuda_device : std.parseInt(std.extVar("cuda_device")),
+    cuda_device : [std.parseInt(x) for x in std.split(std.extVar("cuda_device"), ",")],
     validation_metric: validation_metrics[p.target],
     learning_rate_scheduler: p.learning_rate_scheduler,
     optimizer: p.optimizer
