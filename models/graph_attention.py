@@ -19,7 +19,7 @@ class GraphAttention(torch.nn.Module):
         head_dim = int(output_dim / num_heads)
         self._input_layer = GATConv(in_channels=input_dim, out_channels=head_dim,
                                     heads=num_heads, concat=True, dropout=dropout)
-        self._output_layer = GATConv(in_channels=head_dim, out_channels=head_dim,
+        self._output_layer = GATConv(in_channels=head_dim * num_heads, out_channels=head_dim,
                                      heads=num_heads, concat=True, dropout=dropout)
         self._init_params()
 
@@ -32,17 +32,22 @@ class GraphAttention(torch.nn.Module):
     def forward(self, pair_embeddings, num_trigs_kept, num_arg_spans_kept):
         # Get the data ready
         batch_size = pair_embeddings.size(0)
-        emb_slice = pair_embeddings[0, :num_trigs_kept[0], :num_arg_spans_kept[0]]
+        res = []
 
-        row_ix, _ = torch.sort(torch.arange(num_trigs_kept[0]).repeat(num_arg_spans_kept[0]))
-        col_ix = torch.arange(num_arg_spans_kept[0]).repeat(num_trigs_kept[0])
-        adj = (row_ix == row_ix.unsqueeze(1)) | (col_ix == col_ix.unsqueeze(1))
-        emb_flat = emb_slice.contiguous().view(-1, emb_slice.size(-1))
-        edge_index = adj.nonzero().t().cuda(emb_flat.device)  # This is how the model needs it.
+        for i in batch_size:
+            n_trig = num_trigs_kept[i]
+            n_span = num_arg_spans_kept[i]
+            emb_slice = pair_embeddings[i, :n_trig, :n_span]
+            pad = torch.zeros_like(emb_slice)
 
-        import ipdb; ipdb.set_trace()
+            row_ix, _ = torch.sort(torch.arange(n_trig).repeat(n_span))
+            col_ix = torch.arange(n_span).repeat(n_trig)
+            adj = (row_ix == row_ix.unsqueeze(1)) | (col_ix == col_ix.unsqueeze(1))
+            emb_flat = emb_slice.contiguous().view(-1, emb_slice.size(-1))
+            edge_index = adj.nonzero().t().cuda(emb_flat.device)  # This is how the model needs it.
 
-        x = self._input_layer(emb_flat, edge_index)
-        x = F.elu(x)
-        x = self._output_layer(x, edge_index)
-        return F.elu(x)
+            x = self._input_layer(emb_flat, edge_index)
+            x = F.elu(x)
+            x = self._output_layer(x, edge_index)
+            x = F.elu(x)
+            import ipdb; ipdb.set_trace()
