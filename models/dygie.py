@@ -172,8 +172,8 @@ class DyGIE(Model):
 
         # Only keep the text embeddings that correspond to actual tokens.
         max_sentence_length = sentence_lengths.max().item()
-        text_embeddings = text_embeddings[:, :max_sentence_length, :]
-        text_mask = text_mask[:, :max_sentence_length]
+        text_embeddings = text_embeddings[:, :max_sentence_length, :].contiguous()
+        text_mask = text_mask[:, :max_sentence_length].contiguous()
 
         # Shape: (batch_size, max_sentence_length, encoding_dim)
         contextualized_embeddings = self._lstm_dropout(self._context_layer(text_embeddings, text_mask))
