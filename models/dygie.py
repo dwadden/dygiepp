@@ -77,22 +77,26 @@ class DyGIE(Model):
         self._loss_weights = loss_weights.as_dict()
 
         # TODO(dwadden) Figure out the parameters that need to get passed in.
-        self._coref = CorefResolver.from_params(vocab=vocab,
-                                                feature_size=feature_size,
-                                                check=check,
-                                                params=modules.pop("coref"))
-        self._ner = NERTagger.from_params(vocab=vocab,
-                                          feature_size=feature_size,
-                                          check=check,
-                                          params=modules.pop("ner"))
-        self._relation = RelationExtractor.from_params(vocab=vocab,
-                                                       feature_size=feature_size,
-                                                       check=check,
-                                                       params=modules.pop("relation"))
-        self._events = EventExtractor.from_params(vocab=vocab,
-                                                  feature_size=feature_size,
-                                                  check=check,
-                                                  params=modules.pop("events"))
+        if self._loss_weights["coref"] > 0:
+            self._coref = CorefResolver.from_params(vocab=vocab,
+                                                    feature_size=feature_size,
+                                                    check=check,
+                                                    params=modules.pop("coref"))
+        if self._loss_weights["ner"] > 0:
+            self._ner = NERTagger.from_params(vocab=vocab,
+                                              feature_size=feature_size,
+                                              check=check,
+                                              params=modules.pop("ner"))
+        if self._loss_weights["relation"] > 0:
+            self._relation = RelationExtractor.from_params(vocab=vocab,
+                                                           feature_size=feature_size,
+                                                           check=check,
+                                                           params=modules.pop("relation"))
+        if self._loss_weights["events"] > 0:
+            self._events = EventExtractor.from_params(vocab=vocab,
+                                                      feature_size=feature_size,
+                                                      check=check,
+                                                      params=modules.pop("events"))
 
         self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
                                                               combination="x,y",
@@ -214,9 +218,9 @@ class DyGIE(Model):
         output_relation = {'loss': 0}
         output_events = {'loss': 0}
 
-        # Prune and compute span representations
-        output_relation = self._relation.compute_representations(
-            spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
+        # # Prune and compute span representations
+        # output_relation = self._relation.compute_representations(
+        #     spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
         # TODO(Ulme) Split the forward method of the coreference module up into parts
         #output_coref = self._coref.compute_representations()
@@ -320,19 +324,18 @@ class DyGIE(Model):
         Get all metrics from all modules. For the ones that shouldn't be displayed, prefix their
         keys with an underscore.
         """
-        metrics_coref = self._coref.get_metrics(reset=reset)
+        # metrics_coref = self._coref.get_metrics(reset=reset)
         metrics_ner = self._ner.get_metrics(reset=reset)
-        metrics_relation = self._relation.get_metrics(reset=reset)
+        # metrics_relation = self._relation.get_metrics(reset=reset)
         metrics_events = self._events.get_metrics(reset=reset)
         metrics_joint = self._joint_metrics.get_metric(reset=reset)
 
         # Make sure that there aren't any conflicting names.
-        metric_names = (list(metrics_coref.keys()) + list(metrics_ner.keys()) +
-                        list(metrics_relation.keys()) + list(metrics_events.keys()))
+        # metric_names = (list(metrics_coref.keys()) + list(metrics_ner.keys()) +
+        #                 list(metrics_relation.keys()) + list(metrics_events.keys()))
+        metric_names = (list(metrics_ner.keys()) + list(metrics_events.keys()))
         assert len(set(metric_names)) == len(metric_names)
-        all_metrics = dict(list(metrics_coref.items()) +
-                           list(metrics_ner.items()) +
-                           list(metrics_relation.items()) +
+        all_metrics = dict(list(metrics_ner.items()) +
                            list(metrics_events.items()) +
                            list(metrics_joint.items()))
 
