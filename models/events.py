@@ -177,7 +177,8 @@ class EventExtractor(Model):
 
         (top_trig_embeddings, top_trig_mask,
          top_trig_indices, top_trig_scores, num_trigs_kept) = self._trigger_pruner(
-             trigger_embeddings, trigger_mask, num_trigs_to_keep, trigger_scores)
+             trigger_embeddings, trigger_mask, num_trigs_to_keep, max_items_allowed=4,
+             class_scores=trigger_scores)
         top_trig_mask = top_trig_mask.unsqueeze(-1)
 
         # Compute the number of argument spans to keep.
@@ -190,7 +191,8 @@ class EventExtractor(Model):
         gold_labels = ner_labels if self._event_args_gold_candidates else None
         (top_arg_embeddings, top_arg_mask,
          top_arg_indices, top_arg_scores, num_arg_spans_kept) = self._mention_pruner(
-             span_embeddings, span_mask, num_arg_spans_to_keep, ner_scores, gold_labels)
+             span_embeddings, span_mask, num_arg_spans_to_keep, max_items_allowed=14,
+             class_scores=ner_scores, gold_labels=gold_labels)
 
         if self._check and self._mention_pruner._gold_beam:
             check_gold_pruner()

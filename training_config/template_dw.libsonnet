@@ -96,7 +96,7 @@ function(p) {
     (if events_context_window > 0 then 4 * events_context_window * context_layer_output_size else 0)),
   local graph_attn_input_dim = (argument_pair_dim +
     (if shared_attention_context then trigger_emb_dim else 0)),
-  local argument_scorer_dim = 500,
+  local argument_scorer_dim = 1000,
 
   ////////////////////////////////////////////////////////////////////////////////
 

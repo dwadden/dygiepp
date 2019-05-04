@@ -57,6 +57,7 @@ class Pruner(torch.nn.Module):
                 embeddings: torch.FloatTensor,
                 mask: torch.LongTensor,
                 num_items_to_keep: Union[int, torch.LongTensor],
+                max_items_allowed: int = None,
                 class_scores: torch.FloatTensor = None,
                 gold_labels: torch.long = None) -> Tuple[torch.FloatTensor, torch.LongTensor,
                                                          torch.LongTensor, torch.FloatTensor]:
@@ -136,7 +137,11 @@ class Pruner(torch.nn.Module):
             num_items_to_keep = torch.sum(gold_labels > 0, dim=1)
 
         # Always keep at least one item to avoid edge case with empty matrix.
-        max_items_to_keep = max(num_items_to_keep.max().item(), 1)
+        num_items_to_keep = torch.max(num_items_to_keep, torch.ones_like(num_items_to_keep))
+        num_items_to_keep = torch.min(num_items_to_keep,
+                                      max_items_allowed * torch.ones_like(num_items_to_keep))
+
+        max_items_to_keep = num_items_to_keep.max().item()
 
         if scores.size(-1) != 1 or scores.dim() != 3:
             raise ValueError(f"The scorer passed to Pruner must produce a tensor of shape"
