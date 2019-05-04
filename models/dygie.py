@@ -108,8 +108,9 @@ class DyGIE(Model):
         self._max_span_width = max_span_width
 
         # Read valid event configurations.
-        self._valid_events = self._read_valid_events(valid_events_dir)
-        self._joint_metrics = JointMetrics(self._valid_events)
+        if self._loss_weights["ner"] > 0 and self._loss_weights["events"] > 0:
+            self._valid_events = self._read_valid_events(valid_events_dir)
+            self._joint_metrics = JointMetrics(self._valid_events)
 
         self._display_metrics = display_metrics
 
@@ -176,6 +177,10 @@ class DyGIE(Model):
         #text_embeddings = torch.gather(text_embeddings, 1, torch.tensor(the_list, device=text_embeddings.device).unsqueeze(2).repeat(1, 1, text_embeddings.shape[2]))
         text_embeddings = new_text_embeddings
 
+        # Only keep the text embeddings that correspond to actual tokens.
+        max_sentence_length = sentence_lengths.max().item()
+        text_embeddings = text_embeddings[:, :max_sentence_length, :]
+        text_mask = text_mask[:, :max_sentence_length]
 
         # Shape: (batch_size, max_sentence_length, encoding_dim)
         contextualized_embeddings = self._lstm_dropout(self._context_layer(text_embeddings, text_mask))
@@ -324,7 +329,10 @@ class DyGIE(Model):
         metrics_ner = self._ner.get_metrics(reset=reset)
         metrics_relation = self._relation.get_metrics(reset=reset)
         metrics_events = self._events.get_metrics(reset=reset)
-        metrics_joint = self._joint_metrics.get_metric(reset=reset)
+        if self._loss_weights["ner"] > 0 and self._loss_weights["events"] > 0:
+            metrics_joint = self._joint_metrics.get_metric(reset=reset)
+        else:
+            metrics_joint = {}
 
         # Make sure that there aren't any conflicting names.
         metric_names = (list(metrics_coref.keys()) + list(metrics_ner.keys()) +
