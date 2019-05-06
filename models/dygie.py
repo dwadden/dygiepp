@@ -150,9 +150,22 @@ class DyGIE(Model):
         relation_labels = relation_labels.long()
         argument_labels = argument_labels.long()
 
+        # If we're doing Bert, get the sentence class token as part of the text embedding. This will
+        # break if we use Bert together with other embeddings, but that won't happen much.
+        if "bert-offsets" in text:
+            offsets = text["bert-offsets"]
+            sent_ix = torch.zeros(offsets.size(0), device=offsets.device, dtype=torch.long).unsqueeze(1)
+            padded_offsets = torch.cat([sent_ix, offsets], dim=1)
+            text["bert-offsets"] = padded_offsets
+            padded_embeddings = self._text_field_embedder(text)
+            cls_embeddings = padded_embeddings[:, 0, :]
+            text_embeddings = padded_embeddings[:, 1:, :]
+        else:
+            text_embeddings = self._text_field_embedder(text)
+            cls_embeddings = torch.zeros([text_embeddings.size(0), text_embeddings.size(2)],
+                                         device=text_embeddings.device)
 
-        # Shape: (batch_size, max_sentence_length, embedding_size)
-        text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
+        text_embeddings = self._lexical_dropout(text_embeddings)
 
         # Shape: (batch_size, max_sentence_length)
         text_mask = util.get_text_field_mask(text).float()
@@ -163,7 +176,6 @@ class DyGIE(Model):
             sentence_lengths[i] = metadata[i]["end_ix"] - metadata[i]["start_ix"]
             for k in range(sentence_lengths[i], sentence_group_lengths[i]):
                 text_mask[i][k] = 0
-
 
         max_sentence_length = sentence_lengths.max().item()
 
@@ -251,7 +263,7 @@ class DyGIE(Model):
 
         if self._loss_weights['events'] > 0:
             output_events = self._events(
-                text_mask, contextualized_embeddings, spans, span_mask, span_embeddings,
+                text_mask, contextualized_embeddings, spans, span_mask, span_embeddings, cls_embeddings,
                 sentence_lengths, output_ner, trigger_labels, argument_labels,
                 ner_labels, metadata)
 
