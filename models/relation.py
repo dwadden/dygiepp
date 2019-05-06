@@ -146,22 +146,22 @@ class RelationExtractor(Model):
 
         return top_span_embeddings, top_span_mention_scores, num_spans_to_keep, top_span_mask, top_span_indices, top_spans
 
+
     def relation_propagation(self, output_dict):
         relation_scores = output_dict["relation_scores"]
         top_span_embeddings = output_dict["top_span_embeddings"]
         var = output_dict["top_span_mask"]
-        top_span_mask_tensor = (var.repeat(1, 1, var.shape[1]) * var.view(var.shape[0], 1, var.shape[1]).repeat(1, var.shape[1], 1)).unsqueeze(3).repeat(1, 1, 1, top_span_embeddings.shape[-1]).float()
+        top_span_mask_tensor = (var.repeat(1, 1, var.shape[1]) * var.view(var.shape[0], 1, var.shape[1]).repeat(1, var.shape[1], 1)).float()
         span_num = relation_scores.shape[1]
-        normalization_factor = var.view(var.shape[0], span_num).sum(dim=1).unsqueeze(1).unsqueeze(2).repeat(1, span_num, top_span_embeddings.shape[-1]).float()
+        normalization_factor = var.view(var.shape[0], span_num).sum(dim=1).float()
         for t in range(self.rel_prop):
             # TODO(Ulme) There is currently an implicit assumption that the null label is in the 0-th index.
             # Come up with how to deal with this
             relation_scores = F.relu(relation_scores[:, :, :, 1:], inplace=False)
-            # relation_scores /= (torch.sum(relation_scores, dim=[2,3]).view(-1,span_num,1,1).repeat(1,1,span_num,7) + 0.0000001)
             relation_embeddings = self._A_network(relation_scores)
-            top_span_embeddings_repeated = top_span_embeddings.unsqueeze(2).repeat(1, 1, span_num, 1)
-            entity_embs = torch.sum(relation_embeddings * top_span_embeddings_repeated * top_span_mask_tensor, dim=2)
-            entity_embs /= normalization_factor
+            relation_embeddings = (relation_embeddings.transpose(3, 2).transpose(2, 1).transpose(1, 0) * top_span_mask_tensor).transpose(0, 1).transpose(1, 2).transpose(2, 3)
+            entity_embs = torch.sum(relation_embeddings.transpose(2, 1).transpose(1, 0) * top_span_embeddings, dim=0)
+            entity_embs = (entity_embs.transpose(0, 2) / normalization_factor).transpose(0, 2)
             f_network_input = torch.cat([top_span_embeddings, entity_embs], dim=-1)
             f_weights = self._f_network(f_network_input)
             top_span_embeddings = f_weights * top_span_embeddings + (1.0 - f_weights) * entity_embs
@@ -170,7 +170,6 @@ class RelationExtractor(Model):
         output_dict["relation_scores"] = relation_scores
         output_dict["top_span_embeddings"] = top_span_embeddings
         return output_dict
-
     def predict_labels(self, relation_labels, output_dict, metadata):
         relation_scores = output_dict["relation_scores"]
 
