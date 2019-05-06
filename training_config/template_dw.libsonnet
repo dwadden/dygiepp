@@ -73,7 +73,9 @@ function(p) {
   local relation_scorer_dim = pair_emb_dim,
   local coref_scorer_dim = pair_emb_dim + p.feature_size,
   local trigger_emb_dim = context_layer_output_size,  // Triggers are single contextualized tokens.
-  local trigger_scorer_dim = (if trigger_attention_context then 2 * trigger_emb_dim else trigger_emb_dim),
+  // Add token embedding dim because we're including the cls token.
+  local trigger_scorer_dim = ((if trigger_attention_context then 2 * trigger_emb_dim else trigger_emb_dim) +
+    token_embedding_dim),
 
   // Calculation of argument scorer dim is a bit tricky. First, there's the triggers and the span
   // embeddings. Then, if we're using labels, include those. Then, if we're using a context window,
@@ -94,8 +96,10 @@ function(p) {
     (if event_args_use_ner_labels then ner_label_dim else 0) +
     (if event_args_use_trigger_labels then trigger_label_dim else 0) +
     (if events_context_window > 0 then 4 * events_context_window * context_layer_output_size else 0)),
-  local graph_attn_input_dim = (argument_pair_dim +
+  // Add token embedding dim because of sentence token.
+  local graph_attn_input_dim = (argument_pair_dim + token_embedding_dim +
     (if shared_attention_context then trigger_emb_dim else 0)),
+  // Add token embedding dim because of the cls token.
   local argument_scorer_dim = 1000,
 
   ////////////////////////////////////////////////////////////////////////////////
@@ -218,7 +222,7 @@ function(p) {
     initializer: dygie_initializer,
     loss_weights: p.loss_weights,
     lexical_dropout: p.lexical_dropout,
-    lstm_dropout: p.lstm_dropout,
+    lstm_dropout: (if p.finetune_bert then 0 else p.lstm_dropout),
     rel_prop: p.rel_prop,
     feature_size: p.feature_size,
     use_attentive_span_extractor: p.use_attentive_span_extractor,

@@ -112,8 +112,9 @@ class DyGIE(Model):
         self._max_span_width = max_span_width
 
         # Read valid event configurations.
-        self._valid_events = self._read_valid_events(valid_events_dir)
-        self._joint_metrics = JointMetrics(self._valid_events)
+        if self._loss_weights["ner"] > 0 and self._loss_weights["events"] > 0:
+            self._valid_events = self._read_valid_events(valid_events_dir)
+            self._joint_metrics = JointMetrics(self._valid_events)
 
         self._display_metrics = display_metrics
 
@@ -153,9 +154,22 @@ class DyGIE(Model):
         relation_labels = relation_labels.long()
         argument_labels = argument_labels.long()
 
+        # If we're doing Bert, get the sentence class token as part of the text embedding. This will
+        # break if we use Bert together with other embeddings, but that won't happen much.
+        if "bert-offsets" in text:
+            offsets = text["bert-offsets"]
+            sent_ix = torch.zeros(offsets.size(0), device=offsets.device, dtype=torch.long).unsqueeze(1)
+            padded_offsets = torch.cat([sent_ix, offsets], dim=1)
+            text["bert-offsets"] = padded_offsets
+            padded_embeddings = self._text_field_embedder(text)
+            cls_embeddings = padded_embeddings[:, 0, :]
+            text_embeddings = padded_embeddings[:, 1:, :]
+        else:
+            text_embeddings = self._text_field_embedder(text)
+            cls_embeddings = torch.zeros([text_embeddings.size(0), text_embeddings.size(2)],
+                                         device=text_embeddings.device)
 
-        # Shape: (batch_size, max_sentence_length, embedding_size)
-        text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
+        text_embeddings = self._lexical_dropout(text_embeddings)
 
         # Shape: (batch_size, max_sentence_length)
         text_mask = util.get_text_field_mask(text).float()
@@ -167,10 +181,10 @@ class DyGIE(Model):
             for k in range(sentence_lengths[i], sentence_group_lengths[i]):
                 text_mask[i][k] = 0
 
-
+        max_sentence_length = sentence_lengths.max().item()
 
         # TODO(Ulme) Speed this up by tensorizing
-        new_text_embeddings = torch.zeros(text_embeddings.shape, device=text_embeddings.device)
+        new_text_embeddings = torch.zeros([text_embeddings.shape[0], max_sentence_length, text_embeddings.shape[2]], device=text_embeddings.device)
         for i in range(len(new_text_embeddings)):
             new_text_embeddings[i][0:metadata[i]["end_ix"] - metadata[i]["start_ix"]] = text_embeddings[i][metadata[i]["start_ix"]:metadata[i]["end_ix"]]
 
@@ -180,6 +194,9 @@ class DyGIE(Model):
         #text_embeddings = torch.gather(text_embeddings, 1, torch.tensor(the_list, device=text_embeddings.device).unsqueeze(2).repeat(1, 1, text_embeddings.shape[2]))
         text_embeddings = new_text_embeddings
 
+        # Only keep the text embeddings that correspond to actual tokens.
+        # text_embeddings = text_embeddings[:, :max_sentence_length, :].contiguous()
+        text_mask = text_mask[:, :max_sentence_length].contiguous()
 
         # Shape: (batch_size, max_sentence_length, encoding_dim)
         contextualized_embeddings = self._lstm_dropout(self._context_layer(text_embeddings, text_mask))
@@ -250,7 +267,7 @@ class DyGIE(Model):
 
         if self._loss_weights['events'] > 0:
             output_events = self._events(
-                text_mask, contextualized_embeddings, spans, span_mask, span_embeddings,
+                text_mask, contextualized_embeddings, spans, span_mask, span_embeddings, cls_embeddings,
                 sentence_lengths, output_ner, trigger_labels, argument_labels,
                 ner_labels, metadata)
 
@@ -328,7 +345,10 @@ class DyGIE(Model):
         metrics_ner = self._ner.get_metrics(reset=reset)
         # metrics_relation = self._relation.get_metrics(reset=reset)
         metrics_events = self._events.get_metrics(reset=reset)
-        metrics_joint = self._joint_metrics.get_metric(reset=reset)
+        if self._loss_weights["ner"] > 0 and self._loss_weights["events"] > 0:
+            metrics_joint = self._joint_metrics.get_metric(reset=reset)
+        else:
+            metrics_joint = {}
 
         # Make sure that there aren't any conflicting names.
         # metric_names = (list(metrics_coref.keys()) + list(metrics_ner.keys()) +

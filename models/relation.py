@@ -125,7 +125,8 @@ class RelationExtractor(Model):
                        "relation_scores": relation_scores,
                        "num_spans_to_keep": num_spans_to_keep,
                        "top_span_indices": top_span_indices,
-                       "top_span_mask": top_span_mask}
+                       "top_span_mask": top_span_mask,
+                       "loss": 0}
 
         return output_dict
 
