@@ -1,36 +1,43 @@
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
-import torch
 from torch.nn import functional as F
+import torch
+
+from allennlp.models.model import Model
+from allennlp.nn import InitializerApplicator, RegularizerApplicator
+from allennlp.data import Vocabulary
 
 from torch_geometric.nn import GATConv
-from torch_geometric.data import Data
 
-from allennlp.nn import util
 
 # In the Bengio paper, for the PPI data set (which is big like ours) they use 3 layers, 4 heads of
 # 256 dims each, no dropout or regularization.
 
 
-class GraphAttention(torch.nn.Module):
-    def __init__(self, input_dim, output_dim, num_heads=4, dropout=0.2):
+class GraphAttention(Model):
+    def __init__(self,
+                 vocab: Vocabulary,
+                 input_dim, output_dim, n_heads, n_layers, dropout,
+                 initializer: InitializerApplicator = InitializerApplicator(),
+                 regularizer: Optional[RegularizerApplicator] = None):
         # The dimension of each head is the output dimension divided by the number of heads.
         # Not gonna bother with all the AllenNLP over head at this point, not worth the trouble.
-        super(GraphAttention, self).__init__()
+        super(GraphAttention, self).__init__(vocab, regularizer)
 
-        assert output_dim % num_heads == 0
-        head_dim = int(output_dim / num_heads)
-        self._input_layer = GATConv(in_channels=input_dim, out_channels=head_dim,
-                                    heads=num_heads, concat=True, dropout=dropout)
-        self._output_layer = GATConv(in_channels=head_dim * num_heads, out_channels=head_dim,
-                                     heads=num_heads, concat=True, dropout=dropout)
-        self._init_params()
+        assert output_dim % n_heads == 0
+        head_dim = int(output_dim / n_heads)
+        layers = []
+        input_layer = GATConv(in_channels=input_dim, out_channels=head_dim,
+                              heads=n_heads, concat=True, dropout=dropout)
+        layers.append(input_layer)
+        for _ in range(1, n_layers):
+            this_layer = GATConv(in_channels=head_dim * n_heads, out_channels=head_dim,
+                                 heads=n_heads, concat=True, dropout=dropout)
+            layers.append(this_layer)
 
-    def _init_params(self):
-        for layer in [self._input_layer, self._output_layer]:
-            for param in layer.parameters():
-                if param.ndimension() > 1:
-                    torch.nn.init.xavier_normal_(param)
+        self._layers = torch.nn.ModuleList(layers)
+
+        initializer(self)
 
     def forward(self, pair_embeddings, num_trigs_kept, num_arg_spans_kept):
         # Get the data ready
@@ -50,16 +57,16 @@ class GraphAttention(torch.nn.Module):
             emb_flat = emb_slice.contiguous().view(n_trigs * n_args, n_features)
             edge_index = adj.nonzero().t().cuda(emb_flat.device)  # This is how the model needs it.
 
-            x = self._input_layer(emb_flat, edge_index)
-            x = F.elu(x)
-            x = self._output_layer(x, edge_index)
-            x = F.elu(x)
+            x = emb_flat
+            for layer in self._layers:
+                x = layer(x, edge_index)
+                x = F.elu(x)
 
             out_features = x.size(-1)
 
             # Fill in the relevant entries of the batched score matrix.
             fill = x.view(n_trigs, n_args, out_features)
-            scores = torch.zeros([num_trigs_kept.max(), num_arg_spans_kept.max(), 1000],
+            scores = torch.zeros([num_trigs_kept.max(), num_arg_spans_kept.max(), x.size(-1)],
                                  device=pair_embeddings.device)
             scores[:n_trigs, :n_args] = fill
             res.append(scores.unsqueeze(0))

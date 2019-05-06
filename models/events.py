@@ -52,7 +52,7 @@ class EventExtractor(Model):
                  shared_attention_context: bool,
                  label_embedding_method: str,
                  event_args_label_predictor: str,
-                 graph_attn_input_dim: int,
+                 graph_attention: GraphAttention,
                  event_args_gold_candidates: bool = False,  # If True, use gold argument candidates.
                  context_window: int = 0,
                  initializer: InitializerApplicator = InitializerApplicator(),
@@ -125,8 +125,7 @@ class EventExtractor(Model):
         if self._shared_attention_context:
             self._shared_attention_context_module = context_attention
 
-        self._graph_attention = GraphAttention(
-            graph_attn_input_dim, self._argument_feedforward.get_input_dim())
+        self._graph_attention = graph_attention
 
         # TODO(dwadden) Add metrics.
         self._metrics = EventMetrics()
@@ -178,7 +177,7 @@ class EventExtractor(Model):
 
         (top_trig_embeddings, top_trig_mask,
          top_trig_indices, top_trig_scores, num_trigs_kept) = self._trigger_pruner(
-             trigger_embeddings, trigger_mask, num_trigs_to_keep, max_items_allowed=4,
+             trigger_embeddings, trigger_mask, num_trigs_to_keep, max_items_allowed=6,
              class_scores=trigger_scores)
         top_trig_mask = top_trig_mask.unsqueeze(-1)
 
@@ -192,7 +191,7 @@ class EventExtractor(Model):
         gold_labels = ner_labels if self._event_args_gold_candidates else None
         (top_arg_embeddings, top_arg_mask,
          top_arg_indices, top_arg_scores, num_arg_spans_kept) = self._mention_pruner(
-             span_embeddings, span_mask, num_arg_spans_to_keep, max_items_allowed=14,
+             span_embeddings, span_mask, num_arg_spans_to_keep, max_items_allowed=20,
              class_scores=ner_scores, gold_labels=gold_labels)
 
         if self._check and self._mention_pruner._gold_beam:
