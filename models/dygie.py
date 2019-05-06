@@ -165,9 +165,10 @@ class DyGIE(Model):
                 text_mask[i][k] = 0
 
 
+        max_sentence_length = sentence_lengths.max().item()
 
         # TODO(Ulme) Speed this up by tensorizing
-        new_text_embeddings = torch.zeros(text_embeddings.shape, device=text_embeddings.device)
+        new_text_embeddings = torch.zeros([text_embeddings.shape[0], max_sentence_length, text_embeddings.shape[2]], device=text_embeddings.device)
         for i in range(len(new_text_embeddings)):
             new_text_embeddings[i][0:metadata[i]["end_ix"] - metadata[i]["start_ix"]] = text_embeddings[i][metadata[i]["start_ix"]:metadata[i]["end_ix"]]
 
@@ -178,8 +179,7 @@ class DyGIE(Model):
         text_embeddings = new_text_embeddings
 
         # Only keep the text embeddings that correspond to actual tokens.
-        max_sentence_length = sentence_lengths.max().item()
-        text_embeddings = text_embeddings[:, :max_sentence_length, :].contiguous()
+        # text_embeddings = text_embeddings[:, :max_sentence_length, :].contiguous()
         text_mask = text_mask[:, :max_sentence_length].contiguous()
 
         # Shape: (batch_size, max_sentence_length, encoding_dim)
