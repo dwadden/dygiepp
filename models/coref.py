@@ -83,10 +83,6 @@ class CorefResolver(Model):
         self.softmax = torch.nn.SoftMax(dim=-1)
         initializer(self)
 
-    def coref_propagation(self, output_dict):
-        for doc_key in output_dict:
-            output_dict[doc_key] = self.coref_propagation_doc(output_dict[doc_key])
-
     def coref_propagation_doc(self, output_dict):
         coreference_scores = output_dict["coreference_scores"]
         top_span_embeddings = output_dict["top_span_embeddings"]
@@ -103,9 +99,9 @@ class CorefResolver(Model):
         output_dict["top_span_embeddings"] = top_span_embeddings
         return output_dict
 
-    @overrides
-    #def create_docs(self,  # type: ignore
-    def forward(self,  # type: ignore
+    #@overrides
+    #def forward(self,  # type: ignore
+    def compute_representations(self,  # type: ignore
                 spans_batched: torch.IntTensor,
                 span_mask_batched,
                 span_embeddings_batched,  # TODO(dwadden) add type.
@@ -128,13 +124,23 @@ class CorefResolver(Model):
             ix_list = [1 if entry == key else 0 for entry in doc_keys]
             doc_metadata = [entry for entry in metadata if entry["doc_key"] == key]
             ix = torch.tensor(ix_list, dtype=torch.uint8)
-            output_docs[key] = self._forward_doc(
+            output_docs[key] = self._compute_representations_doc(
                 spans_batched[ix], span_mask_batched[ix], span_embeddings_batched[ix],
                 sentence_lengths[ix], coref_labels_batched[ix], doc_metadata)
+        output_docs["uniq_keys"] = uniq_keys
+        return output_docs
 
+    def predict_labels(self, coref_labels, output_docs, uniq_keys):
+        for key in uniq_keys:
+            ix_list = [1 if entry == key else 0 for entry in doc_keys]
+            doc_metadata = [entry for entry in metadata if entry["doc_key"] == key]
+            ix = torch.tensor(ix_list, dtype=torch.uint8)
+            output_docs[key] = self.predict_labels_doc(output_docs[key])
+        output_docs["uniq_keys"] = uniq_keys
         return self.collect_losses(output_docs, uniq_keys)
 
     def collect_losses(self, output_docs, uniq_keys):
+        uniq_keys = output_docs["uniq_keys"]
         losses = torch.cat([entry["loss"].unsqueeze(0) for entry in output_docs.values()])
         loss = torch.sum(losses)
 
@@ -151,8 +157,7 @@ class CorefResolver(Model):
             output["loss"] = loss
         return output
 
-
-    def _forward_doc(self,  # type: ignore
+    def _compute_representations_doc(self,  # type: ignore
                      spans_batched: torch.IntTensor,
                      span_mask_batched,
                      span_embeddings_batched,  # TODO(dwadden) add type.
@@ -218,7 +223,8 @@ class CorefResolver(Model):
                        "coref_labels": coref_labels,
                        "coreference_scores": coreference_scores}
 
-        return self.predict_labels_doc(output_dict)
+        return output_dict
+        #return self.predict_labels_doc(output_dict)
 
 
 
