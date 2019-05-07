@@ -128,12 +128,12 @@ class EventExtractor(Model):
         if self._shared_attention_context:
             self._shared_attention_context_module = context_attention
 
-        # Span propagation object. There's an ugly hack. I need to pass the functions to compute
-        # trig arg embeddings and argument scores into the span propagator, so I just set the
-        # attributes explicitly.
+        # Span propagation object.
+        # TODO(dwadden) initialize with `from_params` instead if this ends up working.
         self._span_prop = span_prop
         self._span_prop._trig_arg_embedder = self._compute_trig_arg_embeddings
         self._span_prop._argument_scorer = self._compute_argument_scores
+        self._span_prop._check = self._check
 
         # TODO(dwadden) Add metrics.
         self._metrics = EventMetrics()
