@@ -94,11 +94,13 @@ class DyGIE(Model):
                                                   check=check,
                                                   params=modules.pop("events"))
 
-        self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
-                                                              combination="x,y",
-                                                              num_width_embeddings=max_span_width,
-                                                              span_width_embedding_dim=feature_size,
-                                                              bucket_widths=False)
+        # self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
+        #                                                       combination="x,y",
+        #                                                       num_width_embeddings=max_span_width,
+        #                                                       span_width_embedding_dim=feature_size,
+        #                                                       bucket_widths=False)
+        self._endpoint_span_extractor = SelfAttentiveSpanExtractor(
+            input_dim=context_layer.get_output_dim())
         if use_attentive_span_extractor:
             self._attentive_span_extractor = SelfAttentiveSpanExtractor(
                 input_dim=text_field_embedder.get_output_dim())

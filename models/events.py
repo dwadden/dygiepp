@@ -4,6 +4,7 @@ import itertools
 from typing import Any, Dict, List, Optional
 
 import torch
+from torch.nn import functional as F
 from overrides import overrides
 
 from allennlp.data import Vocabulary
@@ -19,6 +20,7 @@ from dygie.training.event_metrics import EventMetrics, ArgumentStats
 from dygie.models.shared import fields_to_batches
 from dygie.models.one_hot import make_embedder
 from dygie.models.entity_beam_pruner import make_pruner
+from dygie.models.span_prop import SpanProp
 
 # TODO(dwadden) rename NERMetrics
 
@@ -41,6 +43,7 @@ class EventExtractor(Model):
                  argument_feedforward: FeedForward,
                  context_attention: BilinearMatrixAttention,
                  trigger_attention: Seq2SeqEncoder,
+                 span_prop: SpanProp,
                  feature_size: int,
                  trigger_spans_per_word: float,
                  argument_spans_per_word: float,
@@ -124,6 +127,13 @@ class EventExtractor(Model):
         if self._shared_attention_context:
             self._shared_attention_context_module = context_attention
 
+        # Span propagation object. There's an ugly hack. I need to pass the functions to compute
+        # trig arg embeddings and argument scores into the span propagator, so I just set the
+        # attributes explicitly.
+        self._span_prop = span_prop
+        self._span_prop._trig_arg_embedder = self._compute_trig_arg_embeddings
+        self._span_prop._argument_scorer = self._compute_argument_scores
+
         # TODO(dwadden) Add metrics.
         self._metrics = EventMetrics()
         self._argument_stats = ArgumentStats()
@@ -196,6 +206,20 @@ class EventExtractor(Model):
         top_arg_spans = util.batched_index_select(spans,
                                                   top_arg_indices)
 
+        top_trig_embeddings, top_arg_embeddings = self._span_prop(
+            top_trig_embeddings, top_arg_embeddings, top_trig_mask, top_arg_mask,
+            top_trig_scores, top_arg_scores)
+
+        # TODO(dwadden) write a test.
+        top_trig_indices_repeat = (top_trig_indices.unsqueeze(-1).
+                                   repeat(1, 1, top_trig_embeddings.size(-1)))
+        updated_trig_embeddings = trigger_embeddings.scatter(
+            1, top_trig_indices_repeat, top_trig_embeddings)
+
+        # Recompute the trigger scores.
+        trigger_scores = self._compute_trigger_scores(updated_trig_embeddings, cls_embeddings, trigger_mask)
+        _, predicted_triggers = trigger_scores.max(-1)
+
         # Collect trigger and ner labels, in case they're included as features to the argument
         # classifier.
         # At train time, use the gold labels. At test time, use the labels predicted by the model,
@@ -225,9 +249,7 @@ class EventExtractor(Model):
                         assert torch.allclose(expected, actual)
 
         trig_arg_embeddings = self._compute_trig_arg_embeddings(
-            top_trig_embeddings, top_arg_embeddings, cls_embeddings, top_trig_labels, top_ner_labels,
-            top_trig_indices, top_arg_spans, trigger_embeddings, trigger_mask)
-
+            top_trig_embeddings, top_arg_embeddings)
         argument_scores = self._compute_argument_scores(
             trig_arg_embeddings, top_trig_scores, top_arg_scores)
 
@@ -326,6 +348,16 @@ class EventExtractor(Model):
 
         return argument_dict, argument_dict_with_scores
 
+
+    ################################################################################
+
+    # TODO(dwadden) We don't re-score the trigger and argument scores during this process. That's
+    # what Yi does. But maybe we should do this...
+
+    ################################################################################
+
+
+
     def _compute_trigger_scores(self, trigger_embeddings, cls_embeddings, trigger_mask):
         """
         Compute trigger scores for all tokens.
@@ -345,10 +377,29 @@ class EventExtractor(Model):
         # Give large negative scores to the masked-out values.
         return trigger_scores
 
-    def _compute_trig_arg_embeddings(self,
-                                     top_trig_embeddings, top_arg_embeddings, cls_embeddings,
-                                     top_trig_labels, top_ner_labels, top_trig_indices,
-                                     top_arg_spans, text_emb, text_mask):
+    def _compute_trig_arg_embeddings(self, trig_emb, arg_emb):
+        num_trigs = trig_emb.size(1)
+        num_args = arg_emb.size(1)
+
+        trig_emb_expanded = trig_emb.unsqueeze(2)
+        trig_emb_tiled = trig_emb_expanded.repeat(1, 1, num_args, 1)
+
+        arg_emb_expanded = arg_emb.unsqueeze(1)
+        arg_emb_tiled = arg_emb_expanded.repeat(1, num_trigs, 1, 1)
+
+        similarity_emb = trig_emb_expanded * arg_emb_expanded
+
+        pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled, similarity_emb]
+        pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
+
+        return pair_embeddings
+
+
+    # NOTE(dwadden) Keep this version around in case I need it later, when finished prototyping.
+    def _fancy_compute_trig_arg_embeddings(self,
+                                           top_trig_embeddings, top_arg_embeddings, cls_embeddings,
+                                           top_trig_labels, top_ner_labels, top_trig_indices,
+                                           top_arg_spans, text_emb, text_mask):
         """
         Create trigger / argument pair embeddings, consisting of:
         - The embeddings of the trigger and argument pair.
@@ -546,7 +597,8 @@ class EventExtractor(Model):
 
         return pad_batch
 
-    def _compute_argument_scores(self, pairwise_embeddings, top_trig_scores, top_arg_scores):
+    def _compute_argument_scores(self, pairwise_embeddings, top_trig_scores, top_arg_scores,
+                                 prepend_zeros=True):
         batch_size = pairwise_embeddings.size(0)
         max_num_trigs = pairwise_embeddings.size(1)
         max_num_args = pairwise_embeddings.size(2)
@@ -567,7 +619,8 @@ class EventExtractor(Model):
         shape = [argument_scores.size(0), argument_scores.size(1), argument_scores.size(2), 1]
         dummy_scores = argument_scores.new_zeros(*shape)
 
-        argument_scores = torch.cat([dummy_scores, argument_scores], -1)
+        if prepend_zeros:
+            argument_scores = torch.cat([dummy_scores, argument_scores], -1)
         return argument_scores
 
     @staticmethod
