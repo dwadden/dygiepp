@@ -22,6 +22,7 @@ from dygie.models.one_hot import make_embedder
 from dygie.models.entity_beam_pruner import make_pruner
 from dygie.models.span_prop import SpanProp
 
+
 # TODO(dwadden) rename NERMetrics
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -347,16 +348,6 @@ class EventExtractor(Model):
                 argument_dict_with_scores[(trig_ix, arg_span)] = (label_name, arg_score)
 
         return argument_dict, argument_dict_with_scores
-
-
-    ################################################################################
-
-    # TODO(dwadden) We don't re-score the trigger and argument scores during this process. That's
-    # what Yi does. But maybe we should do this...
-
-    ################################################################################
-
-
 
     def _compute_trigger_scores(self, trigger_embeddings, cls_embeddings, trigger_mask):
         """
