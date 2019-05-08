@@ -171,6 +171,8 @@ class EventExtractor(Model):
             sentence_lengths.float() * self._trigger_spans_per_word).long()
         num_trigs_to_keep = torch.max(num_trigs_to_keep,
                                       torch.ones_like(num_trigs_to_keep))
+        num_trigs_to_keep = torch.min(num_trigs_to_keep,
+                                      10 * torch.ones_like(num_trigs_to_keep))
 
         (top_trig_embeddings, top_trig_mask,
          top_trig_indices, top_trig_scores, num_trigs_kept) = self._trigger_pruner(
@@ -182,6 +184,8 @@ class EventExtractor(Model):
             sentence_lengths.float() * self._argument_spans_per_word).long()
         num_arg_spans_to_keep = torch.max(num_arg_spans_to_keep,
                                           torch.ones_like(num_arg_spans_to_keep))
+        num_arg_spans_to_keep = torch.min(num_arg_spans_to_keep,
+                                          22 * torch.ones_like(num_arg_spans_to_keep))
 
         # If we're using gold event arguments, include the gold labels.
         gold_labels = ner_labels if self._event_args_gold_candidates else None
