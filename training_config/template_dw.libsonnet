@@ -187,12 +187,12 @@ function(p) {
       input_dim: token_embedding_dim
     }
     else {
-      type: "lstm",
-      bidirectional: true,
+      type: "stacked_bidirectional_lstm",
       input_size: token_embedding_dim,
       hidden_size: p.lstm_hidden_size,
       num_layers: p.lstm_n_layers,
-      dropout: p.lstm_dropout
+      recurrent_dropout_probability: p.lstm_dropout,
+      layer_dropout_probability: p.lstm_dropout
     }
   ),
 
