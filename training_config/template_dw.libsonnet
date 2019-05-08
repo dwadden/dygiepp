@@ -66,13 +66,13 @@ function(p) {
   local context_layer_output_size = (if p.finetune_bert
     then token_embedding_dim
     else 2 * p.lstm_hidden_size),
-  local endpoint_span_emb_dim = context_layer_output_size,
+  local endpoint_span_emb_dim = 2 * context_layer_output_size + p.feature_size,
   local attended_span_emb_dim = if p.use_attentive_span_extractor then token_embedding_dim else 0,
   local span_emb_dim = endpoint_span_emb_dim + attended_span_emb_dim,
   local pair_emb_dim = 3 * span_emb_dim,
   local relation_scorer_dim = pair_emb_dim,
   local coref_scorer_dim = pair_emb_dim + p.feature_size,
-  local trigger_emb_dim = context_layer_output_size,  // Triggers are single contextualized tokens.
+  local trigger_emb_dim = span_emb_dim,
   // Add token embedding dim because we're including the cls token.
   local trigger_scorer_dim = ((if trigger_attention_context then 2 * trigger_emb_dim else trigger_emb_dim) +
     token_embedding_dim),
@@ -91,21 +91,15 @@ function(p) {
   local ner_label_dim = (if event_args_use_ner_labels
     then (if label_embedding_method == "one_hot" then p.n_ner_labels else event_args_label_emb)
     else 0),
-  // // The extra 1 is for the bit indicating whether the trigger is before or inside the argument.
-  // local argument_pair_dim = (trigger_emb_dim + span_emb_dim + p.feature_size + 2 +
-  //   (if event_args_use_ner_labels then ner_label_dim else 0) +
-  //   (if event_args_use_trigger_labels then trigger_label_dim else 0) +
-  //   (if events_context_window > 0 then 4 * events_context_window * context_layer_output_size else 0)),
-  // // Add token embedding dim because of the cls token.
-  // local argument_scorer_dim = (argument_pair_dim +
-  //   (if shared_attention_context then trigger_emb_dim else 0) +
-  //   token_embedding_dim),
-
-  // Simplified version for debugging. In this case, the dimensionality is the same as for the
-  // relation scorer.
-  local argument_pair_dim = pair_emb_dim,
+  // The extra 1 is for the bit indicating whether the trigger is before or inside the argument.
+  local argument_pair_dim = (3 * span_emb_dim + p.feature_size + 2 +
+    (if event_args_use_ner_labels then ner_label_dim else 0) +
+    (if event_args_use_trigger_labels then trigger_label_dim else 0) +
+    (if events_context_window > 0 then 4 * events_context_window * context_layer_output_size else 0)),
   // Add token embedding dim because of the cls token.
-  local argument_scorer_dim = argument_pair_dim,
+  local argument_scorer_dim = (argument_pair_dim +
+    (if shared_attention_context then trigger_emb_dim else 0) +
+    token_embedding_dim),
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -279,7 +273,7 @@ function(p) {
         context_window: events_context_window,
         shared_attention_context: shared_attention_context,
         span_prop: {
-          emb_dim: context_layer_output_size,
+          emb_dim: span_emb_dim,
           n_span_prop: getattr(p, "event_n_span_prop", 0)
         },
         context_attention: {
@@ -288,12 +282,8 @@ function(p) {
         },
         trigger_attention_context: trigger_attention_context,
         trigger_attention: {
-          type: "multi_head_self_attention",
-          num_heads: 8,
+          type: "pass_through",
           input_dim: trigger_emb_dim,
-          attention_dim: trigger_emb_dim,
-          values_dim: trigger_emb_dim,
-          attention_dropout_prob: 0.4
       },
       }
     }

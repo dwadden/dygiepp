@@ -183,7 +183,7 @@ class EventExtractor(Model):
         num_trigs_to_keep = torch.max(num_trigs_to_keep,
                                       torch.ones_like(num_trigs_to_keep))
         num_trigs_to_keep = torch.min(num_trigs_to_keep,
-                                      10 * torch.ones_like(num_trigs_to_keep))
+                                      15 * torch.ones_like(num_trigs_to_keep))
 
         (top_trig_embeddings, top_trig_mask,
          top_trig_indices, top_trig_scores, num_trigs_kept) = self._trigger_pruner(
@@ -196,7 +196,7 @@ class EventExtractor(Model):
         num_arg_spans_to_keep = torch.max(num_arg_spans_to_keep,
                                           torch.ones_like(num_arg_spans_to_keep))
         num_arg_spans_to_keep = torch.min(num_arg_spans_to_keep,
-                                          20 * torch.ones_like(num_arg_spans_to_keep))
+                                          30 * torch.ones_like(num_arg_spans_to_keep))
 
         # If we're using gold event arguments, include the gold labels.
         gold_labels = ner_labels if self._event_args_gold_candidates else None
@@ -210,20 +210,6 @@ class EventExtractor(Model):
         top_arg_mask = top_arg_mask.unsqueeze(-1)
         top_arg_spans = util.batched_index_select(spans,
                                                   top_arg_indices)
-
-        top_trig_embeddings, top_arg_embeddings = self._span_prop(
-            top_trig_embeddings, top_arg_embeddings, top_trig_mask, top_arg_mask,
-            top_trig_scores, top_arg_scores)
-
-        # TODO(dwadden) write a test.
-        top_trig_indices_repeat = (top_trig_indices.unsqueeze(-1).
-                                   repeat(1, 1, top_trig_embeddings.size(-1)))
-        updated_trig_embeddings = trigger_embeddings.scatter(
-            1, top_trig_indices_repeat, top_trig_embeddings)
-
-        # Recompute the trigger scores.
-        trigger_scores = self._compute_trigger_scores(updated_trig_embeddings, cls_embeddings, trigger_mask)
-        _, predicted_triggers = trigger_scores.max(-1)
 
         # Collect trigger and ner labels, in case they're included as features to the argument
         # classifier.
@@ -253,8 +239,32 @@ class EventExtractor(Model):
                         assert torch.abs(actual.sum() - 1) < 0.0001
                         assert torch.allclose(expected, actual)
 
+        # Make a dict of all arguments that are needed to make trigger / argument pair embeddings.
+        trig_arg_emb_dict = dict(cls_embeddings=cls_embeddings,
+                                 top_trig_labels=top_trig_labels,
+                                 top_ner_labels=top_ner_labels,
+                                 top_trig_indices=top_trig_indices,
+                                 top_arg_spans=top_arg_spans,
+                                 text_emb=trigger_embeddings,
+                                 text_mask=trigger_mask)
+
+        # Run span graph propagation.
+        top_trig_embeddings, top_arg_embeddings = self._span_prop(
+            top_trig_embeddings, top_arg_embeddings, top_trig_mask, top_arg_mask,
+            top_trig_scores, top_arg_scores, trig_arg_emb_dict)
+
+        # TODO(dwadden) write a test.
+        top_trig_indices_repeat = (top_trig_indices.unsqueeze(-1).
+                                   repeat(1, 1, top_trig_embeddings.size(-1)))
+        updated_trig_embeddings = trigger_embeddings.scatter(
+            1, top_trig_indices_repeat, top_trig_embeddings)
+
+        # Recompute the trigger scores.
+        trigger_scores = self._compute_trigger_scores(updated_trig_embeddings, cls_embeddings, trigger_mask)
+        _, predicted_triggers = trigger_scores.max(-1)
+
         trig_arg_embeddings = self._compute_trig_arg_embeddings(
-            top_trig_embeddings, top_arg_embeddings)
+            top_trig_embeddings, top_arg_embeddings, **trig_arg_emb_dict)
         argument_scores = self._compute_argument_scores(
             trig_arg_embeddings, top_trig_scores, top_arg_scores)
 
@@ -372,37 +382,18 @@ class EventExtractor(Model):
         # Give large negative scores to the masked-out values.
         return trigger_scores
 
-    def _compute_trig_arg_embeddings(self, trig_emb, arg_emb):
-        num_trigs = trig_emb.size(1)
-        num_args = arg_emb.size(1)
-
-        trig_emb_expanded = trig_emb.unsqueeze(2)
-        trig_emb_tiled = trig_emb_expanded.repeat(1, 1, num_args, 1)
-
-        arg_emb_expanded = arg_emb.unsqueeze(1)
-        arg_emb_tiled = arg_emb_expanded.repeat(1, num_trigs, 1, 1)
-
-        similarity_emb = trig_emb_expanded * arg_emb_expanded
-
-        pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled, similarity_emb]
-        pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
-
-        return pair_embeddings
-
-
-    # NOTE(dwadden) Keep this version around in case I need it later, when finished prototyping.
-    def _fancy_compute_trig_arg_embeddings(self,
-                                           top_trig_embeddings, top_arg_embeddings, cls_embeddings,
-                                           top_trig_labels, top_ner_labels, top_trig_indices,
-                                           top_arg_spans, text_emb, text_mask):
+    def _compute_trig_arg_embeddings(self,
+                                     top_trig_embeddings, top_arg_embeddings, cls_embeddings,
+                                     top_trig_labels, top_ner_labels, top_trig_indices,
+                                     top_arg_spans, text_emb, text_mask):
         """
         Create trigger / argument pair embeddings, consisting of:
         - The embeddings of the trigger and argument pair.
         - Optionally, the embeddings of the trigger and argument labels.
         - Optionally, embeddings of the words surrounding the trigger and argument.
         """
-        trig_emb_list = [top_trig_embeddings]
-        arg_emb_list = [top_arg_embeddings]
+        trig_emb_extras = []
+        arg_emb_extras = []
 
         if self._context_window > 0:
             # Include words in a window around trigger and argument.
@@ -410,8 +401,8 @@ class EventExtractor(Model):
             trigger_context = self._get_context(top_trig_indices, top_trig_indices, text_emb)
             argument_context = self._get_context(
                 top_arg_spans[:, :, 0], top_arg_spans[:, :, 1], text_emb)
-            trig_emb_list.append(trigger_context)
-            arg_emb_list.append(argument_context)
+            trig_emb_extras.append(trigger_context)
+            arg_emb_extras.append(argument_context)
 
         # TODO(dwadden) refactor this. Way too many conditionals.
         if self._event_args_use_trigger_labels:
@@ -422,9 +413,9 @@ class EventExtractor(Model):
                 else:
                     # Otherwise take the average of the embeddings, weighted by softmax scores.
                     top_trig_embs = torch.matmul(top_trig_labels, self._trigger_label_emb.weight)
-                trig_emb_list.append(top_trig_embs)
+                trig_emb_extras.append(top_trig_embs)
             else:
-                trig_emb_list.append(self._trigger_label_emb(top_trig_labels))
+                trig_emb_extras.append(self._trigger_label_emb(top_trig_labels))
         if self._event_args_use_ner_labels:
             if self._event_args_label_predictor == "softmax" and not self.training:
                 # Same deal as for trigger labels.
@@ -432,30 +423,40 @@ class EventExtractor(Model):
                     top_ner_embs = top_ner_labels
                 else:
                     top_ner_embs = torch.matmul(top_ner_labels, self._ner_label_emb.weight)
-                arg_emb_list.append(top_ner_embs)
+                arg_emb_extras.append(top_ner_embs)
             else:
                 # Otherwise, just return the embeddings.
-                arg_emb_list.append(self._ner_label_emb(top_ner_labels))
+                arg_emb_extras.append(self._ner_label_emb(top_ner_labels))
 
-        trig_emb = torch.cat(trig_emb_list, dim=-1)
-        arg_emb = torch.cat(arg_emb_list, dim=-1)
+        num_trigs = top_trig_embeddings.size(1)
+        num_args = top_arg_embeddings.size(1)
 
-        num_trigs = trig_emb.size(1)
-        num_args = arg_emb.size(1)
-
-        trig_emb_expanded = trig_emb.unsqueeze(2)
+        trig_emb_expanded = top_trig_embeddings.unsqueeze(2)
         trig_emb_tiled = trig_emb_expanded.repeat(1, 1, num_args, 1)
 
-        arg_emb_expanded = arg_emb.unsqueeze(1)
+        arg_emb_expanded = top_arg_embeddings.unsqueeze(1)
         arg_emb_tiled = arg_emb_expanded.repeat(1, num_trigs, 1, 1)
+
+        similarity_emb = trig_emb_expanded * arg_emb_expanded
 
         distance_embeddings = self._compute_distance_embeddings(top_trig_indices, top_arg_spans)
 
         cls_repeat = (cls_embeddings.unsqueeze(dim=1).unsqueeze(dim=2).
                       repeat(1, num_trigs, num_args, 1))
 
-        pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled, distance_embeddings, cls_repeat]
+        pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled, similarity_emb,
+                                distance_embeddings, cls_repeat]
         pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
+
+        if trig_emb_extras:
+            trig_extras_expanded = torch.cat(trig_emb_extras, dim=-1).unsqueeze(2)
+            trig_extras_tiled = trig_extras_expanded.repeat(1, 1, num_args, 1)
+            pair_embeddings = torch.cat([pair_embeddings, trig_extras_tiled], dim=3)
+
+        if arg_emb_extras:
+            arg_extras_expanded = torch.cat(arg_emb_extras, dim=-1).unsqueeze(1)
+            arg_extras_tiled = arg_extras_expanded.repeat(1, num_trigs, 1, 1)
+            pair_embeddings = torch.cat([pair_embeddings, arg_extras_tiled], dim=3)
 
         if self._shared_attention_context:
             attended_context = self._get_shared_attention_context(pair_embeddings, text_emb, text_mask)
