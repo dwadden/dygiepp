@@ -27,7 +27,10 @@ function(p) {
 
   local module_initializer = [
     [".*weight", {"type": "xavier_normal"}],
-    [".*weight_matrix", {"type": "xavier_normal"}]],
+    [".*weight_matrix", {"type": "xavier_normal"}],
+    ["_trigger_lstm._module.weight_ih.*", {"type": "xavier_normal"}],
+    ["_trigger_lstm._module.weight_hh.*", {"type": "orthogonal"}]
+  ],
 
   local dygie_initializer = [
     ["_span_width_embedding.weight", {"type": "xavier_normal"}],
@@ -257,7 +260,14 @@ function(p) {
         trigger_spans_per_word: p.trigger_spans_per_word,
         argument_spans_per_word: p.argument_spans_per_word,
         positive_label_weight: p.events_positive_label_weight,
-        trigger_feedforward: make_feedforward(trigger_scorer_dim), // Factor of 2 because of self attention.
+        trigger_lstm: {
+          type: "lstm",
+          bidirectional: true,
+          input_size: trigger_emb_dim,
+          hidden_size: 100,
+          num_layers: 1
+        },
+        // trigger_feedforward: make_feedforward(trigger_scorer_dim), // Factor of 2 because of self attention.
         trigger_candidate_feedforward: make_feedforward(trigger_emb_dim),
         mention_feedforward: make_feedforward(span_emb_dim),
         argument_feedforward: make_feedforward(argument_scorer_dim),

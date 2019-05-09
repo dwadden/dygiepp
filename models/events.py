@@ -35,7 +35,7 @@ class EventExtractor(Model):
     # TODO(dwadden) add option to make `mention_feedforward` be the NER tagger.
     def __init__(self,
                  vocab: Vocabulary,
-                 trigger_feedforward: FeedForward,
+                 trigger_lstm: Seq2SeqEncoder,
                  trigger_candidate_feedforward: FeedForward,
                  mention_feedforward: FeedForward,  # Used if entity beam is off.
                  argument_feedforward: FeedForward,
@@ -84,10 +84,9 @@ class EventExtractor(Model):
         null_label = vocab.get_token_index("", "trigger_labels")
         assert null_label == 0  # If not, the dummy class won't correspond to the null label.
 
-        self._trigger_scorer = torch.nn.Sequential(
-            TimeDistributed(trigger_feedforward),
-            TimeDistributed(torch.nn.Linear(trigger_feedforward.get_output_dim(),
-                                            self._n_trigger_labels - 1)))
+        self._trigger_lstm = trigger_lstm
+        self._trigger_scorer = TimeDistributed(
+            torch.nn.Linear(trigger_lstm.get_output_dim(), self._n_trigger_labels - 1))
 
         self._trigger_attention_context = trigger_attention_context
         if self._trigger_attention_context:
@@ -334,11 +333,12 @@ class EventExtractor(Model):
         """
         Compute trigger scores for all tokens.
         """
-        cls_repeat = cls_embeddings.unsqueeze(dim=1).repeat(1, trigger_embeddings.size(1), 1)
-        trigger_embeddings = torch.cat([trigger_embeddings, cls_repeat], dim=-1)
-        if self._trigger_attention_context:
-            context = self._trigger_attention(trigger_embeddings, trigger_mask)
-            trigger_embeddings = torch.cat([trigger_embeddings, context], dim=2)
+        trigger_embeddings = self._trigger_lstm(trigger_embeddings, trigger_mask)
+        # cls_repeat = cls_embeddings.unsqueeze(dim=1).repeat(1, trigger_embeddings.size(1), 1)
+        # trigger_embeddings = torch.cat([trigger_embeddings, cls_repeat], dim=-1)
+        # if self._trigger_attention_context:
+        #     context = self._trigger_attention(trigger_embeddings, trigger_mask)
+        #     trigger_embeddings = torch.cat([trigger_embeddings, context], dim=2)
         trigger_scores = self._trigger_scorer(trigger_embeddings)
         # Give large negative scores to masked-out elements.
         mask = trigger_mask.unsqueeze(-1)
