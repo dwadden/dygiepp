@@ -74,8 +74,9 @@ function(p) {
   local coref_scorer_dim = pair_emb_dim + p.feature_size,
   local trigger_emb_dim = context_layer_output_size,  // Triggers are single contextualized tokens.
   // Add token embedding dim because we're including the cls token.
+  local class_projection_dim = 200,
   local trigger_scorer_dim = ((if trigger_attention_context then 2 * trigger_emb_dim else trigger_emb_dim) +
-    token_embedding_dim),
+    class_projection_dim),
 
   // Calculation of argument scorer dim is a bit tricky. First, there's the triggers and the span
   // embeddings. Then, if we're using labels, include those. Then, if we're using a context window,
@@ -99,7 +100,7 @@ function(p) {
   // Add token embedding dim because of the cls token.
   local argument_scorer_dim = (argument_pair_dim +
     (if shared_attention_context then trigger_emb_dim else 0) +
-    token_embedding_dim),
+    class_projection_dim),
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -272,6 +273,13 @@ function(p) {
         entity_beam: getattr(p, "events_entity_beam", false),
         context_window: events_context_window,
         shared_attention_context: shared_attention_context,
+        cls_projection: {
+          input_dim: token_embedding_dim,
+          num_layers: 1,
+          hidden_dims: class_projection_dim,
+          activations: "relu",
+          dropout: p.feedforward_dropout
+        },
         context_attention: {
           matrix_1_dim: argument_pair_dim,
           matrix_2_dim: trigger_emb_dim,
