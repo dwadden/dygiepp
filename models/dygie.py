@@ -217,14 +217,19 @@ class DyGIE(Model):
             spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
         # TODO(Ulme) Split the forward method of the coreference module up into parts
-        #output_coref = self._coref.compute_representations()
+        output_coref = self._coref.compute_representations(
+            spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
 
         # Propagation of global information to enhance the span embeddings
         if self.coref_prop > 0:
-            print("Coref prop is not implemented yet")
-            exit()
+            for doc_key in output_coref:
+                output_coref[doc_key] = self.coref_propagation_doc(output_coref[doc_key])
+
             # TODO(Ulme) Implement Coref Propagation
-            #span_embeddings = self.update_span_embeddings(span_embeddings, span_mask, top_span_embeddings, top_span_mask, top_span_indices)
+            import ipdb; ipdb.set_trace()
+            for doc_key in output_coref:
+                span_embeddings = self.update_span_embeddings(span_embeddings, span_mask, output_coref[doc_key]["top_span_embeddings"], output_coref[doc_key]["top_span_mask"], output_coref[doc_key]["top_span_indices"])
+
 
         if self.rel_prop > 0:
             output_relation = self._relation.relation_propagation(output_relation)
@@ -236,8 +241,7 @@ class DyGIE(Model):
                 spans, span_mask, span_embeddings, sentence_lengths, ner_labels, metadata)
 
         if self._loss_weights['coref'] > 0:
-            output_coref = self._coref(
-                spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
+            output_coref = self._coref.predict_labels(coref_labels, output_coref, metadata)
 
         if self._loss_weights['relation'] > 0:
             output_relation = self._relation.predict_labels(relation_labels, output_relation, metadata)
