@@ -571,7 +571,8 @@ class EventExtractor(Model):
 
         full_arguments = torch.cat([arguments_projected, context], dim=-1)
 
-        full_arguments_flat = full_arguments.view(batch_size, max_num_trigs, max_num_args, -1)
+        full_arguments_flat = full_arguments.view(batch_size * max_num_trigs * max_num_args, -1)
+
         argument_scores_flat = self._argument_scorer(full_arguments_flat)
 
         argument_scores = argument_scores_flat.view(batch_size, max_num_trigs, max_num_args, -1)
@@ -581,7 +582,7 @@ class EventExtractor(Model):
         argument_scores += (top_trig_scores.unsqueeze(-1) +
                             top_arg_scores.transpose(1, 2).unsqueeze(-1))
 
-        shape = [argument_scores.size(0), argument_scores.size(1), argument_scores.size(2), 1]
+        shape = [batch_size, max_num_trigs, max_num_args, 1]
         dummy_scores = argument_scores.new_zeros(*shape)
 
         argument_scores = torch.cat([dummy_scores, argument_scores], -1)
