@@ -142,6 +142,10 @@ class EventExtractor(Model):
         self._trigger_loss = torch.nn.CrossEntropyLoss(reduction="sum")
         # TODO(dwadden) add loss weights.
         self._argument_loss = torch.nn.CrossEntropyLoss(reduction="sum", ignore_index=-1)
+
+        import os
+        self._threshold = float(os.environ["THRESHOLD"]) / 10
+
         initializer(self)
 
     @overrides
@@ -377,7 +381,7 @@ class EventExtractor(Model):
         mask = trigger_mask.unsqueeze(-1)
         trigger_scores = util.replace_masked_values(trigger_scores, mask, -1e20)
         dummy_dims = [trigger_scores.size(0), trigger_scores.size(1), 1]
-        dummy_scores = trigger_scores.new_zeros(*dummy_dims)
+        dummy_scores = self._threshold * trigger_scores.new_ones(*dummy_dims)
         trigger_scores = torch.cat((dummy_scores, trigger_scores), -1)
         # Give large negative scores to the masked-out values.
         return trigger_scores
@@ -613,10 +617,11 @@ class EventExtractor(Model):
                             top_arg_scores.transpose(1, 2).unsqueeze(-1))
 
         shape = [argument_scores.size(0), argument_scores.size(1), argument_scores.size(2), 1]
-        dummy_scores = argument_scores.new_zeros(*shape)
+        dummy_scores = self._threshold * argument_scores.new_ones(*shape)
 
         if prepend_zeros:
             argument_scores = torch.cat([dummy_scores, argument_scores], -1)
+
         return argument_scores
 
     @staticmethod
