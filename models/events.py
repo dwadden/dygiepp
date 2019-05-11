@@ -111,7 +111,7 @@ class EventExtractor(Model):
         # / argument pair embeddings and the text.
         self._context_window = context_window                # If greater than 0, concatenate context as features.
         self._argument_feedforward = argument_feedforward
-        self._argument_scorer = torch.nn.Linear(2 * argument_feedforward.get_output_dim(),
+        self._argument_scorer = torch.nn.Linear(argument_feedforward.get_output_dim(),
                                                 self._n_argument_labels)
 
         # Distance embeddings
@@ -569,7 +569,8 @@ class EventExtractor(Model):
         context = self._graph_attention(
             arguments_projected, num_trigs_kept, num_arg_spans_kept)
 
-        full_arguments = torch.cat([arguments_projected, context], dim=-1)
+        # full_arguments = torch.cat([arguments_projected, context], dim=-1)
+        full_arguments = context
 
         full_arguments_flat = full_arguments.view(batch_size * max_num_trigs * max_num_args, -1)
 
