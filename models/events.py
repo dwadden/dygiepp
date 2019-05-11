@@ -148,6 +148,7 @@ class EventExtractor(Model):
     def forward(self,  # type: ignore
                 trigger_mask,
                 trigger_embeddings,
+                trigger_doubles,
                 spans,
                 span_mask,
                 span_embeddings,  # TODO(dwadden) add type.
@@ -248,23 +249,15 @@ class EventExtractor(Model):
                                  text_emb=trigger_embeddings,
                                  text_mask=trigger_mask)
 
+        top_trig_doubles = util.batched_index_select(trigger_doubles, top_trig_indices)
+
         # Run span graph propagation.
-        top_trig_embeddings, top_arg_embeddings = self._span_prop(
-            top_trig_embeddings, top_arg_embeddings, top_trig_mask, top_arg_mask,
+        top_trig_doubles, top_arg_embeddings = self._span_prop(
+            top_trig_doubles, top_arg_embeddings, top_trig_mask, top_arg_mask,
             top_trig_scores, top_arg_scores, trig_arg_emb_dict)
 
-        # TODO(dwadden) write a test.
-        top_trig_indices_repeat = (top_trig_indices.unsqueeze(-1).
-                                   repeat(1, 1, top_trig_embeddings.size(-1)))
-        updated_trig_embeddings = trigger_embeddings.scatter(
-            1, top_trig_indices_repeat, top_trig_embeddings)
-
-        # Recompute the trigger scores.
-        trigger_scores = self._compute_trigger_scores(updated_trig_embeddings, cls_embeddings, trigger_mask)
-        _, predicted_triggers = trigger_scores.max(-1)
-
         trig_arg_embeddings = self._compute_trig_arg_embeddings(
-            top_trig_embeddings, top_arg_embeddings, **trig_arg_emb_dict)
+            top_trig_doubles, top_arg_embeddings, **trig_arg_emb_dict)
         argument_scores = self._compute_argument_scores(
             trig_arg_embeddings, top_trig_scores, top_arg_scores)
 
@@ -383,7 +376,7 @@ class EventExtractor(Model):
         return trigger_scores
 
     def _compute_trig_arg_embeddings(self,
-                                     top_trig_embeddings, top_arg_embeddings, cls_embeddings,
+                                     top_trig_doubles, top_arg_embeddings, cls_embeddings,
                                      top_trig_labels, top_ner_labels, top_trig_indices,
                                      top_arg_spans, text_emb, text_mask):
         """
@@ -428,10 +421,10 @@ class EventExtractor(Model):
                 # Otherwise, just return the embeddings.
                 arg_emb_extras.append(self._ner_label_emb(top_ner_labels))
 
-        num_trigs = top_trig_embeddings.size(1)
+        num_trigs = top_trig_doubles.size(1)
         num_args = top_arg_embeddings.size(1)
 
-        trig_emb_expanded = top_trig_embeddings.unsqueeze(2)
+        trig_emb_expanded = top_trig_doubles.unsqueeze(2)
         trig_emb_tiled = trig_emb_expanded.repeat(1, 1, num_args, 1)
 
         arg_emb_expanded = top_arg_embeddings.unsqueeze(1)

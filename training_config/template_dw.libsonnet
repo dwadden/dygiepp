@@ -72,7 +72,8 @@ function(p) {
   local pair_emb_dim = 3 * span_emb_dim,
   local relation_scorer_dim = pair_emb_dim,
   local coref_scorer_dim = pair_emb_dim + p.feature_size,
-  local trigger_emb_dim = span_emb_dim,
+  local trigger_emb_dim = context_layer_output_size,
+  local trigger_pair_dim = span_emb_dim,
   // Add token embedding dim because we're including the cls token.
   local trigger_scorer_dim = ((if trigger_attention_context then 2 * trigger_emb_dim else trigger_emb_dim) +
     token_embedding_dim),
