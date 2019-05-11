@@ -97,10 +97,8 @@ function(p) {
     (if event_args_use_trigger_labels then trigger_label_dim else 0) +
     (if events_context_window > 0 then 4 * events_context_window * context_layer_output_size else 0)),
   // Add token embedding dim because of sentence token.
-  local graph_attention_input_dim = (argument_pair_dim + token_embedding_dim +
+  local argument_scorer_dim = (argument_pair_dim + token_embedding_dim +
     (if shared_attention_context then trigger_emb_dim else 0)),
-  // Add token embedding dim because of the cls token.
-  local argument_scorer_dim = p.graph_attention_output_dim,
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -290,8 +288,8 @@ function(p) {
           n_layers: getattr(p, "graph_attention_n_layers", 2),
           n_heads: getattr(p, "graph_attention_n_heads", 4),
           dropout: getattr(p, "graph_attention_dropout", 0.2),
-          input_dim: graph_attention_input_dim,
-          output_dim: getattr(p, "graph_attention_output_dim", 1024)
+          input_dim: p.feedforward_dim,
+          output_dim: p.feedforward_dim
         }
       }
     }

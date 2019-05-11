@@ -111,7 +111,8 @@ class EventExtractor(Model):
         # / argument pair embeddings and the text.
         self._context_window = context_window                # If greater than 0, concatenate context as features.
         self._argument_feedforward = argument_feedforward
-        self._argument_scorer = torch.nn.Linear(argument_feedforward.get_output_dim(), self._n_argument_labels)
+        self._argument_scorer = torch.nn.Linear(2 * argument_feedforward.get_output_dim(),
+                                                self._n_argument_labels)
 
         # Distance embeddings
         self._num_distance_buckets = 10  # Just use 10 which is the default.
@@ -235,7 +236,7 @@ class EventExtractor(Model):
             num_arg_spans_kept)
 
         argument_scores = self._compute_argument_scores(
-            trig_arg_embeddings, top_trig_scores, top_arg_scores)
+            trig_arg_embeddings, top_trig_scores, top_arg_scores, num_trigs_kept, num_arg_spans_kept)
 
         _, predicted_arguments = argument_scores.max(-1)
         predicted_arguments -= 1  # The null argument has label -1.
@@ -422,9 +423,6 @@ class EventExtractor(Model):
             attended_context = self._get_shared_attention_context(pair_embeddings, text_emb, text_mask)
             pair_embeddings = torch.cat([pair_embeddings, attended_context], dim=3)
 
-        pair_embeddings = self._graph_attention(
-            pair_embeddings, num_trigs_kept, num_arg_spans_kept)
-
         return pair_embeddings
 
     def _compute_distance_embeddings(self, top_trig_indices, top_arg_spans):
@@ -556,7 +554,8 @@ class EventExtractor(Model):
 
         return pad_batch
 
-    def _compute_argument_scores(self, pairwise_embeddings, top_trig_scores, top_arg_scores):
+    def _compute_argument_scores(self, pairwise_embeddings, top_trig_scores, top_arg_scores,
+                                 num_trigs_kept, num_arg_spans_kept):
         batch_size = pairwise_embeddings.size(0)
         max_num_trigs = pairwise_embeddings.size(1)
         max_num_args = pairwise_embeddings.size(2)
@@ -565,7 +564,15 @@ class EventExtractor(Model):
         embeddings_flat = pairwise_embeddings.view(-1, feature_dim)
 
         arguments_projected_flat = self._argument_feedforward(embeddings_flat)
-        argument_scores_flat = self._argument_scorer(arguments_projected_flat)
+        arguments_projected = arguments_projected_flat.view(batch_size, max_num_trigs, max_num_args, -1)
+
+        context = self._graph_attention(
+            arguments_projected, num_trigs_kept, num_arg_spans_kept)
+
+        full_arguments = torch.cat([arguments_projected, context], dim=-1)
+
+        full_arguments_flat = full_arguments.view(batch_size, max_num_trigs, max_num_args, -1)
+        argument_scores_flat = self._argument_scorer(full_arguments_flat)
 
         argument_scores = argument_scores_flat.view(batch_size, max_num_trigs, max_num_args, -1)
 
