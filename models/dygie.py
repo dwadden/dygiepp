@@ -62,8 +62,6 @@ class DyGIE(Model):
                  use_attentive_span_extractor: bool = True,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
-                 rel_prop: int = 0,
-                 coref_prop: int = 0,
                  display_metrics: List[str] = None,
                  valid_events_dir: str = None) -> None:
         super(DyGIE, self).__init__(vocab, regularizer)
@@ -119,8 +117,6 @@ class DyGIE(Model):
         else:
             self._lstm_dropout = lambda x: x
 
-        self.rel_prop = rel_prop
-        self.coref_prop = coref_prop
 
         initializer(self)
 
@@ -212,28 +208,29 @@ class DyGIE(Model):
         output_relation = {'loss': 0}
         output_events = {'loss': 0}
 
-        # Prune and compute span representations
-        output_relation = self._relation.compute_representations(
-            spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
+        # Prune and compute span representations for coreference module
+        if self._loss_weights["coref"] > 0 or self._coref.coref_prop > 0:
+            output_coref = self._coref.compute_representations(
+                spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
+            output_coref["loss"] = 0
 
-        # TODO(Ulme) Split the forward method of the coreference module up into parts
-        output_coref = self._coref.compute_representations(
-            spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
+        # Prune and compute span representations for relation module
+        if self._loss_weights["relation"] > 0 or self._relation.rel_prop > 0:
+            output_relation = self._relation.compute_representations(
+                spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
+            output_relation["loss"] = 0
 
         # Propagation of global information to enhance the span embeddings
-        if self.coref_prop > 0:
-            for doc_key in output_coref:
-                output_coref[doc_key] = self.coref_propagation_doc(output_coref[doc_key])
-
+        if self._coref.coref_prop > 0:
             # TODO(Ulme) Implement Coref Propagation
-            import ipdb; ipdb.set_trace()
-            for doc_key in output_coref:
-                span_embeddings = self.update_span_embeddings(span_embeddings, span_mask, output_coref[doc_key]["top_span_embeddings"], output_coref[doc_key]["top_span_mask"], output_coref[doc_key]["top_span_indices"])
+            output_coref = self._coref.coref_propagation(output_coref)
+            span_embeddings = self._coref.update_spans(output_coref, span_embeddings)
 
-
-        if self.rel_prop > 0:
+        if self._relation.rel_prop > 0:
             output_relation = self._relation.relation_propagation(output_relation)
-            span_embeddings = self.update_span_embeddings(span_embeddings, span_mask, output_relation["top_span_embeddings"], output_relation["top_span_mask"], output_relation["top_span_indices"])
+            span_embeddings = self.update_span_embeddings(span_embeddings, span_mask,
+                output_relation["top_span_embeddings"], output_relation["top_span_mask"],
+                output_relation["top_span_indices"])
 
         # Make predictions and compute losses for each module
         if self._loss_weights['ner'] > 0:

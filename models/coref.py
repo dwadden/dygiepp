@@ -19,6 +19,7 @@ from dygie.models import shared
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
+
 class CorefResolver(Model):
     """
     TODO(dwadden) document correctly.
@@ -51,7 +52,10 @@ class CorefResolver(Model):
                  antecedent_feedforward: FeedForward,
                  feature_size: int,
                  spans_per_word: float,
+                 span_emb_dim: int,
                  max_antecedents: int,
+                 coref_prop: int = 0,
+                 coref_prop_dropout_f: float = 0.0,
                  initializer: InitializerApplicator = InitializerApplicator(), # TODO(dwadden add this).
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(CorefResolver, self).__init__(vocab, regularizer)
@@ -73,27 +77,44 @@ class CorefResolver(Model):
         self._mention_recall = MentionRecall()
         self._conll_coref_scores = ConllCorefScores()
 
-        span_emb_dim = 820
+        self.coref_prop = coref_prop
         self._f_network = FeedForward(input_dim=2*span_emb_dim,
                                       num_layers=1,
                                       hidden_dims=span_emb_dim,
                                       activations=torch.nn.Sigmoid(),
                                       dropout=coref_prop_dropout_f)
 
-        self.softmax = torch.nn.SoftMax(dim=-1)
+        self.antecedent_softmax = torch.nn.Softmax(dim=-1)
         initializer(self)
+
+    def update_spans(self, output_dict, span_embeddings_batched):
+        new_span_embeddings_batched = span_embeddings_batched.clone()
+        for doc_key in output_dict:
+            span_ix = output_dict[doc_key]["span_ix"]
+            top_span_embeddings = output_dict[doc_key]["top_span_embeddings"]
+            for ix, el in enumerate(output_dict[doc_key]["top_span_indices"].view(-1)):
+                new_span_embeddings_batched[span_ix[el] / span_embeddings_batched.shape[1], span_ix[el] % span_embeddings_batched.shape[1]] = top_span_embeddings[0, ix]
+        return new_span_embeddings_batched
+
+    def coref_propagation(self, output_dict):
+        for doc_key in output_dict:
+            output_dict[doc_key] = self.coref_propagation_doc(output_dict[doc_key])
+        return output_dict
 
     def coref_propagation_doc(self, output_dict):
         coreference_scores = output_dict["coreference_scores"]
         top_span_embeddings = output_dict["top_span_embeddings"]
+        antecedent_indices = output_dict["antecedent_indices"]
         for t in range(self.coref_prop):
-            coreference_probabilities = self.softmax(coreference_scores)[:, :, 1:].unsqueeze(3).repeat(1,1,1,top_span_embeddings.shape[-1])
-            top_span_embeddings_repeated = top_span_embeddings.unsqueeze(2).repeat(1, 1, coreference_probabilities.shape[2], 1)
-            entity_embs = torch.sum(antecedent_distribution * top_span_embeddings_repeated, dim=2)
+            antecedent_distribution = self.antecedent_softmax(coreference_scores)[:, :, 1:]
+            ant_var1 = antecedent_indices.unsqueeze(0).unsqueeze(-1).repeat(1,1,1,top_span_embeddings.shape[-1])
+            top_var1 = top_span_embeddings.unsqueeze(1).repeat(1,antecedent_distribution.shape[1],1,1)
+            entity_embs = (torch.gather(top_var1, 2, ant_var1).permute([3,0,1,2]) * antecedent_distribution).permute([1, 2, 3, 0]).sum(dim=2)
+
             f_network_input = torch.cat([top_span_embeddings, entity_embs], dim=-1)
             f_weights = self._f_network(f_network_input)
             top_span_embeddings = f_weights * top_span_embeddings + (1.0 - f_weights) * entity_embs
-            coreference_scores = self.get_coreference_scores(top_span_embeddings, self._mention_pruner._scorer(top_span_embeddings))
+            coreference_scores = self.get_coref_scores(top_span_embeddings, self._mention_pruner._scorer(top_span_embeddings), output_dict["antecedent_indices"], output_dict["valid_antecedent_offsets"], output_dict["valid_antecedent_log_mask"])
 
         output_dict["coreference_scores"] = coreference_scores
         output_dict["top_span_embeddings"] = top_span_embeddings
@@ -124,23 +145,19 @@ class CorefResolver(Model):
             ix_list = [1 if entry == key else 0 for entry in doc_keys]
             doc_metadata = [entry for entry in metadata if entry["doc_key"] == key]
             ix = torch.tensor(ix_list, dtype=torch.uint8)
-            output_docs[key] = self._compute_representations_doc(
-                spans_batched[ix], span_mask_batched[ix], span_embeddings_batched[ix],
-                sentence_lengths[ix], coref_labels_batched[ix], doc_metadata)
-        output_docs["uniq_keys"] = uniq_keys
+            if sentence_lengths[ix].sum().item() > 1:
+                output_docs[key] = self._compute_representations_doc(
+                    spans_batched[ix], span_mask_batched[ix], span_embeddings_batched[ix],
+                    sentence_lengths[ix], ix, coref_labels_batched[ix], doc_metadata)
         return output_docs
 
-    def predict_labels(self, coref_labels, output_docs, uniq_keys):
-        for key in uniq_keys:
-            ix_list = [1 if entry == key else 0 for entry in doc_keys]
-            doc_metadata = [entry for entry in metadata if entry["doc_key"] == key]
-            ix = torch.tensor(ix_list, dtype=torch.uint8)
-            output_docs[key] = self.predict_labels_doc(output_docs[key])
-        output_docs["uniq_keys"] = uniq_keys
-        return self.collect_losses(output_docs, uniq_keys)
+    def predict_labels(self, coref_labels, output_docs, metadata): # TODO(Ulme) use metadata or remove
+        for key in output_docs:
+            output_docs[key] = self.predict_labels_doc(coref_labels, output_docs[key])
+        return self.collect_losses(output_docs)
 
-    def collect_losses(self, output_docs, uniq_keys):
-        uniq_keys = output_docs["uniq_keys"]
+    def collect_losses(self, output_docs):
+        uniq_keys = [el for el in output_docs]
         losses = torch.cat([entry["loss"].unsqueeze(0) for entry in output_docs.values()])
         loss = torch.sum(losses)
 
@@ -162,6 +179,7 @@ class CorefResolver(Model):
                      span_mask_batched,
                      span_embeddings_batched,  # TODO(dwadden) add type.
                      sentence_lengths,
+                     ix,
                      coref_labels_batched: torch.IntTensor = None,
                      metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
         # pylint: disable=arguments-differ
@@ -183,7 +201,7 @@ class CorefResolver(Model):
         num_spans = spans.size(1)
 
         # Prune based on mention scores. Make sure we keep at least 1.
-        num_spans_to_keep = int(math.ceil(self._spans_per_word * document_length))
+        num_spans_to_keep = max(2, int(math.ceil(self._spans_per_word * document_length)))
 
         # Since there's only one minibatch, there aren't any masked spans for us. The span mask is
         # always 1.
@@ -212,21 +230,24 @@ class CorefResolver(Model):
         valid_antecedent_indices, valid_antecedent_offsets, valid_antecedent_log_mask = \
             self._generate_valid_antecedents(num_spans_to_keep, max_antecedents, util.get_device_of(span_embeddings))
 
-        coreference_scores = self.get_coref_scores(top_span_embeddings, top_span_mention_scores, valid_antecedent_indices, valid_antecedent_offsets)
+        coreference_scores = self.get_coref_scores(top_span_embeddings, top_span_mention_scores,
+            valid_antecedent_indices, valid_antecedent_offsets, valid_antecedent_log_mask)
 
         output_dict = {"top_spans": top_spans,
                        "antecedent_indices": valid_antecedent_indices,
                        "valid_antecedent_log_mask": valid_antecedent_log_mask,
+                       "valid_antecedent_offsets": valid_antecedent_offsets,
                        "top_span_indices": top_span_indices,
+                       "top_span_mask": top_span_mask,
                        "top_span_embeddings": top_span_embeddings,
-                       "flat_top_span_indices", flat_top_span_indices,
+                       "flat_top_span_indices": flat_top_span_indices,
                        "coref_labels": coref_labels,
-                       "coreference_scores": coreference_scores}
+                       "coreference_scores": coreference_scores,
+                       "sentence_lengths": sentence_lengths,
+                       "span_ix": span_ix,
+                       "metadata": metadata}
 
         return output_dict
-        #return self.predict_labels_doc(output_dict)
-
-
 
     # TODO(Ulme) Split up method here?
 
@@ -234,7 +255,8 @@ class CorefResolver(Model):
                          top_span_embeddings,
                          top_span_mention_scores,
                          valid_antecedent_indices,
-                         valid_antecedent_offsets):
+                         valid_antecedent_offsets,
+                         valid_antecedent_log_mask):
         candidate_antecedent_embeddings = util.flattened_index_select(top_span_embeddings,
                                                                       valid_antecedent_indices)
         # Shape: (batch_size, num_spans_to_keep, max_antecedents)
@@ -252,8 +274,10 @@ class CorefResolver(Model):
                                                               valid_antecedent_log_mask)
         return coreference_scores
 
-    def predict_labels_doc(self, output_dict):
+    def predict_labels_doc(self, coref_labels, output_dict):
         # Shape: (batch_size, num_spans_to_keep)
+        #import ipdb; ipdb.set_trace()
+        coreference_scores = output_dict["coreference_scores"]
         _, predicted_antecedents = coreference_scores.max(2)
         # Subtract one here because index 0 is the "no antecedent" class,
         # so this makes the indices line up with actual spans if the prediction
@@ -264,9 +288,12 @@ class CorefResolver(Model):
 
         top_span_indices = output_dict["top_span_indices"]
         flat_top_span_indices = output_dict["flat_top_span_indices"]
-        antecedent_indices = output_dict["valid_antecedent_indices"]
+        valid_antecedent_indices = output_dict["antecedent_indices"]
         valid_antecedent_log_mask = output_dict["valid_antecedent_log_mask"]
         top_spans = output_dict["top_spans"]
+        top_span_mask = output_dict["top_span_mask"]
+        metadata = output_dict["metadata"]
+        sentence_lengths = output_dict["sentence_lengths"]
 
         if coref_labels is not None:
             # Find the gold labels for the spans which we kept.
