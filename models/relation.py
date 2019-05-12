@@ -41,6 +41,8 @@ class RelationExtractor(Model):
         super(RelationExtractor, self).__init__(vocab, regularizer)
 
         self._n_labels = vocab.get_vocab_size("relation_labels")
+        if self._n_labels == 0:
+            self._n_labels = 1
 
         # Span candidate scorer.
         # TODO(dwadden) make sure I've got the input dim right on this one.
