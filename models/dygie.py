@@ -21,6 +21,10 @@ from dygie.training.joint_metrics import JointMetrics
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
+import sys
+from IPython.core import ultratb
+sys.excepthook = ultratb.FormattedTB(mode='Verbose',
+                                     color_scheme='Linux', call_pdb=1)
 
 @Model.register("dygie")
 class DyGIE(Model):
@@ -212,13 +216,11 @@ class DyGIE(Model):
         if self._loss_weights["coref"] > 0 or self._coref.coref_prop > 0:
             output_coref = self._coref.compute_representations(
                 spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
-            output_coref["loss"] = 0
 
         # Prune and compute span representations for relation module
         if self._loss_weights["relation"] > 0 or self._relation.rel_prop > 0:
             output_relation = self._relation.compute_representations(
                 spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
-            output_relation["loss"] = 0
 
         # Propagation of global information to enhance the span embeddings
         if self._coref.coref_prop > 0:
@@ -247,6 +249,10 @@ class DyGIE(Model):
             output_events = self._events(
                 text_mask, contextualized_embeddings, spans, span_mask, span_embeddings,
                 sentence_lengths, trigger_labels, argument_labels, metadata)
+        if "loss" not in output_coref:
+            output_coref["loss"] = 0
+        if "loss" not in output_relation:
+            output_relation["loss"] = 0
 
         # TODO(dwadden) just did this part.
         loss = (self._loss_weights['coref'] * output_coref['loss'] +
