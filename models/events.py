@@ -566,7 +566,7 @@ class EventExtractor(Model):
         # To use as input to trigger scorer.
         arguments_projected = arguments_projected_flat.view(
             batch_size, max_num_trigs, max_num_args, -1)
-        mask = top_trig_mask.unsqueeze(2).byte() | top_arg_mask.unsqueeze(1).byte()
+        mask = top_trig_mask.unsqueeze(2).byte() & top_arg_mask.unsqueeze(1).byte()
         mask = mask.repeat(1, 1, 1, arguments_projected.size(-1))
         arguments_projected[~mask] = -1e22
 
