@@ -277,7 +277,7 @@ class EventExtractor(Model):
 
             loss = (self._loss_weights["trigger"] * trigger_loss +
                     self._loss_weights["arguments"] * argument_loss +
-                    10 * auxiliary_loss)
+                    auxiliary_loss)
 
             output_dict["loss"] = loss
 
