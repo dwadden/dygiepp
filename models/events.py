@@ -44,8 +44,8 @@ class EventExtractor(Model):
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(EventExtractor, self).__init__(vocab, regularizer)
 
-        self._n_trigger_labels = vocab.get_vocab_size("trigger_labels")
-        self._n_argument_labels = vocab.get_vocab_size("argument_labels")
+        self._n_trigger_labels = max(2, vocab.get_vocab_size("trigger_labels"))
+        self._n_argument_labels = max(1, vocab.get_vocab_size("argument_labels"))
 
         # Weight on trigger labeling and argument labeling.
         self._loss_weights = loss_weights.as_dict()
