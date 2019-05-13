@@ -349,18 +349,19 @@ class EventExtractor(Model):
         predicted_num_triggers = self._cls_n_triggers(cls_projected)
         num_trigger_loss = F.cross_entropy(
             predicted_num_triggers, num_triggers,
-            weight=torch.tensor([1, 2, 2, 2, 2], device=trigger_labels.device, dtype=torch.float),
+            weight=torch.tensor([1, 3, 3, 3, 3], device=trigger_labels.device, dtype=torch.float),
             reduction="sum")
 
         label_present = [torch.any(trigger_labels == i, dim=1).unsqueeze(1)
                          for i in range(1, self._n_trigger_labels)]
-        label_present = torch.cat(label_present, dim=1).cuda(cls_projected.device)
+        label_present = torch.cat(label_present, dim=1)
+        if cls_projected.device.type != "cpu":
+            label_present = label_present.cuda(cls_projected.device)
         predicted_event_type_logits = self._cls_event_types(cls_projected)
         trigger_label_loss = F.binary_cross_entropy_with_logits(
             predicted_event_type_logits, label_present.float(), reduction="sum")
 
         return num_trigger_loss + trigger_label_loss
-
 
     def _compute_trigger_scores(self, trigger_embeddings, cls_projected, trigger_mask):
         """
