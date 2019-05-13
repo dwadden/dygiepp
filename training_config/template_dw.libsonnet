@@ -10,7 +10,7 @@ function(p) {
     "ner": "+ner_f1",
     "rel": "+rel_f1",
     "coref": "+coref_f1",
-    "events": "+arg_class_f1"
+    "events": getattr(p, "event_validation_metric", "+arg_class_f1")
   },
 
   local display_metrics = {

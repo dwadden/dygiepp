@@ -169,11 +169,6 @@ function(p) {
     context_layer: {
       type: "pass_through",
       input_dim: token_embedding_dim,
-      //type: "lstm",
-      //bidirectional: true,
-      //input_size: token_embedding_dim,
-      //hidden_size: p.lstm_hidden_size,
-      //num_layers: p.lstm_n_layers,
     },
     modules: {
       coref: {
@@ -223,8 +218,8 @@ function(p) {
     num_epochs: p.num_epochs,
     grad_norm: 5.0,
     patience : p.patience,
-    cuda_device : std.parseInt(std.extVar("cuda_device")),
-    //cuda_device : [1, 2],
+    //cuda_device : std.parseInt(std.extVar("cuda_device")),
+    cuda_device : [0, 1, 2],
     validation_metric: validation_metrics[p.target],
     learning_rate_scheduler: p.learning_rate_scheduler,
     optimizer: p.optimizer

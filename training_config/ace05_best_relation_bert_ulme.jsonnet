@@ -6,6 +6,11 @@ local template = import "template.libsonnet";
 
 // Set options.
 
+local stringToBool(s) =
+  if s == "true" then true
+  else if s == "false" then false
+  else error "invalid boolean: " + std.manifestJson(s);
+
 local params = {
   // Primary prediction target. Watch metrics associated with this target.
   target: "rel",
@@ -73,7 +78,7 @@ local params = {
     t_total: 200000,
     weight_decay: 0.0,
     parameter_groups: [
-      [["_text_field_embedder"], {"lr": 1e-4, "warmup": 0.4, "schedule": "warmup_linear", "t_total": 200000, "weight_decay": 0.1}],
+      [["_text_field_embedder"], {"lr": 1e-4, "warmup": 0.4, "schedule": "warmup_linear", "t_total": 200000, "weight_decay": 0.01, "finetune": stringToBool(std.extVar("finetune"))}],
     ],
   },
   learning_rate_scheduler:  {
