@@ -163,8 +163,10 @@ class EventExtractor(Model):
         predicted_ner = output_ner["predicted_ner"]
 
         # Compute trigger scores.
-        trigger_scores = self._compute_trigger_scores(trigger_embeddings, cls_embeddings, trigger_mask)
-        _, predicted_triggers = trigger_scores.max(-1)
+        # trigger_scores = self._compute_trigger_scores(trigger_embeddings, cls_embeddings, trigger_mask)
+        # _, predicted_triggers = trigger_scores.max(-1)
+        trigger_scores = None
+        predicted_triggers = None
 
         # Get trigger candidates for event argument labeling.
         num_trigs_to_keep = torch.floor(
@@ -210,37 +212,37 @@ class EventExtractor(Model):
         else:
             # Hard predictions.
             if self._event_args_label_predictor == "hard":
-                top_trig_labels = predicted_triggers.gather(1, top_trig_indices)
+                top_trig_labels = None
                 top_ner_labels = predicted_ner.gather(1, top_arg_indices)
             # Softmax predictions.
             else:
-                softmax_triggers = trigger_scores.softmax(dim=-1)
-                top_trig_labels = util.batched_index_select(softmax_triggers, top_trig_indices)
+                top_trig_labels = None
                 softmax_ner = ner_scores.softmax(dim=-1)
                 top_ner_labels = util.batched_index_select(softmax_ner, top_arg_indices)
-                if self._check:
-                    # Make sure we're doing the indexing correctly and softmax is normalized.
-                    batch_size, num_candidates = top_trig_indices.size()
-                    if batch_size > 2 and num_candidates > 5:
-                        trig_ix = top_trig_indices[2, 5]
-                        expected = softmax_triggers[2, trig_ix, :]
-                        actual = top_trig_labels[2, 5]
-                        assert torch.abs(actual.sum() - 1) < 0.0001
-                        assert torch.allclose(expected, actual)
 
         trig_arg_embeddings = self._compute_trig_arg_embeddings(
             top_trig_embeddings, top_arg_embeddings, cls_embeddings, top_trig_labels, top_ner_labels,
             top_trig_indices, top_arg_spans, trigger_embeddings, trigger_mask)
 
-        argument_scores = self._compute_argument_scores(
-            trig_arg_embeddings, top_trig_scores, top_arg_scores)
+        argument_scores, arguments_projected = self._compute_argument_scores(
+            trig_arg_embeddings, top_trig_scores, top_arg_scores, top_trig_mask, top_arg_mask)
+
+        # Additional trigger features obtained by maxpooling the trigger / argument interaction
+        # matrix.
+        maxpooled_arguments, _ = arguments_projected.max(dim=2)
+        trig_embeddings_full = torch.cat([top_trig_embeddings, maxpooled_arguments], dim=-1)
+
+        top_trigger_scores = self._compute_trigger_scores(trig_embeddings_full, cls_embeddings, top_trig_mask)
+        _, top_predicted_triggers = top_trigger_scores.max(-1)
+        prediction_placeholder = torch.zeros_like(trigger_mask, dtype=torch.long)
+        predicted_triggers = prediction_placeholder.scatter(1, top_trig_indices, top_predicted_triggers)
 
         _, predicted_arguments = argument_scores.max(-1)
         predicted_arguments -= 1  # The null argument has label -1.
 
         output_dict = {"top_trigger_indices": top_trig_indices,
                        "top_argument_spans": top_arg_spans,
-                       "trigger_scores": trigger_scores,
+                       "top_trigger_scores": top_trigger_scores,
                        "argument_scores": argument_scores,
                        "predicted_triggers": predicted_triggers,
                        "predicted_arguments": predicted_arguments,
@@ -251,7 +253,8 @@ class EventExtractor(Model):
         # Evaluate loss and F1 if labels were provided.
         if trigger_labels is not None and argument_labels is not None:
             # Compute the loss for both triggers and arguments.
-            trigger_loss = self._get_trigger_loss(trigger_scores, trigger_labels, trigger_mask)
+            top_trigger_labels = torch.gather(trigger_labels, 1, top_trig_indices)
+            trigger_loss = self._get_trigger_loss(top_trigger_scores, top_trigger_labels, top_trig_mask)
 
             gold_arguments = self._get_pruned_gold_arguments(
                 argument_labels, top_trig_indices, top_arg_indices, top_trig_mask, top_arg_mask)
@@ -341,8 +344,7 @@ class EventExtractor(Model):
             trigger_embeddings = torch.cat([trigger_embeddings, context], dim=2)
         trigger_scores = self._trigger_scorer(trigger_embeddings)
         # Give large negative scores to masked-out elements.
-        mask = trigger_mask.unsqueeze(-1)
-        trigger_scores = util.replace_masked_values(trigger_scores, mask, -1e20)
+        trigger_scores = util.replace_masked_values(trigger_scores, trigger_mask, -1e20)
         dummy_dims = [trigger_scores.size(0), trigger_scores.size(1), 1]
         dummy_scores = trigger_scores.new_zeros(*dummy_dims)
         trigger_scores = torch.cat((dummy_scores, trigger_scores), -1)
@@ -550,7 +552,8 @@ class EventExtractor(Model):
 
         return pad_batch
 
-    def _compute_argument_scores(self, pairwise_embeddings, top_trig_scores, top_arg_scores):
+    def _compute_argument_scores(self, pairwise_embeddings, top_trig_scores, top_arg_scores,
+                                 top_trig_mask, top_arg_mask):
         batch_size = pairwise_embeddings.size(0)
         max_num_trigs = pairwise_embeddings.size(1)
         max_num_args = pairwise_embeddings.size(2)
@@ -559,6 +562,14 @@ class EventExtractor(Model):
         embeddings_flat = pairwise_embeddings.view(-1, feature_dim)
 
         arguments_projected_flat = self._argument_feedforward(embeddings_flat)
+
+        # To use as input to trigger scorer.
+        arguments_projected = arguments_projected_flat.view(
+            batch_size, max_num_trigs, max_num_args, -1)
+        mask = top_trig_mask.unsqueeze(2).byte() | top_arg_mask.unsqueeze(1).byte()
+        mask = mask.repeat(1, 1, 1, arguments_projected.size(-1))
+        arguments_projected[~mask] = -1e22
+
         argument_scores_flat = self._argument_scorer(arguments_projected_flat)
 
         argument_scores = argument_scores_flat.view(batch_size, max_num_trigs, max_num_args, -1)
@@ -572,7 +583,7 @@ class EventExtractor(Model):
         dummy_scores = argument_scores.new_zeros(*shape)
 
         argument_scores = torch.cat([dummy_scores, argument_scores], -1)
-        return argument_scores
+        return argument_scores, arguments_projected
 
     @staticmethod
     def _get_pruned_gold_arguments(argument_labels, top_trig_indices, top_arg_indices,

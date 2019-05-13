@@ -75,7 +75,7 @@ function(p) {
   local trigger_emb_dim = context_layer_output_size,  // Triggers are single contextualized tokens.
   // Add token embedding dim because we're including the cls token.
   local trigger_scorer_dim = ((if trigger_attention_context then 2 * trigger_emb_dim else trigger_emb_dim) +
-    token_embedding_dim),
+    token_embedding_dim + p.feedforward_dim),
 
   // Calculation of argument scorer dim is a bit tricky. First, there's the triggers and the span
   // embeddings. Then, if we're using labels, include those. Then, if we're using a context window,
