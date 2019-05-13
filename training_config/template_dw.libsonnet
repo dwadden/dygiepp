@@ -202,6 +202,9 @@ function(p) {
 
   // The model
 
+  random_seed: getattr(p, "random_seed", 13370),
+  numpy_seed: getattr(p, "numpy_seed", 1337),
+  pytorch_seed: getattr(p, "pytorch_seed", 133),
   dataset_reader: {
     type: "ie_json",
     token_indexers: token_indexers,
