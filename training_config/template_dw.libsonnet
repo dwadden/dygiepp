@@ -299,9 +299,10 @@ function(p) {
   iterator: {
     // type: "ie_batch",
     // batch_size: p.batch_size
-    "type": "bucket",
-    "sorting_keys": [["text", "num_tokens"]],
-    "batch_size" : p.batch_size
+    type: "bucket",
+    sorting_keys: [["text", "num_tokens"]],
+    batch_size : p.batch_size,
+    [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
   },
   // validation_iterator: {
   //   type: "ie_document",
