@@ -304,9 +304,11 @@ function(p) {
     batch_size : p.batch_size,
     [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
   },
-  // validation_iterator: {
-  //   type: "ie_document",
-  // },
+  validation_iterator: {
+    type: "bucket",
+    sorting_keys: [["text", "num_tokens"]],
+    batch_size : p.batch_size
+  },
   trainer: {
     num_epochs: p.num_epochs,
     grad_norm: 5.0,
