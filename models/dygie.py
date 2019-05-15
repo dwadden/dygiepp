@@ -18,6 +18,7 @@ from dygie.models.ner import NERTagger
 from dygie.models.relation import RelationExtractor
 from dygie.models.events import EventExtractor
 from dygie.training.joint_metrics import JointMetrics
+from dygie.models.dummy import Dummy
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -72,27 +73,47 @@ class DyGIE(Model):
         self._check = check
 
         self._text_field_embedder = text_field_embedder
+        for param in self._text_field_embedder.token_embedder_bert.parameters():
+            param.requires_grad = False
+
         self._context_layer = context_layer
 
         self._loss_weights = loss_weights.as_dict()
 
-        # TODO(dwadden) Figure out the parameters that need to get passed in.
-        self._coref = CorefResolver.from_params(vocab=vocab,
-                                                feature_size=feature_size,
-                                                check=check,
-                                                params=modules.pop("coref"))
-        self._ner = NERTagger.from_params(vocab=vocab,
-                                          feature_size=feature_size,
-                                          check=check,
-                                          params=modules.pop("ner"))
-        self._relation = RelationExtractor.from_params(vocab=vocab,
-                                                       feature_size=feature_size,
-                                                       check=check,
-                                                       params=modules.pop("relation"))
-        self._events = EventExtractor.from_params(vocab=vocab,
-                                                  feature_size=feature_size,
-                                                  check=check,
-                                                  params=modules.pop("events"))
+        # Create the modules if necessary, else use dummy modules that don't have params.
+        if self._loss_weights["coref"] > 0:
+            self._coref = CorefResolver.from_params(vocab=vocab,
+                                                    feature_size=feature_size,
+                                                    check=check,
+                                                    params=modules.pop("coref"))
+        else:
+            self._coref = Dummy()
+
+        if self._loss_weights["ner"] > 0:
+            self._ner = NERTagger.from_params(vocab=vocab,
+                                              feature_size=feature_size,
+                                              check=check,
+                                              params=modules.pop("ner"))
+        else:
+            self._ner = Dummy()
+
+        if self._loss_weights["relation"] > 0:
+            self._relation = RelationExtractor.from_params(vocab=vocab,
+                                                           feature_size=feature_size,
+                                                           check=check,
+                                                           params=modules.pop("relation"))
+        else:
+            self._relation = Dummy()
+
+        if self._loss_weights["events"] > 0:
+            self._events = EventExtractor.from_params(vocab=vocab,
+                                                      feature_size=feature_size,
+                                                      check=check,
+                                                      params=modules.pop("events"))
+        else:
+            self._events = Dummy()
+
+        # Make endpoint span extractor.
 
         self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
                                                               combination="x,y",
@@ -128,6 +149,13 @@ class DyGIE(Model):
 
         self.rel_prop = rel_prop
         self.coref_prop = coref_prop
+
+        self._loss_weights = dict(coref=0.0,
+                                  relation=0.0,
+                                  ner=0.5,
+                                  events=1.0)
+        self._events_loss_weights = dict(arguments=1,
+                                         trigger=0)
 
         initializer(self)
 
@@ -195,7 +223,7 @@ class DyGIE(Model):
         text_mask = text_mask[:, :max_sentence_length].contiguous()
 
         # Shape: (batch_size, max_sentence_length, encoding_dim)
-        contextualized_embeddings = self._lstm_dropout(self._context_layer(text_embeddings, text_mask))
+        contextualized_embeddings = self._lstm_dropout(self._context_layer(text_embeddings.detach(), text_mask))
 
         if self._attentive_span_extractor is not None:
             # Shape: (batch_size, num_spans, emebedding_size)
@@ -232,8 +260,9 @@ class DyGIE(Model):
         output_events = {'loss': 0}
 
         # Prune and compute span representations
-        output_relation = self._relation.compute_representations(
-            spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
+        if self._loss_weights["relation"] > 0:
+            output_relation = self._relation.compute_representations(
+                spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
         # TODO(Ulme) Split the forward method of the coreference module up into parts
         #output_coref = self._coref.compute_representations()
@@ -263,7 +292,7 @@ class DyGIE(Model):
 
         if self._loss_weights['events'] > 0:
             output_events = self._events(
-                text_mask, contextualized_embeddings, spans, span_mask, span_embeddings, cls_embeddings,
+                text_mask, text_embeddings, contextualized_embeddings, spans, span_mask, span_embeddings, cls_embeddings,
                 sentence_lengths, output_ner, trigger_labels, argument_labels,
                 ner_labels, metadata)
 

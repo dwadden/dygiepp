@@ -1,16 +1,24 @@
 // Library that accepts a parameter dict and returns a full config.
 
 function(p) {
+  // Helper function.
+  // Get the attribute from the object. If the object doesn't have that attribute, return default.
+  local getattr(obj, attrname, default) = if attrname in obj then p[attrname] else default,
+
   // Location of ACE valid event configs
   local valid_events_dir = std.extVar("valid_events_dir"),
 
   // Storing constants.
 
+  local event_validation_metric = (if "event_validation_metric" in p
+    then p.event_validation_metric
+    else "+arg_class_f1"),
+
   local validation_metrics = {
     "ner": "+ner_f1",
     "rel": "+rel_f1",
     "coref": "+coref_f1",
-    "events": "+arg_class_f1"
+    "events": event_validation_metric
   },
 
   local display_metrics = {
@@ -38,9 +46,6 @@ function(p) {
 
   ////////////////////////////////////////////////////////////////////////////////
 
-  // Helper function.
-  // Get the attribute from the object. If the object doesn't have that attribute, return default.
-  local getattr(obj, attrname, default) = if attrname in obj then p[attrname] else default,
 
   // Calculating dimensions.
   local use_bert = (if p.use_bert_base then true else if p.use_bert_large then true else false),
@@ -63,18 +68,19 @@ function(p) {
     (if p.use_bert_base then bert_base_dim else 0) +
     (if p.use_bert_large then bert_large_dim else 0)),
   // If we're using Bert, no LSTM. We just pass the token embeddings right through.
-  local context_layer_output_size = (if p.finetune_bert
-    then token_embedding_dim
-    else 2 * p.lstm_hidden_size),
+  // local context_layer_output_size = (if p.finetune_bert
+  //   then token_embedding_dim
+  local context_layer_output_size = 2 * p.lstm_hidden_size,
   local endpoint_span_emb_dim = 2 * context_layer_output_size + p.feature_size,
   local attended_span_emb_dim = if p.use_attentive_span_extractor then token_embedding_dim else 0,
   local span_emb_dim = endpoint_span_emb_dim + attended_span_emb_dim,
   local pair_emb_dim = 3 * span_emb_dim,
   local relation_scorer_dim = pair_emb_dim,
   local coref_scorer_dim = pair_emb_dim + p.feature_size,
+  local raw_trigger_emb_dim = token_embedding_dim,
   local trigger_emb_dim = context_layer_output_size,  // Triggers are single contextualized tokens.
   // Add token embedding dim because we're including the cls token.
-  local trigger_scorer_dim = ((if trigger_attention_context then 2 * trigger_emb_dim else trigger_emb_dim) +
+  local trigger_scorer_dim = ((if trigger_attention_context then 2 * raw_trigger_emb_dim else raw_trigger_emb_dim) +
     token_embedding_dim),
 
   // Calculation of argument scorer dim is a bit tricky. First, there's the triggers and the span
@@ -181,21 +187,14 @@ function(p) {
   // Modules
 
   // If finetuning Bert, no LSTM. Just pass through.
-  local context_layer = (if p.finetune_bert
-    then {
-      type: "pass_through",
-      input_dim: token_embedding_dim
-    }
-    else {
+  local context_layer = {
       type: "lstm",
       bidirectional: true,
       input_size: token_embedding_dim,
       hidden_size: p.lstm_hidden_size,
       num_layers: p.lstm_n_layers,
       dropout: p.lstm_dropout,
-    }
-  ),
-
+  },
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -224,7 +223,7 @@ function(p) {
     initializer: dygie_initializer,
     loss_weights: p.loss_weights,
     lexical_dropout: p.lexical_dropout,
-    lstm_dropout: (if p.finetune_bert then 0 else p.lstm_dropout),
+    lstm_dropout: p.lstm_dropout,
     rel_prop: p.rel_prop,
     feature_size: p.feature_size,
     use_attentive_span_extractor: p.use_attentive_span_extractor,
@@ -294,13 +293,16 @@ function(p) {
   iterator: {
     // type: "ie_batch",
     // batch_size: p.batch_size
-    "type": "bucket",
-    "sorting_keys": [["text", "num_tokens"]],
-    "batch_size" : p.batch_size
+    type: "bucket",
+    sorting_keys: [["text", "num_tokens"]],
+    batch_size : p.batch_size,
+    [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
   },
-  // validation_iterator: {
-  //   type: "ie_document",
-  // },
+  validation_iterator: {
+    type: "bucket",
+    sorting_keys: [["text", "num_tokens"]],
+    batch_size : p.batch_size
+  },
   trainer: {
     num_epochs: p.num_epochs,
     grad_norm: 5.0,

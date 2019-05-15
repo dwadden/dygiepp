@@ -88,6 +88,8 @@ class EventExtractor(Model):
             TimeDistributed(trigger_feedforward),
             TimeDistributed(torch.nn.Linear(trigger_feedforward.get_output_dim(),
                                             self._n_trigger_labels - 1)))
+        for param in self._trigger_scorer.parameters():
+            param.requires_grad = False
 
         self._trigger_attention_context = trigger_attention_context
         if self._trigger_attention_context:
@@ -136,6 +138,7 @@ class EventExtractor(Model):
     @overrides
     def forward(self,  # type: ignore
                 trigger_mask,
+                raw_trigger_embeddings,
                 trigger_embeddings,
                 spans,
                 span_mask,
@@ -163,8 +166,10 @@ class EventExtractor(Model):
         predicted_ner = output_ner["predicted_ner"]
 
         # Compute trigger scores.
-        trigger_scores = self._compute_trigger_scores(trigger_embeddings, cls_embeddings, trigger_mask)
+        trigger_scores = self._compute_trigger_scores(raw_trigger_embeddings, cls_embeddings, trigger_mask)
         _, predicted_triggers = trigger_scores.max(-1)
+
+        detached_cls_embeddings = cls_embeddings.detach()
 
         # Get trigger candidates for event argument labeling.
         num_trigs_to_keep = torch.floor(
@@ -229,7 +234,7 @@ class EventExtractor(Model):
                         assert torch.allclose(expected, actual)
 
         trig_arg_embeddings = self._compute_trig_arg_embeddings(
-            top_trig_embeddings, top_arg_embeddings, cls_embeddings, top_trig_labels, top_ner_labels,
+            top_trig_embeddings, top_arg_embeddings, detached_cls_embeddings, top_trig_labels, top_ner_labels,
             top_trig_indices, top_arg_spans, trigger_embeddings, trigger_mask)
 
         argument_scores = self._compute_argument_scores(
@@ -330,16 +335,16 @@ class EventExtractor(Model):
 
         return argument_dict, argument_dict_with_scores
 
-    def _compute_trigger_scores(self, trigger_embeddings, cls_embeddings, trigger_mask):
+    def _compute_trigger_scores(self, raw_trigger_embeddings, detached_cls_embeddings, trigger_mask):
         """
         Compute trigger scores for all tokens.
         """
-        cls_repeat = cls_embeddings.unsqueeze(dim=1).repeat(1, trigger_embeddings.size(1), 1)
-        trigger_embeddings = torch.cat([trigger_embeddings, cls_repeat], dim=-1)
+        cls_repeat = detached_cls_embeddings.unsqueeze(dim=1).repeat(1, raw_trigger_embeddings.size(1), 1)
+        raw_trigger_embeddings = torch.cat([raw_trigger_embeddings, cls_repeat], dim=-1)
         if self._trigger_attention_context:
-            context = self._trigger_attention(trigger_embeddings, trigger_mask)
-            trigger_embeddings = torch.cat([trigger_embeddings, context], dim=2)
-        trigger_scores = self._trigger_scorer(trigger_embeddings)
+            context = self._trigger_attention(raw_trigger_embeddings, trigger_mask)
+            raw_trigger_embeddings = torch.cat([raw_trigger_embeddings, context], dim=2)
+        trigger_scores = self._trigger_scorer(raw_trigger_embeddings)
         # Give large negative scores to masked-out elements.
         mask = trigger_mask.unsqueeze(-1)
         trigger_scores = util.replace_masked_values(trigger_scores, mask, -1e20)
@@ -350,7 +355,7 @@ class EventExtractor(Model):
         return trigger_scores
 
     def _compute_trig_arg_embeddings(self,
-                                     top_trig_embeddings, top_arg_embeddings, cls_embeddings,
+                                     top_trig_embeddings, top_arg_embeddings, detached_cls_embeddings,
                                      top_trig_labels, top_ner_labels, top_trig_indices,
                                      top_arg_spans, text_emb, text_mask):
         """
@@ -409,7 +414,7 @@ class EventExtractor(Model):
 
         distance_embeddings = self._compute_distance_embeddings(top_trig_indices, top_arg_spans)
 
-        cls_repeat = (cls_embeddings.unsqueeze(dim=1).unsqueeze(dim=2).
+        cls_repeat = (detached_cls_embeddings.unsqueeze(dim=1).unsqueeze(dim=2).
                       repeat(1, num_trigs, num_args, 1))
 
         pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled, distance_embeddings, cls_repeat]
