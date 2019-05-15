@@ -162,9 +162,9 @@ class Event:
 
     def __repr__(self):
         res = "<"
-        res += self.trigger.__repr__() + ": "
+        res += self.trigger.__repr__() + ":\n"
         for arg in self.arguments:
-            res += arg.__repr__() + "; "
+            res += 6 * " " + arg.__repr__() + ";\n"
         res = res[:-2] + ">"
         return res
 
@@ -182,7 +182,7 @@ class Events:
        return self.event_list[i]
 
     def __repr__(self):
-        return "\n".join([event.__repr__() for event in self.event_list])
+        return "\n\n".join([event.__repr__() for event in self.event_list])
 
     def span_matches(self, argument):
         return set([candidate for candidate in self.arguments

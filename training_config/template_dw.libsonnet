@@ -75,8 +75,9 @@ function(p) {
   local trigger_emb_dim = context_layer_output_size,
   local trigger_pair_dim = span_emb_dim,
   // Add token embedding dim because we're including the cls token.
+  local class_projection_dim = 200,
   local trigger_scorer_dim = ((if trigger_attention_context then 2 * trigger_emb_dim else trigger_emb_dim) +
-    token_embedding_dim),
+    class_projection_dim),
 
   // Calculation of argument scorer dim is a bit tricky. First, there's the triggers and the span
   // embeddings. Then, if we're using labels, include those. Then, if we're using a context window,
@@ -100,7 +101,7 @@ function(p) {
   // Add token embedding dim because of the cls token.
   local argument_scorer_dim = (argument_pair_dim +
     (if shared_attention_context then trigger_emb_dim else 0) +
-    token_embedding_dim),
+    class_projection_dim),
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -188,12 +189,12 @@ function(p) {
       input_dim: token_embedding_dim
     }
     else {
-      type: "lstm",
-      bidirectional: true,
+      type: "stacked_bidirectional_lstm",
       input_size: token_embedding_dim,
       hidden_size: p.lstm_hidden_size,
       num_layers: p.lstm_n_layers,
-      dropout: p.lstm_dropout
+      recurrent_dropout_probability: p.lstm_dropout,
+      layer_dropout_probability: p.lstm_dropout
     }
   ),
 
@@ -203,6 +204,9 @@ function(p) {
 
   // The model
 
+  random_seed: getattr(p, "random_seed", 13370),
+  numpy_seed: getattr(p, "numpy_seed", 1337),
+  pytorch_seed: getattr(p, "pytorch_seed", 133),
   dataset_reader: {
     type: "ie_json",
     token_indexers: token_indexers,
@@ -275,7 +279,13 @@ function(p) {
         shared_attention_context: shared_attention_context,
         span_prop: {
           emb_dim: span_emb_dim,
-          n_span_prop: getattr(p, "event_n_span_prop", 0)
+          n_span_prop: getattr(p, "event_n_span_prop", 0),
+        cls_projection: {
+          input_dim: token_embedding_dim,
+          num_layers: 1,
+          hidden_dims: class_projection_dim,
+          activations: "relu",
+          dropout: p.feedforward_dropout
         },
         context_attention: {
           matrix_1_dim: argument_pair_dim,
@@ -292,13 +302,16 @@ function(p) {
   iterator: {
     // type: "ie_batch",
     // batch_size: p.batch_size
-    "type": "bucket",
-    "sorting_keys": [["text", "num_tokens"]],
-    "batch_size" : p.batch_size
+    type: "bucket",
+    sorting_keys: [["text", "num_tokens"]],
+    batch_size : p.batch_size,
+    [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
   },
-  // validation_iterator: {
-  //   type: "ie_document",
-  // },
+  validation_iterator: {
+    type: "bucket",
+    sorting_keys: [["text", "num_tokens"]],
+    batch_size : p.batch_size
+  },
   trainer: {
     num_epochs: p.num_epochs,
     grad_norm: 5.0,

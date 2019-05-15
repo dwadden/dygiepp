@@ -44,6 +44,7 @@ class RelationExtractor(Model):
 
         self._check = check
 
+        # Need to hack this for cases where there's no relation data. It breaks Ulme's code.
         self._n_labels = max(vocab.get_vocab_size("relation_labels"), 1)
 
         # Span candidate scorer.
