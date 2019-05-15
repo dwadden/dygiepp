@@ -74,8 +74,9 @@ function(p) {
   local coref_scorer_dim = pair_emb_dim + p.feature_size,
   local trigger_emb_dim = context_layer_output_size,  // Triggers are single contextualized tokens.
   // Add token embedding dim because we're including the cls token.
+  local class_projection_dim = 200,
   local trigger_scorer_dim = ((if trigger_attention_context then 2 * trigger_emb_dim else trigger_emb_dim) +
-    token_embedding_dim),
+    class_projection_dim),
 
   // Calculation of argument scorer dim is a bit tricky. First, there's the triggers and the span
   // embeddings. Then, if we're using labels, include those. Then, if we're using a context window,
@@ -99,7 +100,7 @@ function(p) {
   // Add token embedding dim because of the cls token.
   local argument_scorer_dim = (argument_pair_dim +
     (if shared_attention_context then trigger_emb_dim else 0) +
-    token_embedding_dim),
+    class_projection_dim),
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -187,12 +188,12 @@ function(p) {
       input_dim: token_embedding_dim
     }
     else {
-      type: "lstm",
-      bidirectional: true,
+      type: "stacked_bidirectional_lstm",
       input_size: token_embedding_dim,
       hidden_size: p.lstm_hidden_size,
       num_layers: p.lstm_n_layers,
-      dropout: p.lstm_dropout,
+      recurrent_dropout_probability: p.lstm_dropout,
+      layer_dropout_probability: p.lstm_dropout
     }
   ),
 
@@ -275,6 +276,13 @@ function(p) {
         entity_beam: getattr(p, "events_entity_beam", false),
         context_window: events_context_window,
         shared_attention_context: shared_attention_context,
+        cls_projection: {
+          input_dim: token_embedding_dim,
+          num_layers: 1,
+          hidden_dims: class_projection_dim,
+          activations: "relu",
+          dropout: p.feedforward_dropout
+        },
         context_attention: {
           matrix_1_dim: argument_pair_dim,
           matrix_2_dim: trigger_emb_dim,
@@ -294,13 +302,16 @@ function(p) {
   iterator: {
     // type: "ie_batch",
     // batch_size: p.batch_size
-    "type": "bucket",
-    "sorting_keys": [["text", "num_tokens"]],
-    "batch_size" : p.batch_size
+    type: "bucket",
+    sorting_keys: [["text", "num_tokens"]],
+    batch_size : p.batch_size,
+    [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
   },
-  // validation_iterator: {
-  //   type: "ie_document",
-  // },
+  validation_iterator: {
+    type: "bucket",
+    sorting_keys: [["text", "num_tokens"]],
+    batch_size : p.batch_size
+  },
   trainer: {
     num_epochs: p.num_epochs,
     grad_norm: 5.0,

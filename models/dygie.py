@@ -18,6 +18,7 @@ from dygie.models.ner import NERTagger
 from dygie.models.relation import RelationExtractor
 from dygie.models.events import EventExtractor
 from dygie.training.joint_metrics import JointMetrics
+from dygie.models.dummy import Dummy
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -76,23 +77,40 @@ class DyGIE(Model):
 
         self._loss_weights = loss_weights.as_dict()
 
-        # TODO(dwadden) Figure out the parameters that need to get passed in.
-        self._coref = CorefResolver.from_params(vocab=vocab,
-                                                feature_size=feature_size,
-                                                check=check,
-                                                params=modules.pop("coref"))
-        self._ner = NERTagger.from_params(vocab=vocab,
-                                          feature_size=feature_size,
-                                          check=check,
-                                          params=modules.pop("ner"))
-        self._relation = RelationExtractor.from_params(vocab=vocab,
-                                                       feature_size=feature_size,
-                                                       check=check,
-                                                       params=modules.pop("relation"))
-        self._events = EventExtractor.from_params(vocab=vocab,
-                                                  feature_size=feature_size,
-                                                  check=check,
-                                                  params=modules.pop("events"))
+        # Create the modules if necessary, else use dummy modules that don't have params.
+        if self._loss_weights["coref"] > 0:
+            self._coref = CorefResolver.from_params(vocab=vocab,
+                                                    feature_size=feature_size,
+                                                    check=check,
+                                                    params=modules.pop("coref"))
+        else:
+            self._coref = Dummy()
+
+        if self._loss_weights["ner"] > 0:
+            self._ner = NERTagger.from_params(vocab=vocab,
+                                              feature_size=feature_size,
+                                              check=check,
+                                              params=modules.pop("ner"))
+        else:
+            self._ner = Dummy()
+
+        if self._loss_weights["relation"] > 0:
+            self._relation = RelationExtractor.from_params(vocab=vocab,
+                                                           feature_size=feature_size,
+                                                           check=check,
+                                                           params=modules.pop("relation"))
+        else:
+            self._relation = Dummy()
+
+        if self._loss_weights["events"] > 0:
+            self._events = EventExtractor.from_params(vocab=vocab,
+                                                      feature_size=feature_size,
+                                                      check=check,
+                                                      params=modules.pop("events"))
+        else:
+            self._events = Dummy()
+
+        # Make endpoint span extractor.
 
         self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
                                                               combination="x,y",
@@ -232,8 +250,9 @@ class DyGIE(Model):
         output_events = {'loss': 0}
 
         # Prune and compute span representations
-        output_relation = self._relation.compute_representations(
-            spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
+        if self._loss_weights["relation"] > 0:
+            output_relation = self._relation.compute_representations(
+                spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
         # TODO(Ulme) Split the forward method of the coreference module up into parts
         #output_coref = self._coref.compute_representations()

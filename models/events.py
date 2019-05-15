@@ -4,6 +4,7 @@ import itertools
 from typing import Any, Dict, List, Optional
 
 import torch
+from torch.nn import functional as F
 from overrides import overrides
 
 from allennlp.data import Vocabulary
@@ -41,6 +42,7 @@ class EventExtractor(Model):
                  argument_feedforward: FeedForward,
                  context_attention: BilinearMatrixAttention,
                  trigger_attention: Seq2SeqEncoder,
+                 cls_projection: FeedForward,
                  feature_size: int,
                  trigger_spans_per_word: float,
                  argument_spans_per_word: float,
@@ -112,9 +114,15 @@ class EventExtractor(Model):
         self._argument_feedforward = argument_feedforward
         self._argument_scorer = torch.nn.Linear(argument_feedforward.get_output_dim(), self._n_argument_labels)
 
-        # Distance embeddings
+        # Distance embeddings.
         self._num_distance_buckets = 10  # Just use 10 which is the default.
         self._distance_embedding = Embedding(self._num_distance_buckets, feature_size)
+
+        # Class token projection.
+        self._cls_projection = cls_projection
+        self._cls_n_triggers = torch.nn.Linear(self._cls_projection.get_output_dim(), 5)
+        self._cls_event_types = torch.nn.Linear(self._cls_projection.get_output_dim(),
+                                                self._n_trigger_labels - 1)
 
         self._trigger_spans_per_word = trigger_spans_per_word
         self._argument_spans_per_word = argument_spans_per_word
@@ -159,11 +167,14 @@ class EventExtractor(Model):
             if top_arg_indices.size(0) > 2 and (ner_labels[2] > 0).sum() > 1:
                 assert top_arg_indices[2, 1] == (ner_labels[2] > 0).nonzero()[1]
 
+        cls_projected = self._cls_projection(cls_embeddings)
+        auxiliary_loss = self._compute_auxiliary_loss(cls_projected, trigger_labels, trigger_mask)
+
         ner_scores = output_ner["ner_scores"]
         predicted_ner = output_ner["predicted_ner"]
 
         # Compute trigger scores.
-        trigger_scores = self._compute_trigger_scores(trigger_embeddings, cls_embeddings, trigger_mask)
+        trigger_scores = self._compute_trigger_scores(trigger_embeddings, cls_projected, trigger_mask)
         _, predicted_triggers = trigger_scores.max(-1)
 
         # Get trigger candidates for event argument labeling.
@@ -229,7 +240,7 @@ class EventExtractor(Model):
                         assert torch.allclose(expected, actual)
 
         trig_arg_embeddings = self._compute_trig_arg_embeddings(
-            top_trig_embeddings, top_arg_embeddings, cls_embeddings, top_trig_labels, top_ner_labels,
+            top_trig_embeddings, top_arg_embeddings, cls_projected, top_trig_labels, top_ner_labels,
             top_trig_indices, top_arg_spans, trigger_embeddings, trigger_mask)
 
         argument_scores = self._compute_argument_scores(
@@ -265,7 +276,8 @@ class EventExtractor(Model):
             self._argument_stats(predictions)
 
             loss = (self._loss_weights["trigger"] * trigger_loss +
-                    self._loss_weights["arguments"] * argument_loss)
+                    self._loss_weights["arguments"] * argument_loss +
+                    0.3 * auxiliary_loss)
 
             output_dict["loss"] = loss
 
@@ -330,11 +342,32 @@ class EventExtractor(Model):
 
         return argument_dict, argument_dict_with_scores
 
-    def _compute_trigger_scores(self, trigger_embeddings, cls_embeddings, trigger_mask):
+    def _compute_auxiliary_loss(self, cls_projected, trigger_labels, trigger_mask):
+        num_triggers = ((trigger_labels > 0) * trigger_mask.byte()).sum(dim=1)
+        # Truncate at 4.
+        num_triggers = torch.min(num_triggers, 4 * torch.ones_like(num_triggers))
+        predicted_num_triggers = self._cls_n_triggers(cls_projected)
+        num_trigger_loss = F.cross_entropy(
+            predicted_num_triggers, num_triggers,
+            weight=torch.tensor([1, 3, 3, 3, 3], device=trigger_labels.device, dtype=torch.float),
+            reduction="sum")
+
+        label_present = [torch.any(trigger_labels == i, dim=1).unsqueeze(1)
+                         for i in range(1, self._n_trigger_labels)]
+        label_present = torch.cat(label_present, dim=1)
+        if cls_projected.device.type != "cpu":
+            label_present = label_present.cuda(cls_projected.device)
+        predicted_event_type_logits = self._cls_event_types(cls_projected)
+        trigger_label_loss = F.binary_cross_entropy_with_logits(
+            predicted_event_type_logits, label_present.float(), reduction="sum")
+
+        return num_trigger_loss + trigger_label_loss
+
+    def _compute_trigger_scores(self, trigger_embeddings, cls_projected, trigger_mask):
         """
         Compute trigger scores for all tokens.
         """
-        cls_repeat = cls_embeddings.unsqueeze(dim=1).repeat(1, trigger_embeddings.size(1), 1)
+        cls_repeat = cls_projected.unsqueeze(dim=1).repeat(1, trigger_embeddings.size(1), 1)
         trigger_embeddings = torch.cat([trigger_embeddings, cls_repeat], dim=-1)
         if self._trigger_attention_context:
             context = self._trigger_attention(trigger_embeddings, trigger_mask)
@@ -350,7 +383,7 @@ class EventExtractor(Model):
         return trigger_scores
 
     def _compute_trig_arg_embeddings(self,
-                                     top_trig_embeddings, top_arg_embeddings, cls_embeddings,
+                                     top_trig_embeddings, top_arg_embeddings, cls_projected,
                                      top_trig_labels, top_ner_labels, top_trig_indices,
                                      top_arg_spans, text_emb, text_mask):
         """
@@ -409,7 +442,7 @@ class EventExtractor(Model):
 
         distance_embeddings = self._compute_distance_embeddings(top_trig_indices, top_arg_spans)
 
-        cls_repeat = (cls_embeddings.unsqueeze(dim=1).unsqueeze(dim=2).
+        cls_repeat = (cls_projected.unsqueeze(dim=1).unsqueeze(dim=2).
                       repeat(1, num_trigs, num_args, 1))
 
         pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled, distance_embeddings, cls_repeat]
@@ -559,6 +592,7 @@ class EventExtractor(Model):
         embeddings_flat = pairwise_embeddings.view(-1, feature_dim)
 
         arguments_projected_flat = self._argument_feedforward(embeddings_flat)
+
         argument_scores_flat = self._argument_scorer(arguments_projected_flat)
 
         argument_scores = argument_scores_flat.view(batch_size, max_num_trigs, max_num_args, -1)
