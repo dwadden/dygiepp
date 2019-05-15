@@ -214,7 +214,7 @@ class DyGIE(Model):
 
         # Prune and compute span representations for coreference module
         if self._loss_weights["coref"] > 0 or self._coref.coref_prop > 0:
-            output_coref = self._coref.compute_representations(
+            output_coref, coref_indices = self._coref.compute_representations(
                 spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
 
         # Prune and compute span representations for relation module
@@ -226,7 +226,7 @@ class DyGIE(Model):
         if self._coref.coref_prop > 0:
             # TODO(Ulme) Implement Coref Propagation
             output_coref = self._coref.coref_propagation(output_coref)
-            span_embeddings = self._coref.update_spans(output_coref, span_embeddings)
+            span_embeddings = self._coref.update_spans(output_coref, span_embeddings, coref_indices)
 
         if self._relation.rel_prop > 0:
             output_relation = self._relation.relation_propagation(output_relation)
@@ -240,7 +240,7 @@ class DyGIE(Model):
                 spans, span_mask, span_embeddings, sentence_lengths, ner_labels, metadata)
 
         if self._loss_weights['coref'] > 0:
-            output_coref = self._coref.predict_labels(coref_labels, output_coref, metadata)
+            output_coref = self._coref.predict_labels(output_coref, metadata)
 
         if self._loss_weights['relation'] > 0:
             output_relation = self._relation.predict_labels(relation_labels, output_relation, metadata)
