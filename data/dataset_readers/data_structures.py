@@ -37,15 +37,19 @@ class Sentence:
         self.sentence_start = sentence_start
         self.text = entry["sentences"]
         # Gold
-        self.ner = [NER(this_ner, self.text, sentence_start)
-                    for this_ner in entry["ner"]]
+        if "ner_flavor" in entry:
+            self.ner = [NER(this_ner, self.text, sentence_start, flavor=this_flavor)
+                        for this_ner, this_flavor in zip(entry["ner"], entry["ner_flavor"])]
+        else:
+            self.ner = [NER(this_ner, self.text, sentence_start)
+                        for this_ner in entry["ner"]]
         self.relations = [Relation(this_relation, self.text, sentence_start) for
                           this_relation in entry["relations"]]
         self.events = Events(entry["events"], self.text, sentence_start)
 
         # Predicted
         if "predicted_ner" in entry:
-            self.predicted_ner = [NER(this_ner, self.text, sentence_start) for
+            self.predicted_ner = [NER(this_ner, self.text, sentence_start, flavor=None) for
                                   this_ner in entry["predicted_ner"]]
         if "predicted_relations" in entry:
             self.predicted_relations = [Relation(this_relation, self.text, sentence_start) for
@@ -63,6 +67,16 @@ class Sentence:
             tok_ixs += " " * true_offset
 
         return the_text + "\n" + tok_ixs
+
+    def get_flavor(self, argument):
+        the_ner = [x for x in self.ner if x.span == argument.span]
+        if len(the_ner) > 1:
+            print("Weird")
+        if the_ner:
+            the_flavor = the_ner[0].flavor
+        else:
+            the_flavor = None
+        return the_flavor
 
 
 class Span:
@@ -126,9 +140,10 @@ class Argument:
 
 
 class NER:
-    def __init__(self, ner, text, sentence_start):
+    def __init__(self, ner, text, sentence_start, flavor):
         self.span = Span(ner[0], ner[1], text, sentence_start)
         self.label = ner[2]
+        self.flavor = flavor
 
     def __repr__(self):
         return self.span.__repr__() + ": " + self.label
