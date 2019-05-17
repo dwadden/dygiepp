@@ -1,16 +1,22 @@
 // Library that accepts a parameter dict and returns a full config.
 
 function(p) {
+  local getattr(obj, attrname, default) = if attrname in obj then p[attrname] else default,
+
   // Location of ACE valid event configs
   local valid_events_dir = std.extVar("valid_events_dir"),
 
   // Storing constants.
 
+  local event_validation_metric = (if "event_validation_metric" in p
+    then p.event_validation_metric
+    else "+arg_class_f1"),
+
   local validation_metrics = {
     "ner": "+ner_f1",
     "rel": "+rel_f1",
     "coref": "+coref_f1",
-    "events": "+arg_class_f1"
+    "events": event_validation_metric
   },
 
   local display_metrics = {
@@ -39,9 +45,6 @@ function(p) {
   ////////////////////////////////////////////////////////////////////////////////
 
   // Helper function.
-  // Get the attribute from the object. If the object doesn't have that attribute, return default.
-  local getattr(obj, attrname, default) = if attrname in obj then p[attrname] else default,
-
   // Calculating dimensions.
   local use_bert = (if p.use_bert_base then true else if p.use_bert_large then true else false),
 
