@@ -21,10 +21,6 @@ from dygie.training.joint_metrics import JointMetrics
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-import sys
-from IPython.core import ultratb
-sys.excepthook = ultratb.FormattedTB(mode='Verbose',
-                                     color_scheme='Linux', call_pdb=1)
 
 @Model.register("dygie")
 class DyGIE(Model):

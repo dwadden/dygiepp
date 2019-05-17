@@ -143,6 +143,7 @@ class IEJsonReader(DatasetReader):
                 sentence_start = 0
                 js = json.loads(line)
                 doc_key = js["doc_key"]
+                dataset = js["dataset"] if "dataset" in js else None
 
                 # If some fields are missing in the data set, fill them with empties.
                 # TODO(dwadden) do this more cleanly once things are running.
@@ -175,7 +176,7 @@ class IEJsonReader(DatasetReader):
                     sentence_start += len(sentence)
                     instance = self.text_to_instance(
                         sentence, ner_dict, relation_dict, cluster_dict, trigger_dict, argument_dict,
-                        doc_key, sentence_num, groups, start_ix, end_ix)
+                        doc_key, dataset, sentence_num, groups, start_ix, end_ix)
                     yield instance
 
     @overrides
@@ -187,6 +188,7 @@ class IEJsonReader(DatasetReader):
                          trigger_dict,
                          argument_dict,
                          doc_key: str,
+                         dataset: str,
                          sentence_num: int,
                          groups: List[str],
                          start_ix: int,
@@ -208,6 +210,7 @@ class IEJsonReader(DatasetReader):
                         trigger_dict=trigger_dict,
                         argument_dict=argument_dict,
                         doc_key=doc_key,
+                        dataset=dataset,
                         groups=groups,
                         start_ix=start_ix,
                         end_ix=end_ix,
