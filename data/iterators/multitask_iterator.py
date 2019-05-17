@@ -36,7 +36,6 @@ class MultiTaskIterator(DataIterator):
 
             # If the hopper is full, yield up the batch and clear it.
             if len(hoppers[instance_type]) >= self._batch_size:
-                print(instance_type)
                 yield Batch(hoppers[instance_type])
                 hoppers[instance_type].clear()
 

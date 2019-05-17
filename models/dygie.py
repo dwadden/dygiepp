@@ -1,6 +1,7 @@
 from os import path
 import logging
 from typing import Dict, List, Optional
+import copy
 
 import torch
 import torch.nn.functional as F
@@ -70,6 +71,7 @@ class DyGIE(Model):
         self._context_layer = context_layer
 
         self._loss_weights = loss_weights.as_dict()
+        self._permanent_loss_weights = copy.deepcopy(self._loss_weights)
 
         # TODO(dwadden) Figure out the parameters that need to get passed in.
         self._coref = CorefResolver.from_params(vocab=vocab,
@@ -117,7 +119,6 @@ class DyGIE(Model):
         else:
             self._lstm_dropout = lambda x: x
 
-
         initializer(self)
 
     @overrides
@@ -133,7 +134,21 @@ class DyGIE(Model):
         """
         TODO(dwadden) change this.
         """
-        # TODO(dwadden) Is there some smarter way to do the batching within a document?
+        # For co-training on Ontonotes, need to change the loss weights depending on the data coming
+        # in. This is a hack but it will do for now.
+        if self.training:
+            dataset = [entry["dataset"] for entry in metadata]
+            assert len(set(dataset)) == 1
+            dataset = dataset[0]
+            assert dataset in ["ace", "ontonotes"]
+            if dataset == "ontonotes":
+                self._loss_weights = dict(coref=1, ner=0, relation=0, events=0)
+            else:
+                self._loss_weights = self._permanent_loss_weights
+        # This assumes that there won't be any co-training data in the dev and test sets, and that
+        # coref propagation will still happen even when the coref weight is set to 0.
+        else:
+            self._loss_weights = self._permanent_loss_weights
 
         # In AllenNLP, AdjacencyFields are passed in as floats. This fixes it.
         relation_labels = relation_labels.long()
@@ -152,7 +167,6 @@ class DyGIE(Model):
             sentence_lengths[i] = metadata[i]["end_ix"] - metadata[i]["start_ix"]
             for k in range(sentence_lengths[i], sentence_group_lengths[i]):
                 text_mask[i][k] = 0
-
 
         max_sentence_length = sentence_lengths.max().item()
 
