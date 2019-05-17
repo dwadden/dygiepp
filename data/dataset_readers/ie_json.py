@@ -151,6 +151,13 @@ class IEJsonReader(DatasetReader):
                 js["sentence_groups"] = [[self._normalize_word(word) for sentence in js["sentences"][max(0, i-self.k):min(n_sentences, i + self.k + 1)] for word in sentence] for i in range(n_sentences)]
                 js["sentence_start_index"] = [sum(len(js["sentences"][i-j-1]) for j in range(min(self.k, i))) if i > 0 else 0 for i in range(n_sentences)]
                 js["sentence_end_index"] = [js["sentence_start_index"][i] + len(js["sentences"][i]) for i in range(n_sentences)]
+                for sentence_group_nr in range(len(js["sentence_groups"])):
+                    if len(js["sentence_groups"][sentence_group_nr]) > 300:
+                        js["sentence_groups"][sentence_group_nr] = js["sentences"][sentence_group_nr]
+                        js["sentence_start_index"][sentence_group_nr] = 0
+                        js["sentence_end_index"][sentence_group_nr] = len(js["sentences"][sentence_group_nr])
+                        if len(js["sentence_groups"][sentence_group_nr])>300:
+                            import ipdb;
                 if "clusters" not in js:
                     js["clusters"] = []
                 for field in ["ner", "relations", "events"]:
