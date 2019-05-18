@@ -105,6 +105,7 @@ class CorefResolver(Model):
             top_span_embeddings = output_dict[doc_key]["top_span_embeddings"]
             for ix, el in enumerate(output_dict[doc_key]["top_span_indices"].view(-1)):
                 new_span_embeddings_batched[span_ix[el] / span_embeddings_batched.shape[1] + offsets[doc_key], span_ix[el] % span_embeddings_batched.shape[1]] = top_span_embeddings[0, ix]
+
         return new_span_embeddings_batched
 
     def coref_propagation(self, output_dict):
@@ -117,10 +118,21 @@ class CorefResolver(Model):
         top_span_embeddings = output_dict["top_span_embeddings"]
         antecedent_indices = output_dict["antecedent_indices"]
         for t in range(self.coref_prop):
+            assert coreference_scores.shape[1] == antecedent_indices.shape[0]
+            assert coreference_scores.shape[2] - 1 == antecedent_indices.shape[1]
+            assert top_span_embeddings.shape[1] == coreference_scores.shape[1]
+            assert antecedent_indices.max() <= top_span_embeddings.shape[1]
+ 
             antecedent_distribution = self.antecedent_softmax(coreference_scores)[:, :, 1:]
             top_span_emb_repeated = top_span_embeddings.repeat(antecedent_distribution.shape[2],1,1)
-            selected_top_span_embs = util.batched_index_select(top_span_emb_repeated, antecedent_indices).unsqueeze(0) 
-            entity_embs = (selected_top_span_embs.permute([3,0,1,2]) * antecedent_distribution).permute([1, 2, 3, 0]).sum(dim=2)
+            if antecedent_indices.shape[0]==antecedent_indices.shape[1]:
+                selected_top_span_embs = util.batched_index_select(top_span_emb_repeated, antecedent_indices).unsqueeze(0) 
+                entity_embs = (selected_top_span_embs.permute([3,0,1,2]) * antecedent_distribution).permute([1, 2, 3, 0]).sum(dim=2)
+            else:
+                ant_var1 = antecedent_indices.unsqueeze(0).unsqueeze(-1).repeat(1,1,1,top_span_embeddings.shape[-1])
+                top_var1 = top_span_embeddings.unsqueeze(1).repeat(1,antecedent_distribution.shape[1],1,1)
+                entity_embs = (torch.gather(top_var1, 2, ant_var1).permute([3,0,1,2]) * antecedent_distribution).permute([1, 2, 3, 0]).sum(dim=2)
+
             #entity_embs = F.dropout(entity_embs)
 
             f_network_input = torch.cat([top_span_embeddings, entity_embs], dim=-1)
