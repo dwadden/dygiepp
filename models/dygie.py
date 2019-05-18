@@ -166,7 +166,7 @@ class DyGIE(Model):
         text_mask = util.get_text_field_mask(text).float()
         sentence_group_lengths = text_mask.sum(dim=1).long()
 
-        sentence_lengths = text_mask.sum(dim=1).long()
+        sentence_lengths = 0*text_mask.sum(dim=1).long()
         for i in range(len(metadata)):
             sentence_lengths[i] = metadata[i]["end_ix"] - metadata[i]["start_ix"]
             for k in range(sentence_lengths[i], sentence_group_lengths[i]):
@@ -191,6 +191,7 @@ class DyGIE(Model):
 
         # Shape: (batch_size, max_sentence_length, encoding_dim)
         contextualized_embeddings = self._lstm_dropout(self._context_layer(text_embeddings, text_mask))
+        assert spans.max() < contextualized_embeddings.shape[1]
 
         if self._attentive_span_extractor is not None:
             # Shape: (batch_size, num_spans, emebedding_size)
