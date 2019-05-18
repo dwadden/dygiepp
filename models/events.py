@@ -616,7 +616,7 @@ class EventExtractor(Model):
             the_temp = torch.exp(self._softmax_log_temp)
             the_multiplier = torch.exp(self._softmax_log_multiplier)
             softmax_scores = util.masked_softmax(argument_scores / the_temp, mask=top_arg_mask, dim=2)
-            argument_scores += the_multiplier * softmax_scores
+            argument_scores = argument_scores + the_multiplier * softmax_scores
 
         shape = [argument_scores.size(0), argument_scores.size(1), argument_scores.size(2), 1]
         dummy_scores = argument_scores.new_zeros(*shape)
