@@ -77,7 +77,7 @@ function(p) {
   local coref_scorer_dim = pair_emb_dim + p.feature_size,
   local trigger_emb_dim = context_layer_output_size,  // Triggers are single contextualized tokens.
   // Add token embedding dim because we're including the cls token.
-  local class_projection_dim = 200,
+  local class_projection_dim = token_embedding_dim,
   local trigger_scorer_dim = ((if trigger_attention_context then 2 * trigger_emb_dim else trigger_emb_dim) +
     class_projection_dim),
 
@@ -101,9 +101,10 @@ function(p) {
     (if event_args_use_trigger_labels then trigger_label_dim else 0) +
     (if events_context_window > 0 then 4 * events_context_window * context_layer_output_size else 0)),
   // Add token embedding dim because of the cls token.
-  local argument_scorer_dim = (argument_pair_dim +
-    (if shared_attention_context then trigger_emb_dim else 0) +
-    class_projection_dim),
+  // local argument_scorer_dim = (argument_pair_dim +
+  //   (if shared_attention_context then trigger_emb_dim else 0) +
+  //   class_projection_dim),
+  local argument_scorer_dim = (3 * trigger_emb_dim + span_emb_dim + class_projection_dim),
 
   ////////////////////////////////////////////////////////////////////////////////
 

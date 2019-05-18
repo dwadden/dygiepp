@@ -75,9 +75,6 @@ class EventExtractor(Model):
         self._ner_label_emb = make_embedder(kind=label_embedding_method,
                                             num_embeddings=self._n_ner_labels,
                                             embedding_dim=event_args_label_emb)
-        self._trigger_label_emb = make_embedder(kind=label_embedding_method,
-                                                num_embeddings=self._n_trigger_labels,
-                                                embedding_dim=event_args_label_emb)
         self._label_embedding_method = label_embedding_method
 
         # Weight on trigger labeling and argument labeling.
@@ -113,7 +110,9 @@ class EventExtractor(Model):
         # / argument pair embeddings and the text.
         self._context_window = context_window                # If greater than 0, concatenate context as features.
         self._argument_feedforward = argument_feedforward
-        self._argument_scorer = torch.nn.Linear(argument_feedforward.get_output_dim(), self._n_argument_labels)
+        self._argument_scorer = torch.nn.Linear(
+            argument_feedforward.get_output_dim() + self._n_trigger_labels + self._n_ner_labels + 22,
+            self._n_argument_labels)
 
         # Distance embeddings.
         self._num_distance_buckets = 10  # Just use 10 which is the default.
@@ -175,11 +174,12 @@ class EventExtractor(Model):
             if top_arg_indices.size(0) > 2 and (ner_labels[2] > 0).sum() > 1:
                 assert top_arg_indices[2, 1] == (ner_labels[2] > 0).nonzero()[1]
 
-        cls_projected = self._cls_projection(cls_embeddings)
-        auxiliary_loss = self._compute_auxiliary_loss(cls_projected, trigger_labels, trigger_mask)
+        cls_projected = cls_embeddings
+        # cls_projected = self._cls_projection(cls_embeddings)
+        # auxiliary_loss = self._compute_auxiliary_loss(cls_projected, trigger_labels, trigger_mask)
+        auxiliary_loss = 0
 
         ner_scores = output_ner["ner_scores"]
-        predicted_ner = output_ner["predicted_ner"]
 
         # Compute trigger scores.
         trigger_scores = self._compute_trigger_scores(trigger_embeddings, cls_projected, trigger_mask)
@@ -224,28 +224,16 @@ class EventExtractor(Model):
         # At train time, use the gold labels. At test time, use the labels predicted by the model,
         # or gold if specified.
         if self.training or self._event_args_label_predictor == "gold":
-            top_trig_labels = trigger_labels.gather(1, top_trig_indices)
-            top_ner_labels = ner_labels.gather(1, top_arg_indices)
+            top_trig_labels = soften_labels(
+                trigger_labels.gather(1, top_trig_indices), self._n_trigger_labels)
+            top_ner_labels = soften_labels(
+                ner_labels.gather(1, top_arg_indices), self._n_ner_labels)
+        # Softmax predictions.
         else:
-            # Hard predictions.
-            if self._event_args_label_predictor == "hard":
-                top_trig_labels = predicted_triggers.gather(1, top_trig_indices)
-                top_ner_labels = predicted_ner.gather(1, top_arg_indices)
-            # Softmax predictions.
-            else:
-                softmax_triggers = trigger_scores.softmax(dim=-1)
-                top_trig_labels = util.batched_index_select(softmax_triggers, top_trig_indices)
-                softmax_ner = ner_scores.softmax(dim=-1)
-                top_ner_labels = util.batched_index_select(softmax_ner, top_arg_indices)
-                if self._check:
-                    # Make sure we're doing the indexing correctly and softmax is normalized.
-                    batch_size, num_candidates = top_trig_indices.size()
-                    if batch_size > 2 and num_candidates > 5:
-                        trig_ix = top_trig_indices[2, 5]
-                        expected = softmax_triggers[2, trig_ix, :]
-                        actual = top_trig_labels[2, 5]
-                        assert torch.abs(actual.sum() - 1) < 0.0001
-                        assert torch.allclose(expected, actual)
+            softmax_triggers = trigger_scores.softmax(dim=-1)
+            top_trig_labels = util.batched_index_select(softmax_triggers, top_trig_indices)
+            softmax_ner = ner_scores.softmax(dim=-1)
+            top_ner_labels = util.batched_index_select(softmax_ner, top_arg_indices)
 
         trig_arg_embeddings = self._compute_trig_arg_embeddings(
             top_trig_embeddings, top_arg_embeddings, cls_projected, top_trig_labels, top_ner_labels,
@@ -400,65 +388,33 @@ class EventExtractor(Model):
         - Optionally, the embeddings of the trigger and argument labels.
         - Optionally, embeddings of the words surrounding the trigger and argument.
         """
-        trig_emb_list = [top_trig_embeddings]
-        arg_emb_list = [top_arg_embeddings]
+        # First project the big embeddings down.
+        num_trigs = top_trig_embeddings.size(1)
+        num_args = top_arg_embeddings.size(1)
 
-        if self._context_window > 0:
-            # Include words in a window around trigger and argument.
-            # For triggers, the span start and end indices are the same.
-            trigger_context = self._get_context(top_trig_indices, top_trig_indices, text_emb)
-            argument_context = self._get_context(
-                top_arg_spans[:, :, 0], top_arg_spans[:, :, 1], text_emb)
-            trig_emb_list.append(trigger_context)
-            arg_emb_list.append(argument_context)
-
-        # TODO(dwadden) refactor this. Way too many conditionals.
-        if self._event_args_use_trigger_labels:
-            if self._event_args_label_predictor == "softmax" and not self.training:
-                if self._label_embedding_method == "one_hot":
-                    # If we're using one-hot encoding, just return the scores for each class.
-                    top_trig_embs = top_trig_labels
-                else:
-                    # Otherwise take the average of the embeddings, weighted by softmax scores.
-                    top_trig_embs = torch.matmul(top_trig_labels, self._trigger_label_emb.weight)
-                trig_emb_list.append(top_trig_embs)
-            else:
-                trig_emb_list.append(self._trigger_label_emb(top_trig_labels))
-        if self._event_args_use_ner_labels:
-            if self._event_args_label_predictor == "softmax" and not self.training:
-                # Same deal as for trigger labels.
-                if self._label_embedding_method == "one_hot":
-                    top_ner_embs = top_ner_labels
-                else:
-                    top_ner_embs = torch.matmul(top_ner_labels, self._ner_label_emb.weight)
-                arg_emb_list.append(top_ner_embs)
-            else:
-                # Otherwise, just return the embeddings.
-                arg_emb_list.append(self._ner_label_emb(top_ner_labels))
-
-        trig_emb = torch.cat(trig_emb_list, dim=-1)
-        arg_emb = torch.cat(arg_emb_list, dim=-1)
-
-        num_trigs = trig_emb.size(1)
-        num_args = arg_emb.size(1)
-
-        trig_emb_expanded = trig_emb.unsqueeze(2)
+        trig_emb_expanded = top_trig_embeddings.unsqueeze(2)
         trig_emb_tiled = trig_emb_expanded.repeat(1, 1, num_args, 1)
 
-        arg_emb_expanded = arg_emb.unsqueeze(1)
+        arg_emb_expanded = top_arg_embeddings.unsqueeze(1)
         arg_emb_tiled = arg_emb_expanded.repeat(1, num_trigs, 1, 1)
 
-        distance_embeddings = self._compute_distance_embeddings(top_trig_indices, top_arg_spans)
+        similarity_emb = trig_emb_tiled.repeat([1, 1, 1, 2]) * arg_emb_tiled[:, :, :, :-20]
 
         cls_repeat = (cls_projected.unsqueeze(dim=1).unsqueeze(dim=2).
                       repeat(1, num_trigs, num_args, 1))
 
-        pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled, distance_embeddings, cls_repeat]
-        pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
+        catted = torch.cat([trig_emb_tiled, arg_emb_tiled, similarity_emb, cls_repeat], dim=-1)
 
-        if self._shared_attention_context:
-            attended_context = self._get_shared_attention_context(pair_embeddings, text_emb, text_mask)
-            pair_embeddings = torch.cat([pair_embeddings, attended_context], dim=3)
+        projected = self._argument_feedforward(catted)
+
+        # Now add on the little stuff.
+        trigger_labels_tiled = top_trig_labels.unsqueeze(2).repeat(1, 1, num_args, 1)
+        arg_labels_tiled = top_ner_labels.unsqueeze(1).repeat(1, num_trigs, 1, 1)
+
+        distance_embeddings = self._compute_distance_embeddings(top_trig_indices, top_arg_spans)
+
+        pair_embeddings_list = [projected, trigger_labels_tiled, arg_labels_tiled, distance_embeddings]
+        pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
 
         return pair_embeddings
 
@@ -596,13 +552,11 @@ class EventExtractor(Model):
         batch_size = pairwise_embeddings.size(0)
         max_num_trigs = pairwise_embeddings.size(1)
         max_num_args = pairwise_embeddings.size(2)
-        feature_dim = self._argument_feedforward.input_dim
+        feature_dim = self._argument_scorer.in_features
 
         embeddings_flat = pairwise_embeddings.view(-1, feature_dim)
 
-        arguments_projected_flat = self._argument_feedforward(embeddings_flat)
-
-        argument_scores_flat = self._argument_scorer(arguments_projected_flat)
+        argument_scores_flat = self._argument_scorer(embeddings_flat)
 
         argument_scores = argument_scores_flat.view(batch_size, max_num_trigs, max_num_args, -1)
 
@@ -666,3 +620,13 @@ class EventExtractor(Model):
         # Compute cross-entropy loss.
         loss = self._argument_loss(scores_flat, labels_flat)
         return loss
+
+
+def soften_labels(gold, n_class):
+    """
+    Convert from hard labels to softmax-ish labels.
+    """
+    eps = 0.2
+    one_hot = F.one_hot(gold, n_class).float()
+    one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
+    return one_hot
