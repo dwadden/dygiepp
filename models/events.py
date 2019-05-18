@@ -56,6 +56,7 @@ class EventExtractor(Model):
                  event_args_label_predictor: str,
                  event_args_gold_candidates: bool = False,  # If True, use gold argument candidates.
                  context_window: int = 0,
+                 softmax_correction: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  positive_label_weight: float = 1.0,
                  entity_beam: bool = False,
@@ -131,6 +132,13 @@ class EventExtractor(Model):
         self._shared_attention_context = shared_attention_context
         if self._shared_attention_context:
             self._shared_attention_context_module = context_attention
+
+        # Softmax correction parameters.
+        self._softmax_correction = softmax_correction
+        self._softmax_log_temp = torch.nn.Parameter(
+            torch.zeros([1, 1, 1, self._n_argument_labels]))
+        self._softmax_log_multiplier = torch.nn.Parameter(
+            torch.zeros([1, 1, 1, self._n_argument_labels]))
 
         # TODO(dwadden) Add metrics.
         self._metrics = EventMetrics()
@@ -244,7 +252,7 @@ class EventExtractor(Model):
             top_trig_indices, top_arg_spans, trigger_embeddings, trigger_mask)
 
         argument_scores = self._compute_argument_scores(
-            trig_arg_embeddings, top_trig_scores, top_arg_scores)
+            trig_arg_embeddings, top_trig_scores, top_arg_scores, top_arg_mask)
 
         _, predicted_arguments = argument_scores.max(-1)
         predicted_arguments -= 1  # The null argument has label -1.
@@ -583,7 +591,8 @@ class EventExtractor(Model):
 
         return pad_batch
 
-    def _compute_argument_scores(self, pairwise_embeddings, top_trig_scores, top_arg_scores):
+    def _compute_argument_scores(self, pairwise_embeddings, top_trig_scores, top_arg_scores,
+                                 top_arg_mask):
         batch_size = pairwise_embeddings.size(0)
         max_num_trigs = pairwise_embeddings.size(1)
         max_num_args = pairwise_embeddings.size(2)
@@ -601,6 +610,13 @@ class EventExtractor(Model):
 
         argument_scores += (top_trig_scores.unsqueeze(-1) +
                             top_arg_scores.transpose(1, 2).unsqueeze(-1))
+
+        # Softmax correction to compare arguments.
+        if self._softmax_correction:
+            the_temp = torch.exp(self._softmax_log_temp)
+            the_multiplier = torch.exp(self._softmax_log_multiplier)
+            softmax_scores = util.masked_softmax(argument_scores / the_temp, mask=top_arg_mask, dim=2)
+            argument_scores += the_multiplier * softmax_scores
 
         shape = [argument_scores.size(0), argument_scores.size(1), argument_scores.size(2), 1]
         dummy_scores = argument_scores.new_zeros(*shape)

@@ -279,6 +279,7 @@ function(p) {
         entity_beam: getattr(p, "events_entity_beam", false),
         context_window: events_context_window,
         shared_attention_context: shared_attention_context,
+        softmax_correction: getattr(p, "softmax_correction", false),
         cls_projection: {
           input_dim: token_embedding_dim,
           num_layers: 1,
