@@ -57,6 +57,9 @@ function(p) {
   local trigger_scorer_dim = 2 * p.lstm_hidden_size,  // Triggers are single contextualized tokens.
   local argument_scorer_dim = trigger_scorer_dim + span_emb_dim, // Trigger embeddings  and span embeddings.
 
+  // Co-training
+  local co_train = if "co_train" in p then p.co_train else false,
+
   ////////////////////////////////////////////////////////////////////////////////
 
   // Function definitions
@@ -164,6 +167,7 @@ function(p) {
     max_span_width: p.max_span_width,
     display_metrics: display_metrics[p.target],
     valid_events_dir: valid_events_dir,
+    co_train: co_train,
     context_layer: {
       //type: "pass_through",
       //input_dim: token_embedding_dim,
@@ -210,7 +214,7 @@ function(p) {
     }
   },
   iterator: {
-    type: "ie_batch",
+    type: if co_train then "ie_multitask" else "ie_batch",
     batch_size: p.batch_size
   },
   validation_iterator: {

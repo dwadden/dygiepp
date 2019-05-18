@@ -61,6 +61,7 @@ class DyGIE(Model):
                  lexical_dropout: float = 0.2,
                  lstm_dropout: float = 0.4,
                  use_attentive_span_extractor: bool = True,
+                 co_train: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
                  display_metrics: List[str] = None,
@@ -112,6 +113,9 @@ class DyGIE(Model):
         else:
             self._lexical_dropout = lambda x: x
 
+        # Do co-training if we're training on ACE and ontonotes.
+        self._co_train = co_train
+
         # Big gotcha: PyTorch doesn't add dropout to the LSTM's output layer. We need to do this
         # manually.
         if lstm_dropout > 0:
@@ -136,24 +140,24 @@ class DyGIE(Model):
         """
         # For co-training on Ontonotes, need to change the loss weights depending on the data coming
         # in. This is a hack but it will do for now.
-        if self.training:
-            dataset = [entry["dataset"] for entry in metadata]
-            assert len(set(dataset)) == 1
-            dataset = dataset[0]
-            assert dataset in ["ace", "ontonotes"]
-            if dataset == "ontonotes":
-                self._loss_weights = dict(coref=1, ner=0, relation=0, events=0)
+        if self._co_train:
+            if self.training:
+                dataset = [entry["dataset"] for entry in metadata]
+                assert len(set(dataset)) == 1
+                dataset = dataset[0]
+                assert dataset in ["ace", "ontonotes"]
+                if dataset == "ontonotes":
+                    self._loss_weights = dict(coref=1, ner=0, relation=0, events=0)
+                else:
+                    self._loss_weights = self._permanent_loss_weights
+            # This assumes that there won't be any co-training data in the dev and test sets, and that
+            # coref propagation will still happen even when the coref weight is set to 0.
             else:
                 self._loss_weights = self._permanent_loss_weights
-        # This assumes that there won't be any co-training data in the dev and test sets, and that
-        # coref propagation will still happen even when the coref weight is set to 0.
-        else:
-            self._loss_weights = self._permanent_loss_weights
 
         # In AllenNLP, AdjacencyFields are passed in as floats. This fixes it.
         relation_labels = relation_labels.long()
         argument_labels = argument_labels.long()
-
 
         # Shape: (batch_size, max_sentence_length, embedding_size)
         text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
