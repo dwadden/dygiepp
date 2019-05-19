@@ -12,8 +12,11 @@ usage: predict.py [archive-file] [test-file] [output-file]
 
 import json
 from sys import argv
+from os import path
+import os
 
 import numpy as np
+import torch
 
 from allennlp.models.archival import load_archive
 from allennlp.common.util import import_submodules
@@ -120,7 +123,14 @@ def check_lengths(d):
     assert len(set(lengths)) == 1
 
 
-def predict(archive_file, test_file, output_file, cuda_device):
+def dump_scores(doc, pred, score_dir):
+    doc_key = [x["doc_key"] for x in doc["metadata"]]
+    assert len(set(doc_key)) == 1
+    doc_key = doc_key[0]
+    torch.save(pred, path.join(score_dir, doc_key + '.th'))
+
+
+def predict(archive_file, test_file, output_file, cuda_device, score_dir):
     import_submodules("dygie")
     gold_test_data = load_json(test_file)
     archive = load_archive(archive_file, cuda_device)
@@ -142,6 +152,8 @@ def predict(archive_file, test_file, output_file, cuda_device):
             sentence_starts = np.roll(sentence_starts, 1)
             sentence_starts[0] = 0
             pred = model(**doc)
+            if score_dir is not None:
+                dump_scores(doc, pred, score_dir)
             decoded = model.decode(pred)
             predictions = {}
             for k, v in decoded.items():
@@ -159,7 +171,11 @@ def main():
     test_file = argv[2]
     output_file = argv[3]
     cuda_device = int(argv[4])
-    predict(archive_file, test_file, output_file, cuda_device)
+    score_dir = argv[5] if len(argv) > 5 else None
+    if score_dir is not None:
+        if not path.exists(score_dir):
+            os.mkdir(score_dir)
+    predict(archive_file, test_file, output_file, cuda_device, score_dir)
 
 
 if __name__ == '__main__':

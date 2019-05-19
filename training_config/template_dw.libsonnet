@@ -285,6 +285,7 @@ function(p) {
           emb_dim: span_emb_dim,
           n_span_prop: event_n_span_prop
         },
+        softmax_correction: getattr(p, "softmax_correction", false),
         cls_projection: {
           input_dim: token_embedding_dim,
           num_layers: 1,
