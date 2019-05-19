@@ -48,6 +48,8 @@ function(p) {
   // Calculating dimensions.
   local use_bert = (if p.use_bert_base then true else if p.use_bert_large then true else false),
 
+  local event_n_span_prop = getattr(p, "event_n_span_prop", 0),
+
   // If true, use ner and trigger labels as features to predict event arguments.
   // TODO(dwadden) At some point I should make arguments like this mandatory.
   local event_args_use_ner_labels = getattr(p, "event_args_use_ner_labels", false),
@@ -75,7 +77,7 @@ function(p) {
   local pair_emb_dim = 3 * span_emb_dim,
   local relation_scorer_dim = pair_emb_dim,
   local coref_scorer_dim = pair_emb_dim + p.feature_size,
-  local trigger_emb_dim = span_emb_dim,  // Triggers are single contextualized tokens.
+  local trigger_emb_dim = if event_n_span_prop > 0 then span_emb_dim else context_layer_output_size,
   // Add token embedding dim because we're including the cls token.
   local class_projection_dim = 200,
   local trigger_scorer_dim = ((if trigger_attention_context then 2 * trigger_emb_dim else trigger_emb_dim) +
@@ -96,7 +98,7 @@ function(p) {
     then (if label_embedding_method == "one_hot" then p.n_ner_labels else event_args_label_emb)
     else 0),
   // The extra 1 is for the bit indicating whether the trigger is before or inside the argument.
-  local argument_pair_dim = (3 * span_emb_dim + p.feature_size + 2 +
+  local argument_pair_dim = (span_emb_dim + trigger_emb_dim + p.feature_size + 2 +
     (if event_args_use_ner_labels then ner_label_dim else 0) +
     (if event_args_use_trigger_labels then trigger_label_dim else 0) +
     (if events_context_window > 0 then 4 * events_context_window * context_layer_output_size else 0)),
@@ -281,7 +283,7 @@ function(p) {
         shared_attention_context: shared_attention_context,
         span_prop: {
           emb_dim: span_emb_dim,
-          n_span_prop: getattr(p, "event_n_span_prop", 0)
+          n_span_prop: event_n_span_prop
         },
         cls_projection: {
           input_dim: token_embedding_dim,

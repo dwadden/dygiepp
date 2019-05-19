@@ -258,19 +258,20 @@ class EventExtractor(Model):
                                  text_emb=trigger_embeddings,
                                  text_mask=trigger_mask)
 
-        # Run span graph propagation.
-        top_trig_embeddings, top_arg_embeddings = self._span_prop(
-            top_trig_embeddings, top_arg_embeddings, top_trig_mask, top_arg_mask,
-            top_trig_scores, top_arg_scores, trig_arg_emb_dict)
+        # Run span graph propagation, if asked for
+        if self._span_prop._n_span_prop > 0:
+            top_trig_embeddings, top_arg_embeddings = self._span_prop(
+                top_trig_embeddings, top_arg_embeddings, top_trig_mask, top_arg_mask,
+                top_trig_scores, top_arg_scores, trig_arg_emb_dict)
 
-        top_trig_indices_repeat = (top_trig_indices.unsqueeze(-1).
-                                   repeat(1, 1, top_trig_embeddings.size(-1)))
-        updated_trig_embeddings = trigger_embeddings.scatter(
-            1, top_trig_indices_repeat, top_trig_embeddings)
+            top_trig_indices_repeat = (top_trig_indices.unsqueeze(-1).
+                                       repeat(1, 1, top_trig_embeddings.size(-1)))
+            updated_trig_embeddings = trigger_embeddings.scatter(
+                1, top_trig_indices_repeat, top_trig_embeddings)
 
-        # Recompute the trigger scores.
-        trigger_scores = self._compute_trigger_scores(updated_trig_embeddings, cls_projected, trigger_mask)
-        _, predicted_triggers = trigger_scores.max(-1)
+            # Recompute the trigger scores.
+            trigger_scores = self._compute_trigger_scores(updated_trig_embeddings, cls_projected, trigger_mask)
+            _, predicted_triggers = trigger_scores.max(-1)
 
         trig_arg_embeddings = self._compute_trig_arg_embeddings(
             top_trig_embeddings, top_arg_embeddings, **trig_arg_emb_dict)
@@ -468,15 +469,12 @@ class EventExtractor(Model):
         arg_emb_expanded = top_arg_embeddings.unsqueeze(1)
         arg_emb_tiled = arg_emb_expanded.repeat(1, num_trigs, 1, 1)
 
-        similarity_emb = trig_emb_expanded * arg_emb_expanded
-
         distance_embeddings = self._compute_distance_embeddings(top_trig_indices, top_arg_spans)
 
         cls_repeat = (cls_projected.unsqueeze(dim=1).unsqueeze(dim=2).
                       repeat(1, num_trigs, num_args, 1))
 
-        pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled, similarity_emb,
-                                distance_embeddings, cls_repeat]
+        pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled, distance_embeddings, cls_repeat]
         pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
 
         if trig_emb_extras:
