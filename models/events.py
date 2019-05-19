@@ -184,7 +184,7 @@ class EventExtractor(Model):
         predicted_ner = output_ner["predicted_ner"]
 
         # Compute trigger scores.
-        trigger_scores = self._compute_trigger_scores(trigger_doubles, cls_projected, trigger_mask)
+        trigger_scores = self._compute_trigger_scores(trigger_embeddings, cls_projected, trigger_mask)
         _, predicted_triggers = trigger_scores.max(-1)
 
         # Get trigger candidates for event argument labeling.
@@ -269,7 +269,7 @@ class EventExtractor(Model):
             1, top_trig_indices_repeat, top_trig_embeddings)
 
         # Recompute the trigger scores.
-        trigger_scores = self._compute_trigger_scores(updated_trig_embeddings, cls_embeddings, trigger_mask)
+        trigger_scores = self._compute_trigger_scores(updated_trig_embeddings, cls_projected, trigger_mask)
         _, predicted_triggers = trigger_scores.max(-1)
 
         trig_arg_embeddings = self._compute_trig_arg_embeddings(
