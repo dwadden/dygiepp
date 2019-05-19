@@ -205,6 +205,25 @@ function(p) {
     }
   ),
 
+  // Not using these.
+  local iterator = if co_train then {
+    type: "ie_multitask",
+    batch_size: p.batch_size,
+    [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
+  } else {
+    type: "bucket",
+    sorting_keys: [["text", "num_tokens"]],
+    batch_size : p.batch_size,
+    [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
+  },
+
+  local validation_iterator = if co_train then {
+    type: "ie_document"
+  } else {
+    type: "bucket",
+    sorting_keys: [["text", "num_tokens"]],
+    batch_size : p.batch_size
+  },
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -234,7 +253,6 @@ function(p) {
     loss_weights: p.loss_weights,
     lexical_dropout: p.lexical_dropout,
     lstm_dropout: (if p.finetune_bert then 0 else p.lstm_dropout),
-    rel_prop: p.rel_prop,
     feature_size: p.feature_size,
     use_attentive_span_extractor: p.use_attentive_span_extractor,
     max_span_width: p.max_span_width,
@@ -249,6 +267,8 @@ function(p) {
         max_antecedents: p.coref_max_antecedents,
         mention_feedforward: make_feedforward(span_emb_dim),
         antecedent_feedforward: make_feedforward(coref_scorer_dim),
+        span_emb_dim: span_emb_dim,
+        coref_prop: p.coref_prop,
         initializer: module_initializer
       },
       ner: {
@@ -311,7 +331,7 @@ function(p) {
   },
   iterator: {
     type: if co_train then "ie_multitask" else "ie_batch",
-    batch_size: p.batch_size
+    batch_size: p.batch_size,
     [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
   },
   validation_iterator: {

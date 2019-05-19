@@ -79,37 +79,25 @@ class DyGIE(Model):
         self._permanent_loss_weights = copy.deepcopy(self._loss_weights)
 
         # Create the modules if necessary, else use dummy modules that don't have params.
-        if self._loss_weights["coref"] > 0:
-            self._coref = CorefResolver.from_params(vocab=vocab,
-                                                    feature_size=feature_size,
-                                                    check=check,
-                                                    params=modules.pop("coref"))
-        else:
-            self._coref = Dummy()
+        self._coref = CorefResolver.from_params(vocab=vocab,
+                                                feature_size=feature_size,
+                                                check=check,
+                                                params=modules.pop("coref"))
 
-        if self._loss_weights["ner"] > 0:
-            self._ner = NERTagger.from_params(vocab=vocab,
-                                              feature_size=feature_size,
-                                              check=check,
-                                              params=modules.pop("ner"))
-        else:
-            self._ner = Dummy()
+        self._ner = NERTagger.from_params(vocab=vocab,
+                                          feature_size=feature_size,
+                                          check=check,
+                                          params=modules.pop("ner"))
 
-        if self._loss_weights["relation"] > 0:
-            self._relation = RelationExtractor.from_params(vocab=vocab,
-                                                           feature_size=feature_size,
-                                                           check=check,
-                                                           params=modules.pop("relation"))
-        else:
-            self._relation = Dummy()
+        self._relation = RelationExtractor.from_params(vocab=vocab,
+                                                       feature_size=feature_size,
+                                                       check=check,
+                                                       params=modules.pop("relation"))
 
-        if self._loss_weights["events"] > 0:
-            self._events = EventExtractor.from_params(vocab=vocab,
-                                                      feature_size=feature_size,
-                                                      check=check,
-                                                      params=modules.pop("events"))
-        else:
-            self._events = Dummy()
+        self._events = EventExtractor.from_params(vocab=vocab,
+                                                  feature_size=feature_size,
+                                                  check=check,
+                                                  params=modules.pop("events"))
 
         # Make endpoint span extractor.
 
@@ -336,10 +324,10 @@ class DyGIE(Model):
 
         # Check to see if event predictions are globally compatible (argument labels are compatible
         # with NER tags and trigger tags).
-        if self._loss_weights["ner"] > 0 and self._loss_weights["events"] > 0:
-            decoded = self.decode(output_dict)
-            self._joint_metrics(decoded["ner"]["decoded_ner_dict"],
-                                decoded["events"]["decoded_events"])
+        # if self._loss_weights["ner"] > 0 and self._loss_weights["events"] > 0:
+        #     decoded_ner = self._ner.decode(output_dict["ner"])
+        #     decoded_events = self._events.decode(output_dict["events"])
+        #     self._joint_metrics(decoded_ner, decoded_events)
 
         return output_dict
 
