@@ -1,16 +1,22 @@
 // Library that accepts a parameter dict and returns a full config.
 
 function(p) {
+  local getattr(obj, attrname, default) = if attrname in obj then p[attrname] else default,
+
   // Location of ACE valid event configs
   local valid_events_dir = std.extVar("valid_events_dir"),
 
   // Storing constants.
 
+  local event_validation_metric = (if "event_validation_metric" in p
+    then p.event_validation_metric
+    else "+arg_class_f1"),
+
   local validation_metrics = {
     "ner": "+ner_f1",
     "rel": "+rel_f1",
     "coref": "+coref_f1",
-    "events": "+arg_class_f1"
+    "events": event_validation_metric
   },
 
   local display_metrics = {
@@ -39,9 +45,6 @@ function(p) {
   ////////////////////////////////////////////////////////////////////////////////
 
   // Helper function.
-  // Get the attribute from the object. If the object doesn't have that attribute, return default.
-  local getattr(obj, attrname, default) = if attrname in obj then p[attrname] else default,
-
   // Calculating dimensions.
   local use_bert = (if p.use_bert_base then true else if p.use_bert_large then true else false),
 
@@ -72,8 +75,7 @@ function(p) {
   local pair_emb_dim = 3 * span_emb_dim,
   local relation_scorer_dim = pair_emb_dim,
   local coref_scorer_dim = pair_emb_dim + p.feature_size,
-  local trigger_emb_dim = context_layer_output_size,
-  local trigger_pair_dim = span_emb_dim,
+  local trigger_emb_dim = span_emb_dim,  // Triggers are single contextualized tokens.
   // Add token embedding dim because we're including the cls token.
   local class_projection_dim = 200,
   local trigger_scorer_dim = ((if trigger_attention_context then 2 * trigger_emb_dim else trigger_emb_dim) +
@@ -277,9 +279,11 @@ function(p) {
         entity_beam: getattr(p, "events_entity_beam", false),
         context_window: events_context_window,
         shared_attention_context: shared_attention_context,
+        softmax_correction: getattr(p, "softmax_correction", false),
         span_prop: {
           emb_dim: span_emb_dim,
-          n_span_prop: getattr(p, "event_n_span_prop", 0),
+          n_span_prop: getattr(p, "event_n_span_prop", 0)
+        },
         cls_projection: {
           input_dim: token_embedding_dim,
           num_layers: 1,
@@ -319,6 +323,10 @@ function(p) {
     cuda_device : [std.parseInt(x) for x in std.split(std.extVar("cuda_device"), ",")],
     validation_metric: validation_metrics[p.target],
     learning_rate_scheduler: p.learning_rate_scheduler,
-    optimizer: p.optimizer
+    optimizer: p.optimizer,
+    [if "moving_average_decay" in p then "moving_average"]: {
+      type: "exponential",
+      decay: p.moving_average_decay
+    }
   }
 }
