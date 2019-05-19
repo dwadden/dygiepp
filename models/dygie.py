@@ -283,17 +283,17 @@ class DyGIE(Model):
         if self._loss_weights['events'] > 0:
             # Make the trigger embeddings the same size as the argument embeddings to make
             # propagation easier.
-            trigger_doubles = contextualized_embeddings.repeat(1, 1, 2)
-            trigger_widths = torch.zeros([trigger_doubles.size(0), trigger_doubles.size(1)],
-                                         device=trigger_doubles.device, dtype=torch.long)
+            trigger_embeddings = contextualized_embeddings.repeat(1, 1, 2)
+            trigger_widths = torch.zeros([trigger_embeddings.size(0), trigger_embeddings.size(1)],
+                                         device=trigger_embeddings.device, dtype=torch.long)
             trigger_width_embs = self._endpoint_span_extractor._span_width_embedding(trigger_widths)
             trigger_width_embs = trigger_width_embs.detach()
-            trigger_doubles = torch.cat([trigger_doubles, trigger_width_embs], dim=-1)
+            trigger_embeddings = torch.cat([trigger_embeddings, trigger_width_embs], dim=-1)
 
             output_events = self._events(
-                text_mask, contextualized_embeddings, trigger_doubles, spans, span_mask,
-                span_embeddings, cls_embeddings, sentence_lengths, output_ner, trigger_labels,
-                argument_labels, ner_labels, metadata)
+                text_mask, trigger_embeddings, spans, span_mask, span_embeddings, cls_embeddings,
+                sentence_lengths, output_ner, trigger_labels, argument_labels,
+                ner_labels, metadata)
 
         # TODO(dwadden) just did this part.
         loss = (self._loss_weights['coref'] * output_coref['loss'] +

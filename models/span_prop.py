@@ -42,14 +42,14 @@ class SpanProp(Model):
 
         initializer(self)
 
-    def forward(self, trig_doubles, arg_embeddings, trig_mask, arg_mask, trig_scores, arg_scores,
+    def forward(self, trig_embeddings, arg_embeddings, trig_mask, arg_mask, trig_scores, arg_scores,
                 trig_arg_emb_dict):
 
         # The actual function body.
 
         for _ in range(self._n_span_prop):
             pairwise_embeddings = self._trig_arg_embedder(
-                trig_doubles, arg_embeddings, **trig_arg_emb_dict)
+                trig_embeddings, arg_embeddings, **trig_arg_emb_dict)
             argument_scores = self._argument_scorer(
                 pairwise_embeddings, trig_scores, arg_scores, prepend_zeros=False)
             truncated_scores = F.relu(argument_scores)
@@ -62,26 +62,26 @@ class SpanProp(Model):
                 transition_trig, arg_embeddings, arg_mask, [0, 3, 1, 2])
 
             gate_trig = torch.sigmoid(
-                self._gate_trigger(torch.cat([trig_doubles, updates_trig], dim=-1)))
-            trig_doubles = gate_trig * trig_doubles + (1 - gate_trig) * updates_trig
+                self._gate_trigger(torch.cat([trig_embeddings, updates_trig], dim=-1)))
+            trig_embeddings = gate_trig * trig_embeddings + (1 - gate_trig) * updates_trig
 
             # Now the arguments
             # First, update the pairwise embeddings with the new triggers.
             pairwise_embeddings = self._trig_arg_embedder(
-                trig_doubles, arg_embeddings, **trig_arg_emb_dict)
+                trig_embeddings, arg_embeddings, **trig_arg_emb_dict)
             argument_scores = self._argument_scorer(
                 pairwise_embeddings, trig_scores, arg_scores, prepend_zeros=False)
 
             # Then go through the same process.
             transition_arg = self._transition_argument(truncated_scores)
             updates_arg = self._compute_updates(
-                transition_arg, trig_doubles, trig_mask, [0, 3, 2, 1])
+                transition_arg, trig_embeddings, trig_mask, [0, 3, 2, 1])
 
             gate_arg = torch.sigmoid(
                 self._gate_argument(torch.cat([arg_embeddings, updates_arg], dim=-1)))
             arg_embeddings = gate_arg * arg_embeddings + (1 - gate_arg) * updates_arg
 
-        return trig_doubles, arg_embeddings
+        return trig_embeddings, arg_embeddings
 
     @staticmethod
     def _compute_updates(transition, embeddings, mask, permute_order):

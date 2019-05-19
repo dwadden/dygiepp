@@ -76,6 +76,7 @@ function(p) {
   local relation_scorer_dim = pair_emb_dim,
   local coref_scorer_dim = pair_emb_dim + p.feature_size,
   local trigger_emb_dim = span_emb_dim,  // Triggers are single contextualized tokens.
+  local trigger_emb_dim = span_emb_dim,
   // Add token embedding dim because we're including the cls token.
   local class_projection_dim = 200,
   local trigger_scorer_dim = ((if trigger_attention_context then 2 * trigger_emb_dim else trigger_emb_dim) +
