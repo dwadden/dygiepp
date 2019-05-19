@@ -1,6 +1,7 @@
 from os import path
 import logging
 from typing import Dict, List, Optional
+import copy
 
 import torch
 import torch.nn.functional as F
@@ -61,10 +62,9 @@ class DyGIE(Model):
                  lexical_dropout: float = 0.2,
                  lstm_dropout: float = 0.4,
                  use_attentive_span_extractor: bool = False,
+                 co_train: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
-                 rel_prop: int = 0,
-                 coref_prop: int = 0,
                  display_metrics: List[str] = None,
                  valid_events_dir: str = None,
                  check: bool = False) -> None:
@@ -76,6 +76,7 @@ class DyGIE(Model):
         self._context_layer = context_layer
 
         self._loss_weights = loss_weights.as_dict()
+        self._permanent_loss_weights = copy.deepcopy(self._loss_weights)
 
         # Create the modules if necessary, else use dummy modules that don't have params.
         if self._loss_weights["coref"] > 0:
@@ -137,15 +138,15 @@ class DyGIE(Model):
         else:
             self._lexical_dropout = lambda x: x
 
+        # Do co-training if we're training on ACE and ontonotes.
+        self._co_train = co_train
+
         # Big gotcha: PyTorch doesn't add dropout to the LSTM's output layer. We need to do this
         # manually.
         if lstm_dropout > 0:
             self._lstm_dropout = torch.nn.Dropout(p=lstm_dropout)
         else:
             self._lstm_dropout = lambda x: x
-
-        self.rel_prop = rel_prop
-        self.coref_prop = coref_prop
 
         initializer(self)
 
@@ -162,7 +163,22 @@ class DyGIE(Model):
         """
         TODO(dwadden) change this.
         """
-        # TODO(dwadden) Is there some smarter way to do the batching within a document?
+        # For co-training on Ontonotes, need to change the loss weights depending on the data coming
+        # in. This is a hack but it will do for now.
+        if self._co_train:
+            if self.training:
+                dataset = [entry["dataset"] for entry in metadata]
+                assert len(set(dataset)) == 1
+                dataset = dataset[0]
+                assert dataset in ["ace", "ontonotes"]
+                if dataset == "ontonotes":
+                    self._loss_weights = dict(coref=1, ner=0, relation=0, events=0)
+                else:
+                    self._loss_weights = self._permanent_loss_weights
+            # This assumes that there won't be any co-training data in the dev and test sets, and that
+            # coref propagation will still happen even when the coref weight is set to 0.
+            else:
+                self._loss_weights = self._permanent_loss_weights
 
         # In AllenNLP, AdjacencyFields are passed in as floats. This fixes it.
         relation_labels = relation_labels.long()
@@ -189,7 +205,7 @@ class DyGIE(Model):
         text_mask = util.get_text_field_mask(text).float()
         sentence_group_lengths = text_mask.sum(dim=1).long()
 
-        sentence_lengths = text_mask.sum(dim=1).long()
+        sentence_lengths = 0*text_mask.sum(dim=1).long()
         for i in range(len(metadata)):
             sentence_lengths[i] = metadata[i]["end_ix"] - metadata[i]["start_ix"]
             for k in range(sentence_lengths[i], sentence_group_lengths[i]):
@@ -214,6 +230,7 @@ class DyGIE(Model):
 
         # Shape: (batch_size, max_sentence_length, encoding_dim)
         contextualized_embeddings = self._lstm_dropout(self._context_layer(text_embeddings, text_mask))
+        assert spans.max() < contextualized_embeddings.shape[1]
 
         if self._attentive_span_extractor is not None:
             # Shape: (batch_size, num_spans, emebedding_size)
@@ -249,24 +266,27 @@ class DyGIE(Model):
         output_relation = {'loss': 0}
         output_events = {'loss': 0}
 
-        # Prune and compute span representations
-        if self._loss_weights["relation"] > 0:
+        # Prune and compute span representations for coreference module
+        if self._loss_weights["coref"] > 0 or self._coref.coref_prop > 0:
+            output_coref, coref_indices = self._coref.compute_representations(
+                spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
+
+        # Prune and compute span representations for relation module
+        if self._loss_weights["relation"] > 0 or self._relation.rel_prop > 0:
             output_relation = self._relation.compute_representations(
                 spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
-        # TODO(Ulme) Split the forward method of the coreference module up into parts
-        #output_coref = self._coref.compute_representations()
-
         # Propagation of global information to enhance the span embeddings
-        if self.coref_prop > 0:
-            print("Coref prop is not implemented yet")
-            exit()
+        if self._coref.coref_prop > 0:
             # TODO(Ulme) Implement Coref Propagation
-            #span_embeddings = self.update_span_embeddings(span_embeddings, span_mask, top_span_embeddings, top_span_mask, top_span_indices)
+            output_coref = self._coref.coref_propagation(output_coref)
+            span_embeddings = self._coref.update_spans(output_coref, span_embeddings, coref_indices)
 
-        if self.rel_prop > 0:
+        if self._relation.rel_prop > 0:
             output_relation = self._relation.relation_propagation(output_relation)
-            span_embeddings = self.update_span_embeddings(span_embeddings, span_mask, output_relation["top_span_embeddings"], output_relation["top_span_mask"], output_relation["top_span_indices"])
+            span_embeddings = self.update_span_embeddings(span_embeddings, span_mask,
+                output_relation["top_span_embeddings"], output_relation["top_span_mask"],
+                output_relation["top_span_indices"])
 
         # Make predictions and compute losses for each module
         if self._loss_weights['ner'] > 0:
@@ -274,8 +294,7 @@ class DyGIE(Model):
                 spans, span_mask, span_embeddings, sentence_lengths, ner_labels, metadata)
 
         if self._loss_weights['coref'] > 0:
-            output_coref = self._coref(
-                spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
+            output_coref = self._coref.predict_labels(output_coref, metadata)
 
         if self._loss_weights['relation'] > 0:
             output_relation = self._relation.predict_labels(relation_labels, output_relation, metadata)
@@ -297,6 +316,11 @@ class DyGIE(Model):
                 text_mask, trigger_embeddings, spans, span_mask, span_embeddings, cls_embeddings,
                 sentence_lengths, output_ner, trigger_labels, argument_labels,
                 ner_labels, metadata)
+
+        if "loss" not in output_coref:
+            output_coref["loss"] = 0
+        if "loss" not in output_relation:
+            output_relation["loss"] = 0
 
         # TODO(dwadden) just did this part.
         loss = (self._loss_weights['coref'] * output_coref['loss'] +

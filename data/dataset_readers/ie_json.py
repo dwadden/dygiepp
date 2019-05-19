@@ -143,6 +143,7 @@ class IEJsonReader(DatasetReader):
                 sentence_start = 0
                 js = json.loads(line)
                 doc_key = js["doc_key"]
+                dataset = js["dataset"] if "dataset" in js else None
 
                 # If some fields are missing in the data set, fill them with empties.
                 # TODO(dwadden) do this more cleanly once things are running.
@@ -151,6 +152,13 @@ class IEJsonReader(DatasetReader):
                 js["sentence_groups"] = [[self._normalize_word(word) for sentence in js["sentences"][max(0, i-self.k):min(n_sentences, i + self.k + 1)] for word in sentence] for i in range(n_sentences)]
                 js["sentence_start_index"] = [sum(len(js["sentences"][i-j-1]) for j in range(min(self.k, i))) if i > 0 else 0 for i in range(n_sentences)]
                 js["sentence_end_index"] = [js["sentence_start_index"][i] + len(js["sentences"][i]) for i in range(n_sentences)]
+                for sentence_group_nr in range(len(js["sentence_groups"])):
+                    if len(js["sentence_groups"][sentence_group_nr]) > 300:
+                        js["sentence_groups"][sentence_group_nr] = js["sentences"][sentence_group_nr]
+                        js["sentence_start_index"][sentence_group_nr] = 0
+                        js["sentence_end_index"][sentence_group_nr] = len(js["sentences"][sentence_group_nr])
+                        if len(js["sentence_groups"][sentence_group_nr])>300:
+                            import ipdb;
                 if "clusters" not in js:
                     js["clusters"] = []
                 for field in ["ner", "relations", "events"]:
@@ -175,7 +183,7 @@ class IEJsonReader(DatasetReader):
                     sentence_start += len(sentence)
                     instance = self.text_to_instance(
                         sentence, ner_dict, relation_dict, cluster_dict, trigger_dict, argument_dict,
-                        doc_key, sentence_num, groups, start_ix, end_ix)
+                        doc_key, dataset, sentence_num, groups, start_ix, end_ix)
                     yield instance
 
     @overrides
@@ -187,6 +195,7 @@ class IEJsonReader(DatasetReader):
                          trigger_dict,
                          argument_dict,
                          doc_key: str,
+                         dataset: str,
                          sentence_num: int,
                          groups: List[str],
                          start_ix: int,
@@ -208,6 +217,7 @@ class IEJsonReader(DatasetReader):
                         trigger_dict=trigger_dict,
                         argument_dict=argument_dict,
                         doc_key=doc_key,
+                        dataset=dataset,
                         groups=groups,
                         start_ix=start_ix,
                         end_ix=end_ix,

@@ -107,6 +107,9 @@ function(p) {
     (if shared_attention_context then trigger_emb_dim else 0) +
     class_projection_dim),
 
+  // Co-training
+  local co_train = if "co_train" in p then p.co_train else false,
+
   ////////////////////////////////////////////////////////////////////////////////
 
   // Function definitions
@@ -239,6 +242,7 @@ function(p) {
     valid_events_dir: valid_events_dir,
     check: getattr(p, "check", false), // If true, run a bunch of correctness assertions in the code.
     context_layer: context_layer,
+    co_train: co_train,
     modules: {
       coref: {
         spans_per_word: p.coref_spans_per_word,
@@ -306,17 +310,12 @@ function(p) {
     }
   },
   iterator: {
-    // type: "ie_batch",
-    // batch_size: p.batch_size
-    type: "bucket",
-    sorting_keys: [["text", "num_tokens"]],
-    batch_size : p.batch_size,
+    type: if co_train then "ie_multitask" else "ie_batch",
+    batch_size: p.batch_size
     [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
   },
   validation_iterator: {
-    type: "bucket",
-    sorting_keys: [["text", "num_tokens"]],
-    batch_size : p.batch_size
+    type: "ie_document",
   },
   trainer: {
     num_epochs: p.num_epochs,
