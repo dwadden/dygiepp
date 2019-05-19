@@ -44,14 +44,11 @@ class SpanProp(Model):
 
     def forward(self, trig_embeddings, arg_embeddings, trig_mask, arg_mask, trig_scores, arg_scores,
                 trig_arg_emb_dict):
-
-        # The actual function body.
-
         for _ in range(self._n_span_prop):
             pairwise_embeddings = self._trig_arg_embedder(
                 trig_embeddings, arg_embeddings, **trig_arg_emb_dict)
             argument_scores = self._argument_scorer(
-                pairwise_embeddings, trig_scores, arg_scores, prepend_zeros=False)
+                pairwise_embeddings, trig_scores, arg_scores, arg_mask, prepend_zeros=False)
             truncated_scores = F.relu(argument_scores)
 
             # The trigger update.
@@ -70,7 +67,7 @@ class SpanProp(Model):
             pairwise_embeddings = self._trig_arg_embedder(
                 trig_embeddings, arg_embeddings, **trig_arg_emb_dict)
             argument_scores = self._argument_scorer(
-                pairwise_embeddings, trig_scores, arg_scores, prepend_zeros=False)
+                pairwise_embeddings, trig_scores, arg_scores, arg_mask, prepend_zeros=False)
 
             # Then go through the same process.
             transition_arg = self._transition_argument(truncated_scores)
