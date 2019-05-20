@@ -140,7 +140,7 @@ class Argument:
 
 
 class NER:
-    def __init__(self, ner, text, sentence_start, flavor):
+    def __init__(self, ner, text, sentence_start, flavor=None):
         self.span = Span(ner[0], ner[1], text, sentence_start)
         self.label = ner[2]
         self.flavor = flavor
