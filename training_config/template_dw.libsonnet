@@ -339,6 +339,7 @@ function(p) {
     batch_size: p.batch_size
   },
   trainer: {
+    num_serialized_models_to_keep: 3,
     num_epochs: p.num_epochs,
     grad_norm: 5.0,
     patience : p.patience,
