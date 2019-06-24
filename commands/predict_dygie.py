@@ -161,6 +161,8 @@ def predict(archive_file, test_file, output_file, cuda_device, score_dir):
             res = {}
             res.update(gold_data)
             res.update(predictions)
+            if "dataset" in res:
+                del res["dataset"]
             check_lengths(res)
             encoded = json.dumps(res, default=int)
             f.write(encoded + "\n")
