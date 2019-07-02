@@ -19,7 +19,6 @@ from dygie.models.ner import NERTagger
 from dygie.models.relation import RelationExtractor
 from dygie.models.events import EventExtractor
 from dygie.training.joint_metrics import JointMetrics
-from dygie.models.dummy import Dummy
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -75,19 +74,15 @@ class DyGIE(Model):
         self._loss_weights = loss_weights.as_dict()
         self._permanent_loss_weights = copy.deepcopy(self._loss_weights)
 
-        # Create the modules if necessary, else use dummy modules that don't have params.
         self._coref = CorefResolver.from_params(vocab=vocab,
                                                 feature_size=feature_size,
                                                 params=modules.pop("coref"))
-
         self._ner = NERTagger.from_params(vocab=vocab,
                                           feature_size=feature_size,
                                           params=modules.pop("ner"))
-
         self._relation = RelationExtractor.from_params(vocab=vocab,
                                                        feature_size=feature_size,
                                                        params=modules.pop("relation"))
-
         self._events = EventExtractor.from_params(vocab=vocab,
                                                   feature_size=feature_size,
                                                   params=modules.pop("events"))
