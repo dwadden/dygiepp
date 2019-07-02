@@ -63,11 +63,8 @@ class EventExtractor(Model):
                  initializer: InitializerApplicator = InitializerApplicator(),
                  positive_label_weight: float = 1.0,
                  entity_beam: bool = False,
-                 regularizer: Optional[RegularizerApplicator] = None,
-                 check: bool = False) -> None:
+                 regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(EventExtractor, self).__init__(vocab, regularizer)
-
-        self._check = check
 
         self._n_ner_labels = vocab.get_vocab_size("ner_labels")
         self._n_trigger_labels = vocab.get_vocab_size("trigger_labels")
@@ -141,7 +138,6 @@ class EventExtractor(Model):
         self._span_prop = span_prop
         self._span_prop._trig_arg_embedder = self._compute_trig_arg_embeddings
         self._span_prop._argument_scorer = self._compute_argument_scores
-        self._span_prop._check = self._check
 
         # Softmax correction parameters.
         self._softmax_correction = softmax_correction
@@ -178,13 +174,6 @@ class EventExtractor(Model):
         The trigger embeddings are just the contextualized token embeddings, and the trigger mask is
         the text mask. For the arguments, we consider all the spans.
         """
-        def check_gold_pruner():
-            # Make sure we've keeping the same number of guys.
-            assert torch.allclose(num_arg_spans_kept, (ner_labels > 0).sum(dim=1))
-            # Spot-check that the indices are correct.
-            if top_arg_indices.size(0) > 2 and (ner_labels[2] > 0).sum() > 1:
-                assert top_arg_indices[2, 1] == (ner_labels[2] > 0).nonzero()[1]
-
         cls_projected = self._cls_projection(cls_embeddings)
         auxiliary_loss = self._compute_auxiliary_loss(cls_projected, trigger_labels, trigger_mask)
 
@@ -222,9 +211,6 @@ class EventExtractor(Model):
          top_arg_indices, top_arg_scores, num_arg_spans_kept) = self._mention_pruner(
              span_embeddings, span_mask, num_arg_spans_to_keep, ner_scores, gold_labels)
 
-        if self._check and self._mention_pruner._gold_beam:
-            check_gold_pruner()
-
         top_arg_mask = top_arg_mask.unsqueeze(-1)
         top_arg_spans = util.batched_index_select(spans,
                                                   top_arg_indices)
@@ -247,15 +233,6 @@ class EventExtractor(Model):
                 top_trig_labels = util.batched_index_select(softmax_triggers, top_trig_indices)
                 softmax_ner = ner_scores.softmax(dim=-1)
                 top_ner_labels = util.batched_index_select(softmax_ner, top_arg_indices)
-                if self._check:
-                    # Make sure we're doing the indexing correctly and softmax is normalized.
-                    batch_size, num_candidates = top_trig_indices.size()
-                    if batch_size > 2 and num_candidates > 5:
-                        trig_ix = top_trig_indices[2, 5]
-                        expected = softmax_triggers[2, trig_ix, :]
-                        actual = top_trig_labels[2, 5]
-                        assert torch.abs(actual.sum() - 1) < 0.0001
-                        assert torch.allclose(expected, actual)
 
         # Make a dict of all arguments that are needed to make trigger / argument pair embeddings.
         trig_arg_emb_dict = dict(cls_projected=cls_projected,
@@ -502,25 +479,6 @@ class EventExtractor(Model):
         return pair_embeddings
 
     def _compute_distance_embeddings(self, top_trig_indices, top_arg_spans):
-        def check_distance():
-            batch, trig, arg = 2, 1, 6
-            if (top_trig_indices.size(0) > batch and
-                top_trig_indices.size(1) > trig and
-                top_arg_spans.size(1) > arg):
-                trigger_ix = top_trig_indices[batch, trig]
-                arg_span = top_arg_spans[batch, arg]
-                if trigger_ix >= arg_span[0] and trigger_ix <= arg_span[1]:
-                    trigger_check_inside = 1.0
-                    predicted_distance = 0
-                else:
-                    trigger_check_inside = 0.0
-                    predicted_distance = (trigger_ix - arg_span).abs().min().item()
-                trigger_check_before = (trigger_ix < arg_span[0]).float().item()
-                actual_distance = dist[batch, trig, arg].item()
-                assert trigger_check_inside == trigger_inside_feature[batch, trig, arg].item()
-                assert trigger_check_before == trigger_before_feature[batch, trig, arg].item()
-                assert predicted_distance == actual_distance
-
         top_trig_ixs = top_trig_indices.unsqueeze(2)
         arg_span_starts = top_arg_spans[:, :, 0].unsqueeze(1)
         arg_span_ends = top_arg_spans[:, :, 1].unsqueeze(1)
@@ -537,30 +495,9 @@ class EventExtractor(Model):
         trigger_inside_feature = trigger_inside.float().unsqueeze(-1)
         res = torch.cat([dist_emb, trigger_before_feature, trigger_inside_feature], dim=-1)
 
-        if self._check:
-            check_distance()
-
         return res
 
     def _get_shared_attention_context(self, pair_embeddings, text_emb, text_mask):
-        def checkit():
-            # Check to make sure it did the right thing.
-            batch_ix, trig_ix, arg_ix = (2, 1, 3)
-
-            if batch_size > batch_ix and n_triggers > trig_ix and n_args > arg_ix:
-                emb_check = pair_embeddings[batch_ix, trig_ix, arg_ix].unsqueeze(0).unsqueeze(0)
-                text_check = text_emb[batch_ix].unsqueeze(0)
-                mask_check = text_mask[batch_ix].unsqueeze(0)
-
-                check_unnorm = self._shared_attention_context_module(emb_check, text_check)
-                # assert torch.allclose(check_unnorm.squeeze(), attn_unnorm[batch_ix, 0])
-
-                check_weights = util.masked_softmax(check_unnorm, mask_check)
-                # assert torch.allclose(check_weights.squeeze(), attn_weights[batch_ix, 0])
-
-                context_check = util.weighted_sum(text_check, check_weights)
-                assert torch.allclose(context_check.squeeze(), context[batch_ix, trig_ix, arg_ix])
-
         batch_size, n_triggers, n_args, emb_dim = pair_embeddings.size()
         pair_emb_flat = pair_embeddings.view([batch_size, -1, emb_dim])
         attn_unnorm = self._shared_attention_context_module(pair_emb_flat, text_emb)
@@ -568,33 +505,12 @@ class EventExtractor(Model):
         context = util.weighted_sum(text_emb, attn_weights)
         context = context.view(batch_size, n_triggers, n_args, -1)
 
-        if self._check:
-            checkit()
-
         return context
 
     def _get_context(self, span_starts, span_ends, text_emb):
         """
         Given span start and end (inclusive), get the context on either side.
         """
-        def checkit():
-            assert tuple(pad_batch.size()) == (batch_size, num_candidates, emb_size * 2 * self._context_window)
-            if batch_size > 2 and num_candidates > 6:  # Make sure the batch is big enough to check.
-                # Spot-check an entry from the left pad.
-                expected_left = pad_batch[1, 4, 13]
-                actual_ix_left = (span_starts[1, 4] - self._context_window).item()
-                # If left endpoint of context window is off the end of the array, don't check.
-                if actual_ix_left >= 0:
-                    actual_left = text_emb[1, actual_ix_left, 13]
-                    assert torch.allclose(expected_left, actual_left)
-                # And one from the right pad.
-                expected_right = pad_batch[2, 6, -4]
-                actual_ix_right = (span_ends[2, 6] + self._context_window).item()
-                # If right endpoint of context window is off the end of the array, don't check.
-                if actual_ix_right < seq_length:
-                    actual_right = text_emb[2, actual_ix_right, -4]
-                    assert torch.allclose(expected_right, actual_right)
-
         # The text_emb are already zero-padded on the right, which is correct.
         assert span_starts.size() == span_ends.size()
         batch_size, seq_length, emb_size = text_emb.size()
@@ -614,10 +530,6 @@ class EventExtractor(Model):
                 right_end = end_ix + 2 * self._context_window + 1
                 left_pad = padded_emb[batch_ix, left_start:left_end]
                 right_pad = padded_emb[batch_ix, right_start:right_end]
-                if self._check:
-                    assert (tuple(left_pad.size()) ==
-                            tuple(right_pad.size()) ==
-                            (self._context_window, emb_size))
                 pad = torch.cat([left_pad, right_pad], dim=0).view(-1).unsqueeze(0)
                 pad_entry.append(pad)
 
@@ -625,8 +537,6 @@ class EventExtractor(Model):
             pad_batch.append(pad_entry)
 
         pad_batch = torch.cat(pad_batch, dim=0)
-        if self._check:
-            checkit()
 
         return pad_batch
 

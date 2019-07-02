@@ -38,11 +38,8 @@ class RelationExtractor(Model):
                  rel_prop_dropout_f: float = 0.0,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  positive_label_weight: float = 1.0,
-                 regularizer: Optional[RegularizerApplicator] = None,
-                 check: bool = False) -> None:
+                 regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(RelationExtractor, self).__init__(vocab, regularizer)
-
-        self._check = check
 
         # Need to hack this for cases where there's no relation data. It breaks Ulme's code.
         self._n_labels = max(vocab.get_vocab_size("relation_labels"), 1)

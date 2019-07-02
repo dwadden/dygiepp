@@ -66,11 +66,8 @@ class DyGIE(Model):
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
                  display_metrics: List[str] = None,
-                 valid_events_dir: str = None,
-                 check: bool = False) -> None:
+                 valid_events_dir: str = None) -> None:
         super(DyGIE, self).__init__(vocab, regularizer)
-
-        self._check = check
 
         self._text_field_embedder = text_field_embedder
         self._context_layer = context_layer
@@ -81,22 +78,18 @@ class DyGIE(Model):
         # Create the modules if necessary, else use dummy modules that don't have params.
         self._coref = CorefResolver.from_params(vocab=vocab,
                                                 feature_size=feature_size,
-                                                check=check,
                                                 params=modules.pop("coref"))
 
         self._ner = NERTagger.from_params(vocab=vocab,
                                           feature_size=feature_size,
-                                          check=check,
                                           params=modules.pop("ner"))
 
         self._relation = RelationExtractor.from_params(vocab=vocab,
                                                        feature_size=feature_size,
-                                                       check=check,
                                                        params=modules.pop("relation"))
 
         self._events = EventExtractor.from_params(vocab=vocab,
                                                   feature_size=feature_size,
-                                                  check=check,
                                                   params=modules.pop("events"))
 
         # Make endpoint span extractor.

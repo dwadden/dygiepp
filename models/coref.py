@@ -57,11 +57,8 @@ class CorefResolver(Model):
                  coref_prop: int = 0,
                  coref_prop_dropout_f: float = 0.0,
                  initializer: InitializerApplicator = InitializerApplicator(), # TODO(dwadden add this).
-                 regularizer: Optional[RegularizerApplicator] = None,
-                 check: bool = False) -> None:
+                 regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(CorefResolver, self).__init__(vocab, regularizer)
-
-        self._check = check
 
         self._antecedent_feedforward = TimeDistributed(antecedent_feedforward)
         feedforward_scorer = torch.nn.Sequential(

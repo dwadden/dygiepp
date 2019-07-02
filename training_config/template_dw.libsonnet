@@ -258,7 +258,6 @@ function(p) {
     max_span_width: p.max_span_width,
     display_metrics: display_metrics[p.target],
     valid_events_dir: valid_events_dir,
-    check: getattr(p, "check", false), // If true, run a bunch of correctness assertions in the code.
     context_layer: context_layer,
     co_train: co_train,
     modules: {

@@ -38,11 +38,8 @@ class NERTagger(Model):
                  mention_feedforward: FeedForward,
                  feature_size: int,
                  initializer: InitializerApplicator = InitializerApplicator(),
-                 regularizer: Optional[RegularizerApplicator] = None,
-                 check: bool = False) -> None:
+                 regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(NERTagger, self).__init__(vocab, regularizer)
-
-        self._check = check
 
         # Number of classes determine the output dimension of the final layer
         self._n_labels = vocab.get_vocab_size('ner_labels')
