@@ -113,6 +113,8 @@ def check_lengths(d):
     "Make sure all entries in dict have same length."
     keys = list(d.keys())
     keys.remove("doc_key")
+    keys.remove("clusters")
+    keys.remove("predicted_clusters")
     lengths = [len(d[k]) for k in keys]
     assert len(set(lengths)) == 1
 

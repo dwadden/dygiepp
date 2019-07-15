@@ -25,20 +25,19 @@ def batch_identity(batch_size, matrix_size, *args, **kwargs):
     return res
 
 
-def fields_to_batches(d):
+def fields_to_batches(d, keys_to_ignore=[]):
     """
     The input is a dict whose items are batched tensors. The output is a list of dictionaries - one
     per entry in the batch - with the slices of the tensors for that entry. Here's an example.
-
     Input:
     d = {"a": [[1, 2], [3,4]], "b": [1, 2]}
     Output:
     res = [{"a": [1, 2], "b": 1}, {"a": [3, 4], "b": 2}].
     """
     # Make sure all input dicts have same length.
-    lengths = [len(x) for x in d.values()]
+    keys = [key for key in d.keys() if key not in keys_to_ignore]
+    lengths = [len(d[k]) for k in keys]
     assert len(set(lengths)) == 1
     length = lengths[0]
-    keys = d.keys()
     res = [{k: d[k][i] for k in keys} for i in range(length)]
     return res
