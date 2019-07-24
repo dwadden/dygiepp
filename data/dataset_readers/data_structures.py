@@ -57,6 +57,11 @@ class Document:
     def __len__(self):
         return len(self.sentences)
 
+    def print_plaintext(self):
+        for sent in self:
+            print(" ".join(sent.text))
+
+
     def find_cluster(self, entity, predicted=True):
         """
         Search through coreference clusters and return the one containing the query entity, if it's
