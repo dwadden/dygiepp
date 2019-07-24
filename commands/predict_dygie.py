@@ -12,6 +12,7 @@ usage: predict.py [archive-file] [test-file] [output-file]
 
 import json
 from sys import argv
+import warnings
 
 import numpy as np
 
@@ -22,6 +23,7 @@ from allennlp.data.dataset import Batch
 from allennlp.nn import util as nn_util
 
 from dygie.data.iterators.document_iterator import DocumentIterator
+from dygie.data.iterators.batch_iterator import BatchIterator
 
 
 decode_fields = dict(coref="clusters",
@@ -112,9 +114,9 @@ def load_json(test_file):
 def check_lengths(d):
     "Make sure all entries in dict have same length."
     keys = list(d.keys())
-    keys.remove("doc_key")
-    keys.remove("clusters")
-    keys.remove("predicted_clusters")
+    for key in ["doc_key", "clusters", "predicted_clusters", "section_starts"]:
+        if key in keys:
+            keys.remove(key)
     lengths = [len(d[k]) for k in keys]
     assert len(set(lengths)) == 1
 
@@ -131,26 +133,38 @@ def predict(archive_file, test_file, output_file, cuda_device):
     instances = dataset_reader.read(test_file)
     batch = Batch(instances)
     batch.index_instances(model.vocab)
-    iterator = DocumentIterator()
-    with open(output_file, "w") as f:
-        for doc, gold_data in zip(iterator(batch.instances, num_epochs=1, shuffle=False),
-                                  gold_test_data):
-            doc = nn_util.move_to_device(doc, cuda_device)  # Put on GPU.
-            sentence_lengths = [len(entry["sentence"]) for entry in doc["metadata"]]
-            sentence_starts = np.cumsum(sentence_lengths)
-            sentence_starts = np.roll(sentence_starts, 1)
-            sentence_starts[0] = 0
-            pred = model(**doc)
-            decoded = model.decode(pred)
-            predictions = {}
+    iterator = BatchIterator()
+    iterator._batch_size = 5
+    # For long documents, loop over batches of sentences. Keep track of the
+    # total length and append onto the end of the predictions for each sentence
+    # batch.
+    assert len(gold_test_data) == 1
+    gold_data = gold_test_data[0]
+    predictions = {}
+    total_length = 0
+    for sents in iterator(batch.instances, num_epochs=1, shuffle=False):
+        sents = nn_util.move_to_device(sents, cuda_device)  # Put on GPU.
+        sentence_lengths = [len(entry["sentence"]) for entry in sents["metadata"]]
+        sentence_starts = np.cumsum(sentence_lengths) + total_length
+        sentence_starts = np.roll(sentence_starts, 1)
+        sentence_starts[0] = total_length
+        pred = model(**sents)
+        decoded = model.decode(pred)
+        if total_length == 0:
             for k, v in decoded.items():
                 predictions[decode_names[k]] = cleanup(k, v[decode_fields[k]], sentence_starts)
-            res = {}
-            res.update(gold_data)
-            res.update(predictions)
-            check_lengths(res)
-            encoded = json.dumps(res, default=int)
-            f.write(encoded + "\n")
+        else:
+            for k, v in decoded.items():
+                predictions[decode_names[k]] += cleanup(k, v[decode_fields[k]], sentence_starts)
+        total_length += sum(sentence_lengths)
+
+    res = {}
+    res.update(gold_data)
+    res.update(predictions)
+    check_lengths(res)
+    encoded = json.dumps(res, default=int)
+    with open(output_file, "w") as f:
+        f.write(encoded + "\n")
 
 
 def main():
@@ -158,7 +172,12 @@ def main():
     test_file = argv[2]
     output_file = argv[3]
     cuda_device = int(argv[4])
-    predict(archive_file, test_file, output_file, cuda_device)
+    log_file = argv[5]
+    try:
+        predict(archive_file, test_file, output_file, cuda_device)
+    except Exception:
+        with open(log_file, "a") as log:
+            print(f"{test_file}", file=log)
 
 
 if __name__ == '__main__':

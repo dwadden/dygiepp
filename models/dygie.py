@@ -72,6 +72,10 @@ class DyGIE(Model):
         self._context_layer = context_layer
 
         self._loss_weights = loss_weights.as_dict()
+
+        # Set to zero for hackathon predictions.
+        self._loss_weights["coref"] = 0
+
         self._permanent_loss_weights = copy.deepcopy(self._loss_weights)
 
         # TODO(dwadden) Figure out the parameters that need to get passed in.

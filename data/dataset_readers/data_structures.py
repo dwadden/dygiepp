@@ -32,7 +32,7 @@ class Dataset:
 class Document:
     def __init__(self, js):
         self._doc_key = js["doc_key"]
-        entries = fields_to_batches(js, ["doc_key", "clusters", "predicted_clusters"])
+        entries = fields_to_batches(js, ["doc_key", "clusters", "predicted_clusters", "section_starts"])
         sentence_lengths = [len(entry["sentences"]) for entry in entries]
         sentence_starts = np.cumsum(sentence_lengths)
         sentence_starts = np.roll(sentence_starts, 1)
@@ -89,11 +89,12 @@ class Sentence:
         if "ner_flavor" in entry:
             self.ner = [NER(this_ner, self.text, sentence_start, flavor=this_flavor)
                         for this_ner, this_flavor in zip(entry["ner"], entry["ner_flavor"])]
-        else:
+        elif "ner" in entry:
             self.ner = [NER(this_ner, self.text, sentence_start)
                         for this_ner in entry["ner"]]
-        self.relations = [Relation(this_relation, self.text, sentence_start) for
-                          this_relation in entry["relations"]]
+        if "relations" in entry:
+            self.relations = [Relation(this_relation, self.text, sentence_start) for
+                              this_relation in entry["relations"]]
         if "events" in entry:
             self.events = Events(entry["events"], self.text, sentence_start)
 
