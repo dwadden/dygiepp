@@ -13,6 +13,7 @@ usage: predict.py [archive-file] [test-file] [output-file]
 import json
 from sys import argv
 import warnings
+from os import path
 
 import numpy as np
 
@@ -121,15 +122,8 @@ def check_lengths(d):
     assert len(set(lengths)) == 1
 
 
-def predict(archive_file, test_file, output_file, cuda_device):
-    import_submodules("dygie")
+def predict(model, dataset_reader, test_file, output_file, cuda_device):
     gold_test_data = load_json(test_file)
-    archive = load_archive(archive_file, cuda_device)
-    model = archive.model
-    model.eval()
-    config = archive.config.duplicate()
-    dataset_reader_params = config["dataset_reader"]
-    dataset_reader = DatasetReader.from_params(dataset_reader_params)
     instances = dataset_reader.read(test_file)
     batch = Batch(instances)
     batch.index_instances(model.vocab)
@@ -167,17 +161,41 @@ def predict(archive_file, test_file, output_file, cuda_device):
         f.write(encoded + "\n")
 
 
+def predict_list(archive_file, test_file_dir, test_file_list, output_dir,
+                 cuda_device, log_file):
+    import_submodules("dygie")
+    archive = load_archive(archive_file, cuda_device)
+    model = archive.model
+    model.eval()
+    config = archive.config.duplicate()
+    dataset_reader_params = config["dataset_reader"]
+    dataset_reader = DatasetReader.from_params(dataset_reader_params)
+
+    test_files = []
+    with open(test_file_list) as f:
+        for line in f:
+            test_files.append(line.strip())
+
+    for name in test_files:
+        test_file = path.join(test_file_dir, name)
+        output_file = path.join(output_dir, name)
+        try:
+            predict(model, dataset_reader, test_file, output_file, cuda_device)
+        except Exception:
+            with open(log_file, "a") as log:
+                print(f"{name}", file=log)
+
+
+
 def main():
     archive_file = argv[1]
-    test_file = argv[2]
-    output_file = argv[3]
-    cuda_device = int(argv[4])
-    log_file = argv[5]
-    try:
-        predict(archive_file, test_file, output_file, cuda_device)
-    except Exception:
-        with open(log_file, "a") as log:
-            print(f"{test_file}", file=log)
+    test_file_dir = argv[2]
+    test_file_list = argv[3]
+    output_dir = argv[4]
+    cuda_device = int(argv[5])
+    log_file = argv[6]
+    predict_list(archive_file, test_file_dir, test_file_list, output_dir,
+                 cuda_device, log_file)
 
 
 if __name__ == '__main__':
