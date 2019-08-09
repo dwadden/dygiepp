@@ -3,6 +3,7 @@ import collections
 from typing import Any, Dict, List, Optional, Tuple, DefaultDict, Set, Union
 import json
 import itertools
+import pickle as pkl
 
 from overrides import overrides
 
@@ -296,6 +297,18 @@ class IEJsonReader(DatasetReader):
                       metadata=metadata_field)
 
         return Instance(fields)
+
+    @overrides
+    def _instances_from_cache_file(self, cache_filename):
+        with open(cache_filename, "rb") as f:
+            for entry in pkl.load(f):
+                yield entry
+
+    @overrides
+    def _instances_to_cache_file(self, cache_filename, instances):
+        with open(cache_filename, "wb") as f:
+            pkl.dump(instances, f)
+
 
     @staticmethod
     def _normalize_word(word):
