@@ -3,9 +3,6 @@
 function(p) {
   local getattr(obj, attrname, default) = if attrname in obj then p[attrname] else default,
 
-  // Location of ACE valid event configs
-  local valid_events_dir = std.extVar("valid_events_dir"),
-
   // Storing constants.
 
   local event_validation_metric = (if "event_validation_metric" in p
@@ -257,7 +254,6 @@ function(p) {
     use_attentive_span_extractor: p.use_attentive_span_extractor,
     max_span_width: p.max_span_width,
     display_metrics: display_metrics[p.target],
-    valid_events_dir: valid_events_dir,
     context_layer: context_layer,
     co_train: co_train,
     modules: {

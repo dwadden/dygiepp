@@ -1,9 +1,6 @@
 // Library that accepts a parameter dict and returns a full config.
 
 function(p) {
-  // Location of ACE valid event configs
-  local valid_events_dir = "/data/dave/proj/dygie/dygie-experiments/datasets/ace-event/valid-configurations",
-
   // Storing constants.
 
   local validation_metrics = {
@@ -44,8 +41,8 @@ function(p) {
   local use_bert = (if p.use_bert_base then true else if p.use_bert_large then true else false),
   local token_embedding_dim = ((if p.use_glove then glove_dim else 0) +
     (if p.use_char then p.char_n_filters else 0) +
-    (if p.use_elmo then elmo_dim else 0) + 
-    (if p.use_bert_base then bert_base_dim else 0) + 
+    (if p.use_elmo then elmo_dim else 0) +
+    (if p.use_bert_base then bert_base_dim else 0) +
     (if p.use_bert_large then bert_large_dim else 0)),
   //local endpoint_span_emb_dim = 4 * p.lstm_hidden_size + p.feature_size,
   local endpoint_span_emb_dim = 2*token_embedding_dim + p.feature_size,
@@ -165,7 +162,6 @@ function(p) {
     use_attentive_span_extractor: p.use_attentive_span_extractor,
     max_span_width: p.max_span_width,
     display_metrics: display_metrics[p.target],
-    valid_events_dir: valid_events_dir,
     context_layer: {
       type: "pass_through",
       input_dim: token_embedding_dim,

@@ -1,6 +1,6 @@
 // Import template file.
 
-local template = import "template.libsonnet";
+local template = import "template_dw.libsonnet";
 
 ////////////////////
 

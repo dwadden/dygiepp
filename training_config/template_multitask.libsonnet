@@ -1,9 +1,6 @@
 // Library that accepts a parameter dict and returns a full config.
 
 function(p) {
-  // Location of ACE valid event configs
-  local valid_events_dir = "/data/dave/proj/dygie/dygie-experiments/datasets/ace-event/valid-configurations",
-
   // Storing constants.
 
   local validation_metrics = {
@@ -163,7 +160,6 @@ function(p) {
     use_attentive_span_extractor: p.use_attentive_span_extractor,
     max_span_width: p.max_span_width,
     display_metrics: display_metrics[p.target],
-    valid_events_dir: valid_events_dir,
     context_layer: {
       type: "pass_through",
       input_dim: token_embedding_dim,

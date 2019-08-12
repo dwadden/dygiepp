@@ -30,15 +30,17 @@ class SpanProp(Model):
         self._n_argument_labels = vocab.get_vocab_size("argument_labels")
         self._n_span_prop = n_span_prop
 
+        # Only create these if we actually do span propagation.
+        if self._n_span_prop > 0:
         # These are the A matrices in my writeup.
-        self._transition_trigger = torch.nn.Linear(
-            in_features=self._n_argument_labels, out_features=emb_dim)
-        self._transition_argument = torch.nn.Linear(
-            in_features=self._n_argument_labels, out_features=emb_dim)
+            self._transition_trigger = torch.nn.Linear(
+                in_features=self._n_argument_labels, out_features=emb_dim)
+            self._transition_argument = torch.nn.Linear(
+                in_features=self._n_argument_labels, out_features=emb_dim)
 
-        # These are the gates.
-        self._gate_trigger = torch.nn.Linear(in_features=2 * emb_dim, out_features=emb_dim)
-        self._gate_argument = torch.nn.Linear(in_features=2 * emb_dim, out_features=emb_dim)
+            # These are the gates.
+            self._gate_trigger = torch.nn.Linear(in_features=2 * emb_dim, out_features=emb_dim)
+            self._gate_argument = torch.nn.Linear(in_features=2 * emb_dim, out_features=emb_dim)
 
         initializer(self)
 
