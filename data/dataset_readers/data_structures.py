@@ -3,6 +3,19 @@ from dygie.models.shared import fields_to_batches
 import numpy as np
 
 
+def get_sentence_of_span(span, sentence_starts, doc_tokens):
+    """
+    Return the index of the sentence that the span is part of.
+    """
+    # Inclusive sentence ends
+    sentence_ends = [x - 1 for x in sentence_starts[1:]] + [doc_tokens - 1]
+    in_between = [span[0] >= start and span[1] <= end
+                  for start, end in zip(sentence_starts, sentence_ends)]
+    assert sum(in_between) == 1
+    the_sentence = in_between.index(True)
+    return the_sentence
+
+
 class Dataset:
     def __init__(self, json_file):
         with open(json_file) as f:
@@ -12,18 +25,28 @@ class Dataset:
     def __getitem__(self, ix):
         return self.documents[ix]
 
+    def __len__(self):
+        return len(self.documents)
+
 
 class Document:
     def __init__(self, js):
         self._doc_key = js["doc_key"]
-        entries = fields_to_batches(js, ["doc_key"])
+        entries = fields_to_batches(js, ["doc_key", "clusters", "predicted_clusters", "section_starts"])
         sentence_lengths = [len(entry["sentences"]) for entry in entries]
         sentence_starts = np.cumsum(sentence_lengths)
         sentence_starts = np.roll(sentence_starts, 1)
         sentence_starts[0] = 0
-        self.sentences = [Sentence(entry, sentence_start)
-                          for (entry, sentence_start)
-                          in zip(entries, sentence_starts)]
+        self.sentence_starts = sentence_starts
+        self.sentences = [Sentence(entry, sentence_start, sentence_ix)
+                          for sentence_ix, (entry, sentence_start)
+                          in enumerate(zip(entries, sentence_starts))]
+        if "clusters" in js:
+            self.clusters = [Cluster(entry, i, self)
+                             for i, entry in enumerate(js["clusters"])]
+        if "predicted_clusters" in js:
+            self.predicted_clusters = [Cluster(entry, i, self)
+                                       for i, entry in enumerate(js["predicted_clusters"])]
 
     def __repr__(self):
         return "\n".join([str(i) + ": " + " ".join(sent.text) for i, sent in enumerate(self.sentences)])
@@ -31,21 +54,49 @@ class Document:
     def __getitem__(self, ix):
         return self.sentences[ix]
 
+    def __len__(self):
+        return len(self.sentences)
+
+    def print_plaintext(self):
+        for sent in self:
+            print(" ".join(sent.text))
+
+
+    def find_cluster(self, entity, predicted=True):
+        """
+        Search through coreference clusters and return the one containing the query entity, if it's
+        part of a cluster. If we don't find a match, return None.
+        """
+        clusters = self.predicted_clusters if predicted else self.clusters
+        for clust in clusters:
+            for entry in clust:
+                if entry.span == entity.span:
+                    return clust
+
+        return None
+
+    @property
+    def n_tokens(self):
+        return sum([len(sent) for sent in self.sentences])
+
 
 class Sentence:
-    def __init__(self, entry, sentence_start):
+    def __init__(self, entry, sentence_start, sentence_ix):
         self.sentence_start = sentence_start
         self.text = entry["sentences"]
+        self.sentence_ix = sentence_ix
         # Gold
         if "ner_flavor" in entry:
             self.ner = [NER(this_ner, self.text, sentence_start, flavor=this_flavor)
                         for this_ner, this_flavor in zip(entry["ner"], entry["ner_flavor"])]
-        else:
+        elif "ner" in entry:
             self.ner = [NER(this_ner, self.text, sentence_start)
                         for this_ner in entry["ner"]]
-        self.relations = [Relation(this_relation, self.text, sentence_start) for
-                          this_relation in entry["relations"]]
-        self.events = Events(entry["events"], self.text, sentence_start)
+        if "relations" in entry:
+            self.relations = [Relation(this_relation, self.text, sentence_start) for
+                              this_relation in entry["relations"]]
+        if "events" in entry:
+            self.events = Events(entry["events"], self.text, sentence_start)
 
         # Predicted
         if "predicted_ner" in entry:
@@ -67,6 +118,9 @@ class Sentence:
             tok_ixs += " " * true_offset
 
         return the_text + "\n" + tok_ixs
+
+    def __len__(self):
+        return len(self.text)
 
     def get_flavor(self, argument):
         the_ner = [x for x in self.ner if x.span == argument.span]
@@ -148,6 +202,10 @@ class NER:
     def __repr__(self):
         return self.span.__repr__() + ": " + self.label
 
+    def __eq__(self, other):
+        return (self.span == other.span and
+                self.label == other.label and
+                self.flavor == other.flavor)
 
 class Relation:
     def __init__(self, relation, text, sentence_start):
@@ -218,3 +276,37 @@ class Events:
             if candidate == argument:
                 return True
         return False
+
+
+class Cluster:
+    def __init__(self, cluster, cluster_id, document):
+        members = []
+        for entry in cluster:
+            sentence_ix = get_sentence_of_span(entry, document.sentence_starts, document.n_tokens)
+            sentence = document[sentence_ix]
+            span = Span(entry[0], entry[1], sentence.text, sentence.sentence_start)
+            ners = [x for x in sentence.ner if x.span == span]
+            assert len(ners) <= 1
+            ner = ners[0] if len(ners) == 1 else None
+            to_append = ClusterMember(span, ner, sentence, cluster_id)
+            members.append(to_append)
+
+        self.members = members
+        self.cluster_id = cluster_id
+
+    def __repr__(self):
+        return f"{self.cluster_id}: " + self.members.__repr__()
+
+    def __getitem__(self, ix):
+        return self.members[ix]
+
+
+class ClusterMember:
+    def __init__(self, span, ner, sentence, cluster_id):
+        self.span = span
+        self.ner = ner
+        self.sentence = sentence
+        self.cluster_id = cluster_id
+
+    def __repr__(self):
+        return f"<{self.sentence.sentence_ix}> " + self.span.__repr__()
