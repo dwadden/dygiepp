@@ -118,7 +118,11 @@ def load_json(test_file):
 def check_lengths(d):
     "Make sure all entries in dict have same length."
     keys = list(d.keys())
-    keys.remove("doc_key")
+    # Dict fields that won't have the same length as the # of sentences in the doc.
+    keys_to_remove = ["doc_key", "clusters", "predicted_clusters"]
+    for key in keys_to_remove:
+        if key in keys:
+            keys.remove(key)
     lengths = [len(d[k]) for k in keys]
     assert len(set(lengths)) == 1
 
