@@ -7,7 +7,7 @@ Things needed for code release
 
 ## Data
 
-- [ ] The scierc dataset. This can come as part of the package.
+- [ ] Script to download the scierc dataset.
 - [ ] Script to download and preprocess the WLPC dataset.
 - [ ] Script to download and preprocess the GENIA dataset.
 - [ ] Script to download and preprocess the ACE relation dataset.
