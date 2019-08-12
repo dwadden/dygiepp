@@ -12,8 +12,11 @@ usage: predict.py [archive-file] [test-file] [output-file]
 
 import json
 from sys import argv
+from os import path
+import os
 
 import numpy as np
+import torch
 
 from allennlp.models.archival import load_archive
 from allennlp.common.util import import_submodules
@@ -26,17 +29,20 @@ from dygie.data.iterators.document_iterator import DocumentIterator
 
 decode_fields = dict(coref="clusters",
                      ner="decoded_ner",
-                     relation="decoded_relations")
+                     relation="decoded_relations",
+                     events="decoded_events")
 
 decode_names = dict(coref="predicted_clusters",
                     ner="predicted_ner",
-                    relation="predicted_relations")
+                    relation="predicted_relations",
+                    events="predicted_events")
 
 
 def cleanup(k, decoded, sentence_starts):
     dispatch = {"coref": cleanup_coref,
                 "ner": cleanup_ner,
-                "relation": cleanup_relation}
+                "relation": cleanup_relation,
+                "events": cleanup_event}  # TODO(dwadden) make this nicer later if worth it.
     return dispatch[k](decoded, sentence_starts)
 
 
@@ -112,12 +118,23 @@ def load_json(test_file):
 def check_lengths(d):
     "Make sure all entries in dict have same length."
     keys = list(d.keys())
-    keys.remove("doc_key")
+    # Dict fields that won't have the same length as the # of sentences in the doc.
+    keys_to_remove = ["doc_key", "clusters", "predicted_clusters"]
+    for key in keys_to_remove:
+        if key in keys:
+            keys.remove(key)
     lengths = [len(d[k]) for k in keys]
     assert len(set(lengths)) == 1
 
 
-def predict(archive_file, test_file, output_file, cuda_device):
+def dump_scores(doc, pred, score_dir):
+    doc_key = [x["doc_key"] for x in doc["metadata"]]
+    assert len(set(doc_key)) == 1
+    doc_key = doc_key[0]
+    torch.save(pred, path.join(score_dir, doc_key + '.th'))
+
+
+def predict(archive_file, test_file, output_file, cuda_device, score_dir):
     import_submodules("dygie")
     gold_test_data = load_json(test_file)
     archive = load_archive(archive_file, cuda_device)
@@ -139,6 +156,8 @@ def predict(archive_file, test_file, output_file, cuda_device):
             sentence_starts = np.roll(sentence_starts, 1)
             sentence_starts[0] = 0
             pred = model(**doc)
+            if score_dir is not None:
+                dump_scores(doc, pred, score_dir)
             decoded = model.decode(pred)
             predictions = {}
             for k, v in decoded.items():
@@ -146,6 +165,8 @@ def predict(archive_file, test_file, output_file, cuda_device):
             res = {}
             res.update(gold_data)
             res.update(predictions)
+            if "dataset" in res:
+                del res["dataset"]
             check_lengths(res)
             encoded = json.dumps(res, default=int)
             f.write(encoded + "\n")
@@ -156,7 +177,11 @@ def main():
     test_file = argv[2]
     output_file = argv[3]
     cuda_device = int(argv[4])
-    predict(archive_file, test_file, output_file, cuda_device)
+    score_dir = argv[5] if len(argv) > 5 else None
+    if score_dir is not None:
+        if not path.exists(score_dir):
+            os.mkdir(score_dir)
+    predict(archive_file, test_file, output_file, cuda_device, score_dir)
 
 
 if __name__ == '__main__':

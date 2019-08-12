@@ -10,14 +10,14 @@ from allennlp.data import Vocabulary
 from allennlp.models.model import Model
 from allennlp.modules.token_embedders import Embedding
 from allennlp.modules import FeedForward
-from allennlp.modules import TimeDistributed, Pruner
+from allennlp.modules import TimeDistributed
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from allennlp.training.metrics import MentionRecall, ConllCorefScores
 
 from dygie.models import shared
+from dygie.models.entity_beam_pruner import Pruner
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
 
 
 class CorefResolver(Model):
@@ -122,11 +122,11 @@ class CorefResolver(Model):
             assert coreference_scores.shape[2] - 1 == antecedent_indices.shape[1]
             assert top_span_embeddings.shape[1] == coreference_scores.shape[1]
             assert antecedent_indices.max() <= top_span_embeddings.shape[1]
- 
+
             antecedent_distribution = self.antecedent_softmax(coreference_scores)[:, :, 1:]
             top_span_emb_repeated = top_span_embeddings.repeat(antecedent_distribution.shape[2],1,1)
             if antecedent_indices.shape[0]==antecedent_indices.shape[1]:
-                selected_top_span_embs = util.batched_index_select(top_span_emb_repeated, antecedent_indices).unsqueeze(0) 
+                selected_top_span_embs = util.batched_index_select(top_span_emb_repeated, antecedent_indices).unsqueeze(0)
                 entity_embs = (selected_top_span_embs.permute([3,0,1,2]) * antecedent_distribution).permute([1, 2, 3, 0]).sum(dim=2)
             else:
                 ant_var1 = antecedent_indices.unsqueeze(0).unsqueeze(-1).repeat(1,1,1,top_span_embeddings.shape[-1])
@@ -236,9 +236,8 @@ class CorefResolver(Model):
         # always 1.
         span_mask = torch.ones(num_spans, device=spans_batched.device).unsqueeze(0)
         (top_span_embeddings, top_span_mask,
-         top_span_indices, top_span_mention_scores) = self._mention_pruner(span_embeddings,
-                                                                           span_mask,
-                                                                           num_spans_to_keep)
+         top_span_indices, top_span_mention_scores, num_items_kept) = self._mention_pruner(
+             span_embeddings, span_mask, num_spans_to_keep)
         top_span_mask = top_span_mask.unsqueeze(-1)
         # Shape: (batch_size * num_spans_to_keep)
         flat_top_span_indices = util.flatten_and_batch_shift_indices(top_span_indices, num_spans)
@@ -312,7 +311,7 @@ class CorefResolver(Model):
         # so this makes the indices line up with actual spans if the prediction
         # is greater than -1.
         predicted_antecedents -= 1
-        
+
         output_dict["predicted_antecedents"] = predicted_antecedents
 
         top_span_indices = output_dict["top_span_indices"]

@@ -10,9 +10,10 @@ from allennlp.data import Vocabulary
 from allennlp.models.model import Model
 from allennlp.modules import FeedForward
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
-from allennlp.modules import TimeDistributed, Pruner
+from allennlp.modules import TimeDistributed
 
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
+from dygie.models.entity_beam_pruner import Pruner
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -40,9 +41,8 @@ class RelationExtractor(Model):
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(RelationExtractor, self).__init__(vocab, regularizer)
 
-        self._n_labels = vocab.get_vocab_size("relation_labels")
-        if self._n_labels == 0:
-            self._n_labels = 1
+        # Need to hack this for cases where there's no relation data. It breaks Ulme's code.
+        self._n_labels = max(vocab.get_vocab_size("relation_labels"), 1)
 
         # Span candidate scorer.
         # TODO(dwadden) make sure I've got the input dim right on this one.
@@ -123,7 +123,8 @@ class RelationExtractor(Model):
                        "relation_scores": relation_scores,
                        "num_spans_to_keep": num_spans_to_keep,
                        "top_span_indices": top_span_indices,
-                       "top_span_mask": top_span_mask}
+                       "top_span_mask": top_span_mask,
+                       "loss": 0}
 
         return output_dict
 
@@ -135,9 +136,8 @@ class RelationExtractor(Model):
         num_spans_to_keep = torch.ceil(sentence_lengths.float() * self._spans_per_word).long()
 
         (top_span_embeddings, top_span_mask,
-        top_span_indices, top_span_mention_scores) = self._mention_pruner(span_embeddings,
-                                                                       span_mask,
-                                                                       num_spans_to_keep)
+         top_span_indices, top_span_mention_scores, num_spans_kept) = self._mention_pruner(
+             span_embeddings, span_mask, num_spans_to_keep)
 
         top_span_mask = top_span_mask.unsqueeze(-1)
 

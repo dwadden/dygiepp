@@ -60,7 +60,7 @@ class DyGIE(Model):
                  loss_weights: Dict[str, int],
                  lexical_dropout: float = 0.2,
                  lstm_dropout: float = 0.4,
-                 use_attentive_span_extractor: bool = True,
+                 use_attentive_span_extractor: bool = False,
                  co_train: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
@@ -74,7 +74,6 @@ class DyGIE(Model):
         self._loss_weights = loss_weights.as_dict()
         self._permanent_loss_weights = copy.deepcopy(self._loss_weights)
 
-        # TODO(dwadden) Figure out the parameters that need to get passed in.
         self._coref = CorefResolver.from_params(vocab=vocab,
                                                 feature_size=feature_size,
                                                 params=modules.pop("coref"))
@@ -87,6 +86,8 @@ class DyGIE(Model):
         self._events = EventExtractor.from_params(vocab=vocab,
                                                   feature_size=feature_size,
                                                   params=modules.pop("events"))
+
+        # Make endpoint span extractor.
 
         self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
                                                               combination="x,y",
@@ -159,8 +160,22 @@ class DyGIE(Model):
         relation_labels = relation_labels.long()
         argument_labels = argument_labels.long()
 
-        # Shape: (batch_size, max_sentence_length, embedding_size)
-        text_embeddings = self._lexical_dropout(self._text_field_embedder(text))
+        # If we're doing Bert, get the sentence class token as part of the text embedding. This will
+        # break if we use Bert together with other embeddings, but that won't happen much.
+        if "bert-offsets" in text:
+            offsets = text["bert-offsets"]
+            sent_ix = torch.zeros(offsets.size(0), device=offsets.device, dtype=torch.long).unsqueeze(1)
+            padded_offsets = torch.cat([sent_ix, offsets], dim=1)
+            text["bert-offsets"] = padded_offsets
+            padded_embeddings = self._text_field_embedder(text)
+            cls_embeddings = padded_embeddings[:, 0, :]
+            text_embeddings = padded_embeddings[:, 1:, :]
+        else:
+            text_embeddings = self._text_field_embedder(text)
+            cls_embeddings = torch.zeros([text_embeddings.size(0), text_embeddings.size(2)],
+                                         device=text_embeddings.device)
+
+        text_embeddings = self._lexical_dropout(text_embeddings)
 
         # Shape: (batch_size, max_sentence_length)
         text_mask = util.get_text_field_mask(text).float()
@@ -261,9 +276,23 @@ class DyGIE(Model):
             output_relation = self._relation.predict_labels(relation_labels, output_relation, metadata)
 
         if self._loss_weights['events'] > 0:
+            # Make the trigger embeddings the same size as the argument embeddings to make
+            # propagation easier.
+            if self._events._span_prop._n_span_prop > 0:
+                trigger_embeddings = contextualized_embeddings.repeat(1, 1, 2)
+                trigger_widths = torch.zeros([trigger_embeddings.size(0), trigger_embeddings.size(1)],
+                                             device=trigger_embeddings.device, dtype=torch.long)
+                trigger_width_embs = self._endpoint_span_extractor._span_width_embedding(trigger_widths)
+                trigger_width_embs = trigger_width_embs.detach()
+                trigger_embeddings = torch.cat([trigger_embeddings, trigger_width_embs], dim=-1)
+            else:
+                trigger_embeddings = contextualized_embeddings
+
             output_events = self._events(
-                text_mask, contextualized_embeddings, spans, span_mask, span_embeddings,
-                sentence_lengths, trigger_labels, argument_labels, metadata)
+                text_mask, trigger_embeddings, spans, span_mask, span_embeddings, cls_embeddings,
+                sentence_lengths, output_ner, trigger_labels, argument_labels,
+                ner_labels, metadata)
+
         if "loss" not in output_coref:
             output_coref["loss"] = 0
         if "loss" not in output_relation:
@@ -283,10 +312,10 @@ class DyGIE(Model):
 
         # Check to see if event predictions are globally compatible (argument labels are compatible
         # with NER tags and trigger tags).
-        if self._loss_weights["ner"] > 0 and self._loss_weights["events"] > 0:
-            decoded = self.decode(output_dict)
-            self._joint_metrics(decoded["ner"]["decoded_ner_dict"],
-                                decoded["events"]["decoded_events"])
+        # if self._loss_weights["ner"] > 0 and self._loss_weights["events"] > 0:
+        #     decoded_ner = self._ner.decode(output_dict["ner"])
+        #     decoded_events = self._events.decode(output_dict["events"])
+        #     self._joint_metrics(decoded_ner, decoded_events)
 
         return output_dict
 

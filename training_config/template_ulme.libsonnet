@@ -2,7 +2,7 @@
 
 function(p) {
   // Location of ACE valid event configs
-  local valid_events_dir = "data/dwadden/proj/dygie/dygie-experiments/datasets/ace-event/valid-configurations",
+  local valid_events_dir = "/data/dave/proj/dygie/dygie-experiments/datasets/ace-event/valid-configurations",
 
   // Storing constants.
 
@@ -32,8 +32,8 @@ function(p) {
 
   local dygie_initializer = [
     ["_span_width_embedding.weight", {"type": "xavier_normal"}],
-    ["_context_layer._module.weight_ih.*", {"type": "xavier_normal"}],
-    ["_context_layer._module.weight_hh.*", {"type": "orthogonal"}]
+    //["_context_layer._module.weight_ih.*", {"type": "xavier_normal"}],
+    //["_context_layer._module.weight_hh.*", {"type": "orthogonal"}]
   ],
 
 
@@ -44,11 +44,11 @@ function(p) {
   local use_bert = (if p.use_bert_base then true else if p.use_bert_large then true else false),
   local token_embedding_dim = ((if p.use_glove then glove_dim else 0) +
     (if p.use_char then p.char_n_filters else 0) +
-    (if p.use_elmo then elmo_dim else 0) +
-    (if p.use_bert_base then bert_base_dim else 0) +
+    (if p.use_elmo then elmo_dim else 0) + 
+    (if p.use_bert_base then bert_base_dim else 0) + 
     (if p.use_bert_large then bert_large_dim else 0)),
-  local endpoint_span_emb_dim = 4 * p.lstm_hidden_size + p.feature_size,
-  //local endpoint_span_emb_dim = 2*token_embedding_dim + p.feature_size,
+  //local endpoint_span_emb_dim = 4 * p.lstm_hidden_size + p.feature_size,
+  local endpoint_span_emb_dim = 2*token_embedding_dim + p.feature_size,
   local attended_span_emb_dim = if p.use_attentive_span_extractor then token_embedding_dim else 0,
   local span_emb_dim = endpoint_span_emb_dim + attended_span_emb_dim,
   local pair_emb_dim = 3 * span_emb_dim,
@@ -56,9 +56,6 @@ function(p) {
   local coref_scorer_dim = pair_emb_dim + p.feature_size,
   local trigger_scorer_dim = 2 * p.lstm_hidden_size,  // Triggers are single contextualized tokens.
   local argument_scorer_dim = trigger_scorer_dim + span_emb_dim, // Trigger embeddings  and span embeddings.
-
-  // Co-training
-  local co_train = if "co_train" in p then p.co_train else false,
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -142,7 +139,8 @@ function(p) {
     type: "ie_json",
     token_indexers: token_indexers,
     max_span_width: p.max_span_width,
-    context_width: p.context_width
+    //context_width: p.context_width
+    context_width: std.extVar("context_width")
   },
   train_data_path: std.extVar("ie_train_data_path"),
   validation_data_path: std.extVar("ie_dev_data_path"),
@@ -161,21 +159,21 @@ function(p) {
     loss_weights: p.loss_weights,
     lexical_dropout: p.lexical_dropout,
     lstm_dropout: p.lstm_dropout,
-    rel_prop: p.rel_prop,
+    //rel_prop: p.rel_prop,
+    rel_prop: std.extVar("rel_prop"),
     feature_size: p.feature_size,
     use_attentive_span_extractor: p.use_attentive_span_extractor,
     max_span_width: p.max_span_width,
     display_metrics: display_metrics[p.target],
     valid_events_dir: valid_events_dir,
-    co_train: co_train,
     context_layer: {
-      //type: "pass_through",
-      //input_dim: token_embedding_dim,
-      type: "lstm",
-      bidirectional: true,
-      input_size: token_embedding_dim,
-      hidden_size: p.lstm_hidden_size,
-      num_layers: p.lstm_n_layers,
+      type: "pass_through",
+      input_dim: token_embedding_dim,
+      //type: "lstm",
+      //bidirectional: true,
+      //input_size: token_embedding_dim,
+      //hidden_size: p.lstm_hidden_size,
+      //num_layers: p.lstm_n_layers,
     },
     modules: {
       coref: {
@@ -197,7 +195,8 @@ function(p) {
         rel_prop_dropout_A: p.rel_prop_dropout_A,
         rel_prop_dropout_f: p.rel_prop_dropout_f,
         span_emb_dim: span_emb_dim,
-        rel_prop: p.rel_prop,
+        //rel_prop: p.rel_prop,
+        rel_prop: std.extVar("rel_prop"),
         initializer: module_initializer
       },
       events: {
@@ -214,7 +213,7 @@ function(p) {
     }
   },
   iterator: {
-    type: if co_train then "ie_multitask" else "ie_batch",
+    type: "ie_batch",
     batch_size: p.batch_size
   },
   validation_iterator: {
@@ -225,6 +224,7 @@ function(p) {
     grad_norm: 5.0,
     patience : p.patience,
     cuda_device : std.parseInt(std.extVar("cuda_device")),
+    //cuda_device : [1, 2],
     validation_metric: validation_metrics[p.target],
     learning_rate_scheduler: p.learning_rate_scheduler,
     optimizer: p.optimizer
