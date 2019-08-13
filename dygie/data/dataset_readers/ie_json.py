@@ -126,12 +126,15 @@ class IEJsonReader(DatasetReader):
                  max_span_width: int,
                  token_indexers: Dict[str, TokenIndexer] = None,
                  context_width: int = 1,
+                 debug: bool = False,
                  lazy: bool = False) -> None:
         super().__init__(lazy)
         assert (context_width % 2 == 1) and (context_width > 0)
         self.k = int( (context_width - 1) / 2)
         self._max_span_width = max_span_width
         self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
+        self._debug = debug
+        self._n_debug_docs = 10
 
     @overrides
     def _read(self, file_path: str):
@@ -139,53 +142,59 @@ class IEJsonReader(DatasetReader):
         file_path = cached_path(file_path)
 
         with open(file_path, "r") as f:
+            lines = f.readlines()
+        # If we're debugging, only do the first 10 documents.
+        if self._debug:
+            lines = lines[:self._n_debug_docs]
+
+        for line in lines:
             # Loop over the documents.
-            for line in f:
-                sentence_start = 0
-                js = json.loads(line)
-                doc_key = js["doc_key"]
-                dataset = js["dataset"] if "dataset" in js else None
+            sentence_start = 0
+            js = json.loads(line)
+            doc_key = js["doc_key"]
+            dataset = js["dataset"] if "dataset" in js else None
 
-                # If some fields are missing in the data set, fill them with empties.
-                # TODO(dwadden) do this more cleanly once things are running.
-                n_sentences = len(js["sentences"])
-                # TODO(Ulme) Make it so that the
-                js["sentence_groups"] = [[self._normalize_word(word) for sentence in js["sentences"][max(0, i-self.k):min(n_sentences, i + self.k + 1)] for word in sentence] for i in range(n_sentences)]
-                js["sentence_start_index"] = [sum(len(js["sentences"][i-j-1]) for j in range(min(self.k, i))) if i > 0 else 0 for i in range(n_sentences)]
-                js["sentence_end_index"] = [js["sentence_start_index"][i] + len(js["sentences"][i]) for i in range(n_sentences)]
-                for sentence_group_nr in range(len(js["sentence_groups"])):
-                    if len(js["sentence_groups"][sentence_group_nr]) > 300:
-                        js["sentence_groups"][sentence_group_nr] = js["sentences"][sentence_group_nr]
-                        js["sentence_start_index"][sentence_group_nr] = 0
-                        js["sentence_end_index"][sentence_group_nr] = len(js["sentences"][sentence_group_nr])
-                        if len(js["sentence_groups"][sentence_group_nr])>300:
-                            import ipdb;
-                if "clusters" not in js:
-                    js["clusters"] = []
-                for field in ["ner", "relations", "events"]:
-                    if field not in js:
-                        js[field] = [[] for _ in range(n_sentences)]
+            # If some fields are missing in the data set, fill them with empties.
+            # TODO(dwadden) do this more cleanly once things are running.
+            n_sentences = len(js["sentences"])
+            # TODO(Ulme) Make it so that the
+            js["sentence_groups"] = [[self._normalize_word(word) for sentence in js["sentences"][max(0, i-self.k):min(n_sentences, i + self.k + 1)] for word in sentence] for i in range(n_sentences)]
+            js["sentence_start_index"] = [sum(len(js["sentences"][i-j-1]) for j in range(min(self.k, i))) if i > 0 else 0 for i in range(n_sentences)]
+            js["sentence_end_index"] = [js["sentence_start_index"][i] + len(js["sentences"][i]) for i in range(n_sentences)]
+            for sentence_group_nr in range(len(js["sentence_groups"])):
+                if len(js["sentence_groups"][sentence_group_nr]) > 300:
+                    js["sentence_groups"][sentence_group_nr] = js["sentences"][sentence_group_nr]
+                    js["sentence_start_index"][sentence_group_nr] = 0
+                    js["sentence_end_index"][sentence_group_nr] = len(js["sentences"][sentence_group_nr])
+                    if len(js["sentence_groups"][sentence_group_nr])>300:
+                        import ipdb;
+            if "clusters" not in js:
+                js["clusters"] = []
+            for field in ["ner", "relations", "events"]:
+                if field not in js:
+                    js[field] = [[] for _ in range(n_sentences)]
 
-                cluster_dict_doc = make_cluster_dict(js["clusters"])
-                #zipped = zip(js["sentences"], js["ner"], js["relations"], js["events"])
-                zipped = zip(js["sentences"], js["ner"], js["relations"], js["events"], js["sentence_groups"], js["sentence_start_index"], js["sentence_end_index"])
+            cluster_dict_doc = make_cluster_dict(js["clusters"])
+            #zipped = zip(js["sentences"], js["ner"], js["relations"], js["events"])
+            zipped = zip(js["sentences"], js["ner"], js["relations"], js["events"], js["sentence_groups"], js["sentence_start_index"], js["sentence_end_index"])
 
-                # Loop over the sentences.
-                for sentence_num, (sentence, ner, relations, events, groups, start_ix, end_ix) in enumerate(zipped):
+            # Loop over the sentences.
+            for sentence_num, (sentence, ner, relations, events, groups, start_ix, end_ix) in enumerate(zipped):
 
-                    sentence_end = sentence_start + len(sentence) - 1
-                    cluster_tmp, cluster_dict_doc = cluster_dict_sentence(
-                        cluster_dict_doc, sentence_start, sentence_end)
+                sentence_end = sentence_start + len(sentence) - 1
+                cluster_tmp, cluster_dict_doc = cluster_dict_sentence(
+                    cluster_dict_doc, sentence_start, sentence_end)
 
-                    # TODO(dwadden) too many outputs. Re-write as a dictionary.
-                    # Make span indices relative to sentence instead of document.
-                    ner_dict, relation_dict, cluster_dict, trigger_dict, argument_dict = \
-                        format_label_fields(ner, relations, cluster_tmp, events, sentence_start)
-                    sentence_start += len(sentence)
-                    instance = self.text_to_instance(
-                        sentence, ner_dict, relation_dict, cluster_dict, trigger_dict, argument_dict,
-                        doc_key, dataset, sentence_num, groups, start_ix, end_ix)
-                    yield instance
+                # TODO(dwadden) too many outputs. Re-write as a dictionary.
+                # Make span indices relative to sentence instead of document.
+                ner_dict, relation_dict, cluster_dict, trigger_dict, argument_dict = \
+                    format_label_fields(ner, relations, cluster_tmp, events, sentence_start)
+                sentence_start += len(sentence)
+                instance = self.text_to_instance(
+                    sentence, ner_dict, relation_dict, cluster_dict, trigger_dict, argument_dict,
+                    doc_key, dataset, sentence_num, groups, start_ix, end_ix)
+                yield instance
+
 
     @overrides
     def text_to_instance(self,
