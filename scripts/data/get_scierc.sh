@@ -1,6 +1,6 @@
 # Download the raw and processed scierc dataset and put them in the `data`
 # folder.
-# Usage: From main project folder, run `bash scripts/get_scierc.sh`
+# Usage: From main project folder, run `bash scripts/data/get_scierc.sh`
 
 out_dir=data/scierc
 mkdir $out_dir
