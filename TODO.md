@@ -19,11 +19,16 @@ For each data set, let's release a single pre-trained model that does reasonable
 
 ## Config files
 
-Clean up the config file structure and include configs to re-run the experiments in the paper.
+- [ ] Get down to a single `template.jsonnet` file.
+    - [ ] ULME I think that we should be able to use `template_dw` for everything. Can you diff my template against yours to make sure this will work and let me know if it looks OK? Then I'll delete the rest of the templates.
+- [ ] Simplify the configuration structure. Right now it's pretty opaque...
+- [ ] Make it so we have one config file per model.
 
 ## Training scripts
 
 Include scripts to reproduce (approximately) the results in the paper.
+
+- [ ] ULME add whatever scripts you used to kick off model training.
 
 ## Demo
 
