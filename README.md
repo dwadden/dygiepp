@@ -1,6 +1,6 @@
 # DyGIE++
 
-This code contains an implementation of the DyGIE++ information extraction model first presented in TODO(Yi's paper), together with improvements introduced in TODO(Dave and Ulme's paper). DyGIE++ achieves state-of the art or competitive performance on three sentence-level IE tasks:
+This repository contains an implementation of the DyGIE++ information extraction model first presented in TODO(Yi's paper), with additional improvements from TODO(Dave and Ulme's paper). DyGIE++ achieves state-of the art or competitive performance on three sentence-level IE tasks:
 
 - Named entity recognition, entities with nested or overlapping text spans.
 - Relation extraction.

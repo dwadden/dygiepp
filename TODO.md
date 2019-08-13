@@ -7,6 +7,7 @@ Things needed for code release
 
 ## Data
 
+- [ ] ULME Dump all datasets in the gdrive folder that Dave shared. I (Dave) need to make sure that my preprocessing scripts are doing the right thing.
 - [ ] Script to download the scierc dataset.
 - [ ] Script to download and preprocess the WLPC dataset.
 - [ ] Script to download and preprocess the GENIA dataset.
