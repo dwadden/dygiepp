@@ -1,6 +1,7 @@
 """
 Format GENIA data set from
-https://gitlab.com/sutd_nlp/overlapping_mentions/tree/master/data/GENIA.
+https://gitlab.com/sutd_nlp/overlapping_mentions/tree/master/data/GENIA into the json form used by
+DyGIE++.
 """
 
 import json
@@ -8,7 +9,12 @@ import os
 from os import path
 import pandas as pd
 
-import shared
+
+def save_list(xs, name):
+    "Save a list as text, one entry per line."
+    with open(name, "w") as f:
+        for x in xs:
+            f.write(str(x) + "\n")
 
 
 def make_sentences(lines):
@@ -65,10 +71,10 @@ def doc_to_json(sents, doc_id, fold):
     # Append fold info to doc_key since one doc appears in both train and dev;
     # ditto dev and test.
     res = dict(clusters=[],
-                         sentences=[],
-                         ner=[],
-                         relations=[],
-                         doc_key=str(doc_id) + '_' + fold)
+               sentences=[],
+               ner=[],
+               relations=[],
+               doc_key=str(doc_id) + '_' + fold)
     offset = 0
     for sent in sents:
         tokens_sent, ner_tags_sent = sentence_to_json(sent, offset)
@@ -95,7 +101,7 @@ def format_fold(fold, in_dir, out_dir):
     out_name = path.join(out_dir, "{0}.json".format(fold))
     ner_labels = set()
     with open(out_name, "w") as f_out:
-        order = pd.read_table(path.join(in_dir, "{0}_order.csv".format(fold)), header=None)[0]
+        order = pd.read_csv(path.join(in_dir, "{0}_order.csv".format(fold)), header=None, sep="\t")[0]
         already_written = set()
         for doc_id in order:
             # I need this check because there is a duplicate document in the train
@@ -115,20 +121,20 @@ def format_fold(fold, in_dir, out_dir):
 
 
 def main():
-    project_base = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    data_dir = path.join(project_base, "data", "genia", "sutd-article")
-    in_dir = path.join(data_dir, "split-good")
-    out_dir = path.join(data_dir, "json")
+    in_prefix = "./data/genia/raw-data/sutd-article"
+    in_dir = f"{in_prefix}/split-corrected"
+    out_dir = "./data/genia/processed-data/json-ner"
+    os.makedirs(out_dir)
     folds = ["train", "dev", "test"]
     ner_labels = set()
 
     for fold in folds:
         msg = "Formatting fold {0}.".format(fold)
-        print msg
+        print(msg)
         ner_labels_fold = format_fold(fold, in_dir, out_dir)
         ner_labels = ner_labels | ner_labels_fold
 
-    shared.save_list(sorted(ner_labels), path.join(data_dir, "ner-labels.txt"))
+    save_list(sorted(ner_labels), path.join(in_prefix, "ner-labels.txt"))
 
 
 if __name__ == "__main__":

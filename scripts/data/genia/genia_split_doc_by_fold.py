@@ -7,9 +7,11 @@ import pandas as pd
 import os
 from os import path
 
-train_path = "/data/dave/proj/scierc_coref/data/genia/sutd/train.data"
-dev_path = "/data/dave/proj/scierc_coref/data/genia/sutd/dev.data"
-test_path = "/data/dave/proj/scierc_coref/data/genia/sutd/test.data"
+base_dir = "./data/genia/raw-data"
+
+train_path = f"{base_dir}/sutd-original/train.data"
+dev_path = f"{base_dir}/sutd-original/dev.data"
+test_path = f"{base_dir}/sutd-original/test.data"
 
 with open(dev_path, "r") as f:
     first_dev = f.readline()
@@ -18,17 +20,18 @@ with open(test_path, "r") as f:
     first_test = f.readline()
 
 
-wkdir = "/data/dave/proj/scierc_coref/data/genia/sutd-article/final"
-order_file = "/data/dave/proj/scierc_coref/data/genia/sutd-article/doc_order.csv"
-order = pd.read_table(order_file, header=None)[0]
+wkdir = f"{base_dir}/sutd-article/correct-format"
+order_file = f"{base_dir}/sutd-article/doc_order.csv"
+order = pd.read_csv(order_file, header=None, sep="\t")[0]
 
-out_dir = "/data/dave/proj/scierc_coref/data/genia/sutd-article/split"
+out_dir = f"{base_dir}/sutd-article/split"
+os.mkdir(out_dir)
 for fold in ["train", "dev", "test"]:
     os.mkdir(path.join(out_dir, fold))
 
 fold = "train"
 
-articles_fold=dict(train=[], dev=[], test=[])
+articles_fold = dict(train=[], dev=[], test=[])
 
 for article_id in order:
     with open(path.join(wkdir, "{0}.data".format(article_id))) as article:
@@ -48,6 +51,6 @@ for article_id in order:
             out_file.write(line)
 
 for fold in ["train", "dev", "test"]:
-    fold_file = path.join("/data/dave/proj/scierc_coref/data/genia/sutd-article/split", fold + "_order.csv")
+    fold_file = path.join(f"{base_dir}/sutd-article/split", fold + "_order.csv")
     to_write = pd.Series(articles_fold[fold])
-    to_write.to_csv(fold_file, index=False)
+    to_write.to_csv(fold_file, index=False, header=False)

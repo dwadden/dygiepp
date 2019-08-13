@@ -13,6 +13,7 @@ import pandas as pd
 import numpy as np
 from Levenshtein.StringMatcher import StringMatcher
 
+
 def make_lookups():
     """
     Need to match the ner data and the coref data by sentence. Create

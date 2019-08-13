@@ -11,7 +11,7 @@
 # functions.
 
 out_dir=data/genia
-raw_dir=$out_dir/raw_data
+raw_dir=$out_dir/raw-data
 ner_dir=$raw_dir/GENIAcorpus3.02p
 
 download_raw() {
@@ -39,7 +39,7 @@ download_sutd() {
     # Download preprocessed data from this project:
     # https://gitlab.com/sutd_nlp/overlapping_mentions/tree/master.
     # We preprocess the data to align our folds with theirs.
-    out_dir=data/genia/raw_data/sutd
+    out_dir=$raw_dir/sutd-original
     mkdir $out_dir
 
     url_base=https://gitlab.com/sutd_nlp/overlapping_mentions/raw/master/data/GENIA/scripts
@@ -51,18 +51,18 @@ download_sutd() {
     done
 }
 
-convert_ner() {
+convert_sutd() {
     # Run script from https://gitlab.com/sutd_nlp/overlapping_mentions/tree/master/data/GENIA
     # to format the entity data. I've modified the script so that each article
     # gets dumped in its own file.
 
     corpus_name=$ner_dir/GENIAcorpus3.02.merged.xml
 
-    ner_base=$raw_dir/ner-article
-    tmpdir="$ner_base/tmp"
-    finaldir="$ner_base/final"
+    sutd_base=$raw_dir/sutd-article
+    tmpdir="$sutd_base/tmp"
+    finaldir="$sutd_base/correct-format"
 
-    mkdir $ner_base
+    mkdir $sutd_base
     mkdir $tmpdir
     mkdir $finaldir
 
@@ -80,5 +80,10 @@ convert_ner() {
 
 # download_raw
 # download_sutd
-# convert_ner
-python ./scripts/data/genia/genia_split_doc_by_fold.py
+# convert_sutd
+# python ./scripts/data/genia/genia_split_doc_by_fold.py
+# python ./scripts/data/genia/fix_genia_article.py
+# python ./scripts/data/genia/format_genia_sutd.py
+
+# TODO(dwadden) I'm here.
+python ./genia_align_ids.py
