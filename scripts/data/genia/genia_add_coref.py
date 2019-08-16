@@ -4,14 +4,12 @@ Add coreference information to the GENIA data set.
 
 from collections import defaultdict
 
-import os
 from os import path
 import glob
 import re
 import json
 from bs4 import BeautifulSoup as BS
 import pandas as pd
-import re
 
 import shared
 
@@ -33,7 +31,7 @@ def get_coref_types():
     coref_counts = defaultdict(lambda: 0)
     for i, coref_file in enumerate(coref_files):
         if not i % 100:
-            print i
+            print(i)
         with open(coref_file, "r") as f:
             soup = BS(f.read().decode("utf-8"), "lxml")
             corefs = soup.find_all("coref")
@@ -50,12 +48,13 @@ def get_coref_types():
 
 class Coref(object):
     """Represents a single coreference."""
+
     def __init__(self, xml, soup_text, sents):
         "Get the text, id, referrent, and text span."
         self.xml = xml
         self.text = xml.text
         self.tokens = [tok for tok in re.split('([ -/,.+])', self.text)
-                                     if tok not in ["", " "]]
+                       if tok not in ["", " "]]
         self.id = xml.attrs["id"]
         # A very small number of corefs have two parents. I'm going to just take the first parent.
         # TODO(dwadden) If time, go back and fix this.
@@ -82,7 +81,7 @@ class Coref(object):
             # Last character of the match must be a dash or char after must be an
             # escape, else we're not at end of token.
             text_ixs = [ixs for ixs in tmp_ixs if
-                                    soup_text[ixs[1] + 1] in '([ -/,.+])<' or soup_text[ixs[1]] == "-"]
+                        soup_text[ixs[1] + 1] in '([ -/,.+])<' or soup_text[ixs[1]] == "-"]
             if len(text_ixs) != n_matches:
                 # If the number of xml tag matches doesn't equal the number of span
                 # matches, record and return.
@@ -103,6 +102,7 @@ class Coref(object):
 
 class Corefs(object):
     """Holds all corefs and represents relations between them."""
+
     def __init__(self, soup, sents_flat, coref_types):
         self.coref_types = coref_types
         coref_items = soup.find_all("coref")
@@ -192,13 +192,13 @@ class Corefs(object):
 
 def one_fold(fold, coref_types):
     """Add coref field to json, one fold."""
-    print "Running fold {0}.".format(fold)
+    print("Running fold {0}.".format(fold))
     with open(path.join(json_dir, "{0}.json".format(fold))) as f_json:
         with open(path.join(out_dir, "{0}.json".format(fold)), "w") as f_out:
             for counter, line in enumerate(f_json):
                 if not counter % 100:
-                    print counter
-                    print stats
+                    print(counter)
+                    print(stats)
                 doc = json.loads(line)
                 pmid = int(doc["doc_key"].split("_")[0])
                 medline_id = alignment.loc[pmid][0]
@@ -217,7 +217,7 @@ def get_clusters(coref_types):
     stats = dict(no_matches=0, successful_matches=0, different_num_matches=0)
     for fold in ["train", "dev", "test"]:
         one_fold(fold, coref_types)
-    print stats
+    print(stats)
 
 
 def main():

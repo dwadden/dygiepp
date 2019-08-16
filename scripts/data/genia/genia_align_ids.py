@@ -13,6 +13,12 @@ import pandas as pd
 import numpy as np
 from Levenshtein.StringMatcher import StringMatcher
 
+genia_base = "./data/genia"
+genia_raw = f"{genia_base}/raw-data"
+genia_align = f"{genia_base}/processed-data/align"
+
+os.mkdir(genia_align)
+
 
 def make_lookups():
     """
@@ -20,14 +26,13 @@ def make_lookups():
     dictionaries where the keys are the document ID's and the values are the
     sentences. Save as .pkl files to match.
     """
-    xml_path = "/data/dave/proj/scierc_coref/data/genia/GENIAcorpus3.02p/GENIAcorpus3.02.merged.xml"
-    coref_path = "/data/dave/proj/scierc_coref/data/genia/GENIA_MedCo_coreference_corpus_1.0"
+    xml_path = f"{genia_base}/raw-data/GENIAcorpus3.02p/GENIAcorpus3.02.merged.xml"
+    coref_path = f"{genia_base}/raw-data/GENIA_MedCo_coreference_corpus_1.0"
 
     with open(xml_path, 'r') as infile:
-        soup = BS(infile.read().decode('utf-8'), 'lxml')
+        soup = BS(infile.read(), 'lxml')
 
     articles = soup.find_all('article')
-    articles_obj = []
 
     def get_ner_info(article):
         medline_id = article.find("bibliomisc").text
@@ -36,21 +41,21 @@ def make_lookups():
 
     ner_info = dict([get_ner_info(entry) for entry in articles])
 
-    with open("/data/dave/proj/scierc_coref/data/genia/align/ner_ids.pkl", "wb") as f:
+    with open(f"{genia_align}/ner_ids.pkl", "wb") as f:
         pkl.dump(ner_info, f, protocol=-1)
 
     coref_files = glob.glob(path.join(coref_path, "*.xml"))
 
     def get_coref_info(name):
         with open(name, "r") as f:
-            this_soup = BS(f.read().decode('utf-8'), 'lxml')
+            this_soup = BS(f.read(), 'lxml')
             pmid = this_soup.find("pmid").text
             title = this_soup.find("articletitle").text.strip()
             return (pmid, title)
 
     coref_info = dict([get_coref_info(entry) for entry in coref_files])
 
-    with open("/data/dave/proj/scierc_coref/data/genia/align/coref_ids.pkl", "wb") as f:
+    with open(f"{genia_align}/coref_ids.pkl", "wb") as f:
         pkl.dump(coref_info, f, protocol=-1)
 
 
@@ -66,11 +71,10 @@ def create_matches():
             return matcher.distance()
         return compare
 
-
-    with open("/data/dave/proj/scierc_coref/data/genia/align/coref_ids.pkl", "rb") as f:
-        coref = pkl.load(f).items()
-    with open("/data/dave/proj/scierc_coref/data/genia/align/ner_ids.pkl", "rb") as f:
-        ner = pkl.load(f).items()
+    with open(f"{genia_align}/coref_ids.pkl", "rb") as f:
+        coref = list(pkl.load(f).items())
+    with open(f"{genia_align}/ner_ids.pkl", "rb") as f:
+        ner = list(pkl.load(f).items())
 
     compare = make_comparator()
 
@@ -89,19 +93,20 @@ def create_matches():
         if the_match in matched:
             raise Exception("Already matched.")
         if match_distance:
-            print sentence
-            print match_article[1]
+            print(sentence)
+            print(match_article[1])
         matches.append(dict(ner=match_article[0].replace("MEDLINE:", ""),
-                                                coref=article[0]))
+                            coref=article[0]))
         matched.add(the_match)
 
     matches = pd.DataFrame(matches)
-    outfile = "/data/dave/proj/scierc_coref/data/genia/align/alignment.csv"
+    outfile = f"{genia_align}/alignment.csv"
     matches.to_csv(outfile, index=False)
-    print "All done."
+    print("All done.")
 
 
 def main():
+    make_lookups()
     create_matches()
 
 

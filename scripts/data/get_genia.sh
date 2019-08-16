@@ -84,6 +84,5 @@ convert_sutd() {
 # python ./scripts/data/genia/genia_split_doc_by_fold.py
 # python ./scripts/data/genia/fix_genia_article.py
 # python ./scripts/data/genia/format_genia_sutd.py
-
-# TODO(dwadden) I'm here.
-python ./genia_align_ids.py
+# python ./scripts/data/genia/genia_align_ids.py
+python ./scripts/data/genia/genia_add_coref.py
