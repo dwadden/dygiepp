@@ -14,13 +14,13 @@ We have trained and evaluated DyGIE++ on the following datasets:
 - `GENIA`: Entity extraction on the [GENIA](http://www.geniaproject.org/) corpus of biomedical abstracts.
 - `Wet Lab Protocol Corpus (WLPC)`: Entity and relation extraction for [Wet Lab Protocol Corpus](http://bionlp.osu.edu:5000/protocols) (WLPC).
 
-See TODO(cite the paper) for more details on the data.
+<!-- See TODO(cite the paper) for more details on the data. -->
 
 This repository is a work in progress. We will shortly be providing scripts to format the datasets and train models described in the paper.
 
 <!-- This repository provides scripts to obtain the data sets, run the primary experiments described in TODO(Dave and Ulme's paper), and make predictions using a pre-trained DyGIE++ model on new data sets. -->
 
-## Installation
+<!-- ## Installation
 
 DyGIE++ is implemented using the AllenNLP framework. TODO(add a requirements.txt file) of things we need to install.
 
@@ -37,4 +37,4 @@ We provide scripts to obtain and preprocess the data sets used to evaluate DyGIE
 
 ## Making predictions on a new data set
 
-We have pre-trained DyGIE++ models on each of the five datasets described above. The models are available for download at TODO(add a URL). To make predictions on a new dataset, the data must be converted to DyGIE++ readable `.json` files.
+We have pre-trained DyGIE++ models on each of the five datasets described above. The models are available for download at TODO(add a URL). To make predictions on a new dataset, the data must be converted to DyGIE++ readable `.json` files. -->
