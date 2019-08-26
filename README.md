@@ -1,6 +1,6 @@
 # DyGIE++
 
-This repository contains an implementation of the DyGIE++ information extraction model first presented in TODO(Yi's paper), with additional improvements from TODO(Dave and Ulme's paper). DyGIE++ achieves state-of the art or competitive performance on three sentence-level IE tasks:
+This repository contains an implementation of the DyGIE++ information extraction model presented in TODO(Dave and Ulme's paper). DyGIE++ achieves state-of the art or competitive performance on three sentence-level IE tasks:
 
 - Named entity recognition, entities with nested or overlapping text spans.
 - Relation extraction.
@@ -16,7 +16,9 @@ We have trained and evaluated DyGIE++ on the following datasets:
 
 See TODO(cite the paper) for more details on the data.
 
-This repository provides scripts to obtain the data sets, run the primary experiments described in TODO(Dave and Ulme's paper), and make predictions using a pre-trained DyGIE++ model on new data sets.
+This repository is a work in progress. We will shortly be providing scripts to format the datasets and train models described in the paper.
+
+<!-- This repository provides scripts to obtain the data sets, run the primary experiments described in TODO(Dave and Ulme's paper), and make predictions using a pre-trained DyGIE++ model on new data sets. -->
 
 ## Installation
 
