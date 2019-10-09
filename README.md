@@ -1,5 +1,7 @@
 # DyGIE++
 
+This repository is under construction. We will shortly be providing scripts to format the datasets and train models described in the paper. The `master` branch is intended for release, and will be runnable by EMNLP (early Nov 2020). If you need to run experiments with this code before then, create an issue and I'll help.
+
 This repository contains an implementation of the DyGIE++ information extraction model presented in TODO(Dave and Ulme's paper). DyGIE++ achieves state-of the art or competitive performance on three sentence-level IE tasks:
 
 - Named entity recognition, entities with nested or overlapping text spans.
@@ -15,8 +17,6 @@ We have trained and evaluated DyGIE++ on the following datasets:
 - `Wet Lab Protocol Corpus (WLPC)`: Entity and relation extraction for [Wet Lab Protocol Corpus](http://bionlp.osu.edu:5000/protocols) (WLPC).
 
 <!-- See TODO(cite the paper) for more details on the data. -->
-
-This repository is under construction. We will shortly be providing scripts to format the datasets and train models described in the paper. The `master` branch is intended for release, and will be runnable by EMNLP (early Nov 2020). If you need to run experiments with this code before then, create an issue and I'll help.
 
 <!-- This repository provides scripts to obtain the data sets, run the primary experiments described in TODO(Dave and Ulme's paper), and make predictions using a pre-trained DyGIE++ model on new data sets. -->
 
