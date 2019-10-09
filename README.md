@@ -16,7 +16,7 @@ We have trained and evaluated DyGIE++ on the following datasets:
 
 <!-- See TODO(cite the paper) for more details on the data. -->
 
-This repository is a work in progress. We will shortly be providing scripts to format the datasets and train models described in the paper. The `master` branch is intended for release, but isn't working yet. The `develop` branch works, but it's messy. The `master` branch should be functional by the end of October, together with data. If you need to run experiments with this code before then, create an issue and I'll help.
+This repository is under construction. We will shortly be providing scripts to format the datasets and train models described in the paper. The `master` branch is intended for release, and will be runnable by EMNLP (early Nov 2020). If you need to run experiments with this code before then, create an issue and I'll help.
 
 <!-- This repository provides scripts to obtain the data sets, run the primary experiments described in TODO(Dave and Ulme's paper), and make predictions using a pre-trained DyGIE++ model on new data sets. -->
 
