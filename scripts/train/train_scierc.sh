@@ -13,5 +13,4 @@ ie_train_data_path=$data_root/train.json \
     allennlp train $config_file \
     --cache-directory $data_root/cached \
     --serialization-dir ./models/$experiment_name \
-    --include-package dygie \
-    --force
+    --include-package dygie
