@@ -331,7 +331,7 @@ function(p) {
     [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
   },
   validation_iterator: {
-    type: "ie_batch",
+    type: "ie_document",
     batch_size: p.batch_size
   },
   trainer: {

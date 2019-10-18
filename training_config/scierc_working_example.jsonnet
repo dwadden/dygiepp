@@ -68,7 +68,8 @@ local params = {
   events_positive_label_weight: 1.0,
 
   // Model training
-  batch_size: 8,
+  batch_size: 2,
+  instances_per_epoch: 1000,
   num_epochs: 250,
   patience: 15,
   optimizer: {
@@ -78,7 +79,7 @@ local params = {
     t_total: 200000,
     weight_decay: 0.0,
     parameter_groups: [
-      [["_text_field_embedder"], {"lr": 5e-5, "warmup": 0.2, "t_total": 200000, "weight_decay": 0.01}],
+      [["_text_field_embedder"], {"type": "bert_adam", "lr": 5e-5, "warmup": 0.2, "t_total": 200000, "weight_decay": 0.01}],
     ],
   },
   learning_rate_scheduler:  {

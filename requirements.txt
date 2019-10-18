@@ -1,0 +1,5 @@
+# Usage: `pip install -r requirements.txt``
+
+torch==1.2.0
+allennlp==0.9.0
+pandas
