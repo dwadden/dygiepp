@@ -3,7 +3,7 @@
 
 experiment_name="scierc"
 data_root="./data/scierc/processed_data/json"
-config_file="./training_config/ace05_best_ner_bert.jsonnet"
+config_file="./training_config/ace05_best_ner_working_example.jsonnet"
 cuda_device=$1
 
 ie_train_data_path=$data_root/train.json \

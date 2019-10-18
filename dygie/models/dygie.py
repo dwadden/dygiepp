@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from overrides import overrides
 
 from allennlp.data import Vocabulary
+from allennlp.common.params import Params
 from allennlp.models.model import Model
 from allennlp.modules import Seq2SeqEncoder, TextFieldEmbedder, FeedForward
 from allennlp.modules.span_extractors import SelfAttentiveSpanExtractor, EndpointSpanExtractor
@@ -70,9 +71,11 @@ class DyGIE(Model):
         self._text_field_embedder = text_field_embedder
         self._context_layer = context_layer
 
-        self._loss_weights = loss_weights.as_dict()
+        self._loss_weights = loss_weights
         self._permanent_loss_weights = copy.deepcopy(self._loss_weights)
 
+        # Need to add this line so things don't break. TODO(dwadden) sort out what's happening.
+        modules = Params(modules)
         self._coref = CorefResolver.from_params(vocab=vocab,
                                                 feature_size=feature_size,
                                                 params=modules.pop("coref"))

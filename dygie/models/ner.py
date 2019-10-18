@@ -95,7 +95,7 @@ class NERTagger(Model):
             self._ner_metrics(predicted_ner, ner_labels, span_mask)
             ner_scores_flat = ner_scores.view(-1, self._n_labels)
             ner_labels_flat = ner_labels.view(-1)
-            mask_flat = span_mask.view(-1).byte()
+            mask_flat = span_mask.view(-1).bool()
 
             loss = self._loss(ner_scores_flat[mask_flat], ner_labels_flat[mask_flat])
             output_dict["loss"] = loss
@@ -109,7 +109,7 @@ class NERTagger(Model):
     def decode(self, output_dict: Dict[str, torch.Tensor]):
         predicted_ner_batch = output_dict["predicted_ner"].detach().cpu()
         spans_batch = output_dict["spans"].detach().cpu()
-        span_mask_batch = output_dict["span_mask"].detach().cpu().byte()
+        span_mask_batch = output_dict["span_mask"].detach().cpu().bool()
 
         res_list = []
         res_dict = []

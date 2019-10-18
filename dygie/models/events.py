@@ -81,7 +81,7 @@ class EventExtractor(Model):
         self._label_embedding_method = label_embedding_method
 
         # Weight on trigger labeling and argument labeling.
-        self._loss_weights = loss_weights.as_dict()
+        self._loss_weights = loss_weights
 
         # Trigger candidate scorer.
         null_label = vocab.get_token_index("", "trigger_labels")
@@ -360,7 +360,7 @@ class EventExtractor(Model):
         return argument_dict, argument_dict_with_scores
 
     def _compute_auxiliary_loss(self, cls_projected, trigger_labels, trigger_mask):
-        num_triggers = ((trigger_labels > 0) * trigger_mask.byte()).sum(dim=1)
+        num_triggers = ((trigger_labels > 0) * trigger_mask.bool()).sum(dim=1)
         # Truncate at 4.
         num_triggers = torch.min(num_triggers, 4 * torch.ones_like(num_triggers))
         predicted_num_triggers = self._cls_n_triggers(cls_projected)
@@ -586,7 +586,7 @@ class EventExtractor(Model):
         arguments = []
 
         zipped = zip(argument_labels, top_trig_indices, top_arg_indices,
-                     top_trig_masks.byte(), top_arg_masks.byte())
+                     top_trig_masks.bool(), top_arg_masks.bool())
 
         for sliced, trig_ixs, arg_ixs, trig_mask, arg_mask in zipped:
             entry = sliced[trig_ixs][:, arg_ixs].unsqueeze(0)
@@ -600,7 +600,7 @@ class EventExtractor(Model):
     def _get_trigger_loss(self, trigger_scores, trigger_labels, trigger_mask):
         trigger_scores_flat = trigger_scores.view(-1, self._n_trigger_labels)
         trigger_labels_flat = trigger_labels.view(-1)
-        mask_flat = trigger_mask.view(-1).byte()
+        mask_flat = trigger_mask.view(-1).bool()
 
         loss = self._trigger_loss(trigger_scores_flat[mask_flat], trigger_labels_flat[mask_flat])
         return loss

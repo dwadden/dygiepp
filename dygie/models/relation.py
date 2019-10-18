@@ -312,7 +312,7 @@ class RelationExtractor(Model):
         # TODO(dwadden) Test and possibly optimize.
         relations = []
 
-        for sliced, ixs, top_span_mask in zip(relation_labels, top_span_indices, top_span_masks.byte()):
+        for sliced, ixs, top_span_mask in zip(relation_labels, top_span_indices, top_span_masks.bool()):
             entry = sliced[ixs][:, ixs].unsqueeze(0)
             mask_entry = top_span_mask & top_span_mask.transpose(0, 1).unsqueeze(0)
             entry[mask_entry] += 1

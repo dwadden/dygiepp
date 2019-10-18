@@ -25,10 +25,10 @@ class NERMetrics(Metric):
         for i in range(self.number_of_classes):
             if i == self.none_label:
                 continue
-            self._true_positives += ((predictions==i)*(gold_labels==i)*mask.byte()).sum()
-            self._false_positives += ((predictions==i)*(gold_labels!=i)*mask.byte()).sum()
-            self._true_negatives += ((predictions!=i)*(gold_labels!=i)*mask.byte()).sum()
-            self._false_negatives += ((predictions!=i)*(gold_labels==i)*mask.byte()).sum()
+            self._true_positives += ((predictions==i)*(gold_labels==i)*mask.bool()).sum()
+            self._false_positives += ((predictions==i)*(gold_labels!=i)*mask.bool()).sum()
+            self._true_negatives += ((predictions!=i)*(gold_labels!=i)*mask.bool()).sum()
+            self._false_negatives += ((predictions!=i)*(gold_labels==i)*mask.bool()).sum()
 
     @overrides
     def get_metric(self, reset=False):

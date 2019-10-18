@@ -143,7 +143,8 @@ class Pruner(torch.nn.Module):
                              f"(batch_size, num_items, 1), but found shape {scores.size()}")
         # Make sure that we don't select any masked items by setting their scores to be very
         # negative.  These are logits, typically, so -1e20 should be plenty negative.
-        scores = util.replace_masked_values(scores, mask, -1e20)
+        # NOTE(`mask` needs to be a byte tensor now.)
+        scores = util.replace_masked_values(scores, mask.byte(), -1e20)
 
         # Shape: (batch_size, max_num_items_to_keep, 1)
         _, top_indices = scores.topk(max_items_to_keep, 1)
@@ -151,7 +152,7 @@ class Pruner(torch.nn.Module):
         # Mask based on number of items to keep for each sentence.
         # Shape: (batch_size, max_num_items_to_keep)
         top_indices_mask = util.get_mask_from_sequence_lengths(num_items_to_keep, max_items_to_keep)
-        top_indices_mask = top_indices_mask.byte()
+        top_indices_mask = top_indices_mask.bool()
 
         # Shape: (batch_size, max_num_items_to_keep)
         top_indices = top_indices.squeeze(-1)
@@ -181,7 +182,7 @@ class Pruner(torch.nn.Module):
         # the top k for each sentence.
         # Shape: (batch_size, max_num_items_to_keep)
         sequence_mask = util.batched_index_select(mask, top_indices, flat_top_indices)
-        sequence_mask = sequence_mask.squeeze(-1).byte()
+        sequence_mask = sequence_mask.squeeze(-1).bool()
         top_mask = top_indices_mask & sequence_mask
         top_mask = top_mask.long()
 
