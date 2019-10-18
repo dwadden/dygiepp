@@ -173,7 +173,7 @@ class CorefResolver(Model):
             ix_list = [1 if entry == key else 0 for entry in doc_keys]
             indices[key] = ix_list
             doc_metadata = [entry for entry in metadata if entry["doc_key"] == key]
-            ix = torch.tensor(ix_list, dtype=torch.uint8)
+            ix = torch.tensor(ix_list, dtype=torch.bool)
             if sentence_lengths[ix].sum().item() > 1:
                 output_docs[key] = self._compute_representations_doc(
                     spans_batched[ix], span_mask_batched[ix], span_embeddings_batched[ix],

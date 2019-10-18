@@ -16,7 +16,7 @@ local params = {
   target: "ner",
 
   // If debugging, don't load expensive embedding files.
-  debug: true,
+  debug: false,
 
   // Specifies the token-level features that will be created.
   use_glove: false,
@@ -27,8 +27,8 @@ local params = {
   use_bert_large: false,
   finetune_bert: true,
   rel_prop: 0,
-  coref_prop: 0,
-  context_width: 3,
+  coref_prop: 1,
+  context_width: 1,
   rel_prop_dropout_A: 0.0,
   rel_prop_dropout_f: 0.0,
 
@@ -46,7 +46,7 @@ local params = {
   loss_weights: {          // Loss weights for the modules.
     ner: 1.0,
     relation: 1.0,
-    coref: 0.0,
+    coref: 0.2,
     events: 0.0
   },
   loss_weights_events: {   // Loss weights for trigger and argument ID in events.
