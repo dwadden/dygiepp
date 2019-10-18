@@ -6,7 +6,7 @@ This repository is under construction. To train a joint IE model on the `scierc`
 
 ## Depenencies
 
-The only dependencies for the modeling code are [AllenNLP](https://allennlp.org/) 1.2.0 and [PyTorch](https://pytorch.org/)0.9.0. It may run with newer versions, but this is not guarenteed. The necessary dependencies can be installed with `pip install -r requirements.txt`. For PyTorch GPU support, follow the instructions on the [PyTorch](https://pytorch.org/).
+The only dependencies for the modeling code are [AllenNLP](https://allennlp.org/) 1.2.0 and [PyTorch](https://pytorch.org/) 0.9.0. It may run with newer versions, but this is not guarenteed. The necessary dependencies can be installed with `pip install -r requirements.txt`. For PyTorch GPU support, follow the instructions on the [PyTorch](https://pytorch.org/).
 
 Pandas is also required for data preprocessing.
 
