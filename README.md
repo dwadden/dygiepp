@@ -6,7 +6,7 @@ This repository is under construction. To train a joint IE model on the `scierc`
 
 ## Depenencies
 
-The only dependencies for the modeling code are [AllenNLP](https://allennlp.org/) 1.2.0 and [PyTorch](https://pytorch.org/) 0.9.0. It may run with newer versions, but this is not guarenteed. The necessary dependencies can be installed with `pip install -r requirements.txt`. For PyTorch GPU support, follow the instructions on the [PyTorch](https://pytorch.org/).
+The only dependencies for the modeling code are [AllenNLP](https://allennlp.org/) 0.9.0 and [PyTorch](https://pytorch.org/) 1.2.0. It may run with newer versions, but this is not guarenteed. The necessary dependencies can be installed with `pip install -r requirements.txt`. For PyTorch GPU support, follow the instructions on the [PyTorch](https://pytorch.org/).
 
 Pandas is also required for data preprocessing.
 
@@ -16,10 +16,12 @@ Pandas is also required for data preprocessing.
 To train a model for named entity recognition, relation extraction, and coreference resolution on the SciERC dataset:
 
 - **Download the data**. From the top-level folder for this repo, enter `bash ./scripts/data/get_scierc.sh`. This will download the scierc dataset into a folder `./data/scierc`
-- **Train the model**. Enter `bash ./scripts/train/train_scierc.sh`. This will kick off training, and save a model at `./models/scierc`.
+- **Train the model**. Enter `bash ./scripts/train/train_scierc.sh [gpu-id]`. The `gpu-id` should be an integer like `1`, or `-1` to train on CPU. The program will train a model and save a model at `./models/scierc`.
 
-The model uses BERT and coreference propagation to create globally-contextualized embeddings. During training, you may get warnings `WARNING - root - NaN or Inf found in input tensor.`. This may be due to an  [AllenNLP issue](https://github.com/allenai/allennlp/issues/3116). We're looking into it.
+The model uses BERT and coreference propagation to create globally-contextualized embeddings. During training, you may get warnings `WARNING - root - NaN or Inf found in input tensor`. This is due to a [tensorboard logging issue](https://github.com/allenai/allennlp/issues/3116) and doesn't mean your model is diverging.
 
+
+<!-- TODO: multi-GPU training. -->
 
 <!-- ## To organize.
 

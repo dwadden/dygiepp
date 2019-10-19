@@ -1,5 +1,6 @@
 # Train DyGIE++ model on the scierc data set.
 # Usage: bash scripts/train/train_scierc.sh [gpu-id]
+# gpu-id can be an integer GPU ID, or -1 for CPU.
 
 experiment_name="scierc"
 data_root="./data/scierc/processed_data/json"
