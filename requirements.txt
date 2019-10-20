@@ -1,5 +1,14 @@
 # Usage: `pip install -r requirements.txt``
 
+# Modeling
+
 torch==1.2.0
 allennlp==0.9.0
+
+
+# Data munging
+
 pandas
+beautifulsoup4
+lxml
+python-Levenshtein

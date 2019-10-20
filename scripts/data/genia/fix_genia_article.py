@@ -75,6 +75,9 @@ def fix_fold(fold):
 
 
 def main():
+    if not path.exists(out_dir):
+        os.mkdir(out_dir)
+
     for fold in ["train", "dev", "test"]:
         fix_fold(fold)
 

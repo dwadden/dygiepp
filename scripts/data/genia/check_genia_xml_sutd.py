@@ -16,7 +16,7 @@ def check_against_xml_source():
     xml_file = "/data/dave/proj/scierc_coref/data/genia/GENIAcorpus3.02p/GENIAcorpus3.02.merged.xml"
 
     with open(xml_file, 'r') as infile:
-        soup = BS(infile.read().decode('utf-8'), 'lxml')
+        soup = BS(infile.read(), 'lxml')
     articles = soup.find_all('article')
 
     # Check 5 random files

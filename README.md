@@ -6,10 +6,13 @@ This repository is under construction. To train a joint IE model on the `scierc`
 
 ## Depenencies
 
-The only dependencies for the modeling code are [AllenNLP](https://allennlp.org/) 0.9.0 and [PyTorch](https://pytorch.org/) 1.2.0. It may run with newer versions, but this is not guarenteed. The necessary dependencies can be installed with `pip install -r requirements.txt`. For PyTorch GPU support, follow the instructions on the [PyTorch](https://pytorch.org/).
+This code was developed using Python 3.7. To create a new Conda environment using Python 3.7, do `conda create --name dygiepp python=3.7`.
 
-Pandas is also required for data preprocessing.
+The necessary dependencies can be installed with `pip install -r requirements.txt`.
 
+The only dependencies for the modeling code are [AllenNLP](https://allennlp.org/) 0.9.0 and [PyTorch](https://pytorch.org/) 1.2.0. It may run with newer versions, but this is not guarenteed. For PyTorch GPU support, follow the instructions on the [PyTorch](https://pytorch.org/).
+
+For data preprocessing a few additional data and string processing libraries are required including, [Pandas](https://pandas.pydata.org) and [Beautiful Soup 4](https://www.crummy.com/software/BeautifulSoup/bs4/doc/).
 
 ## Training a model
 

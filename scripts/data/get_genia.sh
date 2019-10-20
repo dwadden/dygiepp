@@ -15,17 +15,18 @@ raw_dir=$out_dir/raw-data
 ner_dir=$raw_dir/GENIAcorpus3.02p
 
 download_raw() {
+    echo "Downloading raw GENIA data."
     # Download the data.
 
     mkdir $out_dir
     mkdir $raw_dir
 
     # Download the entities.
-    wget http://www.nactem.ac.uk/GENIA/current/GENIA-corpus/Part-of-speech/GENIAcorpus3.02p.tgz \
+    wget -nv http://www.nactem.ac.uk/GENIA/current/GENIA-corpus/Part-of-speech/GENIAcorpus3.02p.tgz \
         -P $raw_dir
 
     # Download the coreference data.
-    wget http://www.nactem.ac.uk/GENIA/current/GENIA-corpus/Coreference/GENIA_MedCo_coreference_corpus_1.0.tar.gz \
+    wget -nv http://www.nactem.ac.uk/GENIA/current/GENIA-corpus/Coreference/GENIA_MedCo_coreference_corpus_1.0.tar.gz \
         -P $raw_dir
 
     # Decompress and cleanup
@@ -36,6 +37,7 @@ download_raw() {
 }
 
 download_sutd() {
+    echo "Downloading preprocessed GENIA data from https://gitlab.com/sutd_nlp/overlapping_mentions."
     # Download preprocessed data from this project:
     # https://gitlab.com/sutd_nlp/overlapping_mentions/tree/master.
     # We preprocess the data to align our folds with theirs.
@@ -47,11 +49,12 @@ download_sutd() {
     for fold in train dev test
     do
         url=$url_base/$fold.data
-        wget $url -O $out_dir/$fold.data
+        wget -nv $url -O $out_dir/$fold.data
     done
 }
 
 convert_sutd() {
+    echo "Converting SUTD-formatted GENIA data."
     # Run script from https://gitlab.com/sutd_nlp/overlapping_mentions/tree/master/data/GENIA
     # to format the entity data. I've modified the script so that each article
     # gets dumped in its own file.
@@ -78,11 +81,14 @@ convert_sutd() {
 
 ####################
 
-# download_raw
-# download_sutd
-# convert_sutd
-# python ./scripts/data/genia/genia_split_doc_by_fold.py
-# python ./scripts/data/genia/fix_genia_article.py
-# python ./scripts/data/genia/format_genia_sutd.py
-# python ./scripts/data/genia/genia_align_ids.py
+download_raw
+download_sutd
+convert_sutd
+python ./scripts/data/genia/genia_split_doc_by_fold.py
+python ./scripts/data/genia/fix_genia_article.py
+python ./scripts/data/genia/format_genia_sutd.py
+python ./scripts/data/genia/genia_align_ids.py
 python ./scripts/data/genia/genia_add_coref.py
+python ./scripts/data/genia/genia_add_coref.py --ident-only
+
+# python ./scripts/data/genia/check_genia_xml_sutd.py

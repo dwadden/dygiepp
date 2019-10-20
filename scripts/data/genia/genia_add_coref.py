@@ -5,33 +5,36 @@ Add coreference information to the GENIA data set.
 from collections import defaultdict
 
 from os import path
+import os
 import glob
 import re
 import json
 from bs4 import BeautifulSoup as BS
 import pandas as pd
+import argparse
 
 import shared
 
 
-json_dir = "/data/dave/proj/scierc_coref/data/genia/sutd-article/json"
-coref_dir = "/data/dave/proj/scierc_coref/data/genia/GENIA_MedCo_coreference_corpus_1.0"
-alignment_file = "/data/dave/proj/scierc_coref/data/genia/align/alignment.csv"
-# out_dir = "/data/dave/proj/scierc_coref/data/genia/sutd-article/json-coref-ident-only"
-out_dir = "/data/dave/proj/scierc_coref/data/genia/sutd-article/json-coref-all"
+genia_base = "./data/genia"
+genia_raw = f"{genia_base}/raw-data"
+genia_processed = f"{genia_base}/processed-data"
+
+json_dir = f"{genia_processed}/json-ner"
+coref_dir = f"{genia_raw}/GENIA_MedCo_coreference_corpus_1.0"
+alignment_file = f"{genia_processed}/align/alignment.csv"
 
 alignment = pd.read_csv(alignment_file).set_index("ner")
 
 
 def get_coref_types():
     """
-    Get the different types of coref in the GENIA data set, and save to file.
+    Get the different types of coref in the GENIA data set, and save to file. Once this is done
+    once, just hard-code the list of coref types.
     """
     coref_files = glob.glob(path.join(coref_dir, "*xml"))
     coref_counts = defaultdict(lambda: 0)
     for i, coref_file in enumerate(coref_files):
-        if not i % 100:
-            print(i)
         with open(coref_file, "r") as f:
             soup = BS(f.read().decode("utf-8"), "lxml")
             corefs = soup.find_all("coref")
@@ -173,7 +176,8 @@ class Corefs(object):
                     if coref.cluster_assignment in clusters:
                         clusters[coref.cluster_assignment].remove(coref)
         # Now remove singleton clusters.
-        for key in clusters.keys():
+        # Need to make it a list to avoid `dictionary size changed iteration` error."
+        for key in list(clusters.keys()):
             if len(clusters[key]) == 1:
                 _ = clusters.pop(key)
         return clusters
@@ -190,49 +194,60 @@ class Corefs(object):
         return res
 
 
-def one_fold(fold, coref_types):
+def one_fold(fold, coref_types, out_dir):
     """Add coref field to json, one fold."""
     print("Running fold {0}.".format(fold))
     with open(path.join(json_dir, "{0}.json".format(fold))) as f_json:
         with open(path.join(out_dir, "{0}.json".format(fold)), "w") as f_out:
             for counter, line in enumerate(f_json):
-                if not counter % 100:
-                    print(counter)
-                    print(stats)
                 doc = json.loads(line)
                 pmid = int(doc["doc_key"].split("_")[0])
                 medline_id = alignment.loc[pmid][0]
                 xml_file = path.join(coref_dir, str(medline_id) + ".xml")
                 sents_flat = shared.flatten(doc["sentences"])
                 with open(xml_file, "r") as f_xml:
-                    soup = BS(f_xml.read().decode("utf-8"), "lxml")
+                    soup = BS(f_xml.read(), "lxml")
                     corefs = Corefs(soup, sents_flat, coref_types)
                 doc["clusters"] = corefs.cluster_spans
                 f_out.write(json.dumps(doc) + "\n")
 
 
-def get_clusters(coref_types):
+def get_clusters(coref_types, out_dir):
     """Add coref to json, filtering to only keep coref roots and `coref_types`."""
     global stats
     stats = dict(no_matches=0, successful_matches=0, different_num_matches=0)
     for fold in ["train", "dev", "test"]:
-        one_fold(fold, coref_types)
+        one_fold(fold, coref_types, out_dir)
     print(stats)
 
 
 def main():
     # get_coref_types()
-    coref_types = [
-        "IDENT",
-        "NONE",
-        "RELAT",
-        "PRON",
-        "APPOS",
-        "OTHER",
-        "PART-WHOLE",
-        "WHOLE-PART"
-    ]
-    get_clusters(coref_types)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--ident-only", action="store_true",
+                        help="If true, only do `IDENT` coreferences.")
+    args = parser.parse_args()
+    if args.ident_only:
+        coref_types = ["IDENT"]
+    else:
+        coref_types = [
+            "IDENT",
+            "NONE",
+            "RELAT",
+            "PRON",
+            "APPOS",
+            "OTHER",
+            "PART-WHOLE",
+            "WHOLE-PART"
+        ]
+
+    coref_type_name = "ident-only" if args.ident_only else "all"
+    out_dir = f"{genia_processed}/json-coref-{coref_type_name}"
+
+    if not path.exists(out_dir):
+        os.mkdir(out_dir)
+
+    get_clusters(coref_types, out_dir)
 
 
 if __name__ == '__main__':
