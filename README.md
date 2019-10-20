@@ -2,7 +2,7 @@
 
 Implements the model described in the paper [Entity, Relation, and Event Extraction with Contextualized Span Representations](https://www.semanticscholar.org/paper/Entity%2C-Relation%2C-and-Event-Extraction-with-Span-Wadden-Wennberg/fac2368c2ec81ef82fd168d49a0def2f8d1ec7d8).
 
-This repository is under construction. To train a joint IE model on the `scierc` dataset, see the [model training instructions](#training-a-model). Support for more datasets will be added.
+This repository is under construction. To train a joint IE model on the `SciERC` or `GENIA` dataset, see the [model training instructions](#training-a-model). Support for more datasets will be added.
 
 ## Depenencies
 
@@ -16,12 +16,23 @@ For data preprocessing a few additional data and string processing libraries are
 
 ## Training a model
 
+### SciERC
+
 To train a model for named entity recognition, relation extraction, and coreference resolution on the SciERC dataset:
 
 - **Download the data**. From the top-level folder for this repo, enter `bash ./scripts/data/get_scierc.sh`. This will download the scierc dataset into a folder `./data/scierc`
 - **Train the model**. Enter `bash ./scripts/train/train_scierc.sh [gpu-id]`. The `gpu-id` should be an integer like `1`, or `-1` to train on CPU. The program will train a model and save a model at `./models/scierc`.
 
 The model uses BERT and coreference propagation to create globally-contextualized embeddings. During training, you may get warnings `WARNING - root - NaN or Inf found in input tensor`. This is due to a [tensorboard logging issue](https://github.com/allenai/allennlp/issues/3116) and doesn't mean your model is diverging.
+
+
+### GENIA
+
+The steps are similar to SciERC.
+
+- **Download the data**. From the top-level folder for this repo, enter `bash ./scripts/data/get_genia.sh`.
+- **Train the model**. Enter `bash ./scripts/train/train_genia.sh [gpu-id]`. The program will train a model and save a model at `./models/genia`.
+
 
 
 <!-- TODO: multi-GPU training. -->
