@@ -1,5 +1,8 @@
 """
 Add coreference information to the GENIA data set.
+
+Also remove blacklisted documents, for which the merge didn't go correctly and off-by-one-errors
+were introduced.
 """
 
 from collections import defaultdict
@@ -194,9 +197,17 @@ class Corefs(object):
         return res
 
 
-def one_fold(fold, coref_types, out_dir):
+def get_excluded():
+    "Get list of files that had random off-by-1-errors and will be excluded."
+    current_path = os.path.dirname(os.path.realpath(__file__))
+    excluded = pd.read_table(f"{current_path}/exclude.txt", header=None, squeeze=True).values
+    return excluded
+
+
+def one_fold(fold, coref_types, out_dir, keep_excluded):
     """Add coref field to json, one fold."""
     print("Running fold {0}.".format(fold))
+    excluded = get_excluded()
     with open(path.join(json_dir, "{0}.json".format(fold))) as f_json:
         with open(path.join(out_dir, "{0}.json".format(fold)), "w") as f_out:
             for counter, line in enumerate(f_json):
@@ -209,15 +220,17 @@ def one_fold(fold, coref_types, out_dir):
                     soup = BS(f_xml.read(), "lxml")
                     corefs = Corefs(soup, sents_flat, coref_types)
                 doc["clusters"] = corefs.cluster_spans
-                f_out.write(json.dumps(doc) + "\n")
+                # Save unless it's bad and we're excluding bad documents.
+                if keep_excluded or doc["doc_key"] not in excluded:
+                    f_out.write(json.dumps(doc) + "\n")
 
 
-def get_clusters(coref_types, out_dir):
+def get_clusters(coref_types, out_dir, keep_excluded):
     """Add coref to json, filtering to only keep coref roots and `coref_types`."""
     global stats
     stats = dict(no_matches=0, successful_matches=0, different_num_matches=0)
     for fold in ["train", "dev", "test"]:
-        one_fold(fold, coref_types, out_dir)
+        one_fold(fold, coref_types, out_dir, keep_excluded)
     print(stats)
 
 
@@ -226,6 +239,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--ident-only", action="store_true",
                         help="If true, only do `IDENT` coreferences.")
+    parser.add_argument("--keep-excluded", action="store_true",
+                        help="If true, keep training docs that were excluded due to off-by-1 errors.")
     args = parser.parse_args()
     if args.ident_only:
         coref_types = ["IDENT"]
@@ -247,7 +262,7 @@ def main():
     if not path.exists(out_dir):
         os.mkdir(out_dir)
 
-    get_clusters(coref_types, out_dir)
+    get_clusters(coref_types, out_dir, args.keep_excluded)
 
 
 if __name__ == '__main__':

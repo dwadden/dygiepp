@@ -21,6 +21,8 @@ We followed the preprocessing and train / dev / test split from the [https://git
 
 In GENIA, coreference annotations are labeled one of `IDENT, NONE, RELAT, PRON, APPOS, OTHER, PART-WHOLE, WHOLE-PART`. We preprocess two versions of the data; `json-coref-all` has all coreference annotations, while `json-coref-ident-only` uses only `IDENT` coreferences. We use the `ident-only` version in our experiments.
 
+We encountered off-by-one errors stitching together 10 training documents, and excluded these. They are listed in `./scripts/data/genia/exclude.txt`. If for some reason you want to include these documents anyhow, pass the `--keep-excluded` flag as detailed in a comment at the end of  `./scripts/data/get_genia.sh`.
+
 
 ## ACE
 

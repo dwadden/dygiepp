@@ -455,7 +455,7 @@ def main():
 
     doc_keys = pd.Series([entry.doc_key for entry in articles_obj])
     doc_keys.name = "doc_order"
-    doc_keys.to_csv(path.join(path.dirname(output_dir), "doc_order.csv"), index=False)
+    doc_keys.to_csv(path.join(path.dirname(output_dir), "doc_order.csv"), index=False, header=False)
 
     for tokenized in [False, True]:
         if tokenized:

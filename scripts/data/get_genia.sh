@@ -11,14 +11,12 @@
 # functions.
 
 out_dir=data/genia
+log_dir=$out_dir/logs
 raw_dir=$out_dir/raw-data
 ner_dir=$raw_dir/GENIAcorpus3.02p
 
 download_raw() {
-    echo "Downloading raw GENIA data."
     # Download the data.
-
-    mkdir $out_dir
     mkdir $raw_dir
 
     # Download the entities.
@@ -37,7 +35,6 @@ download_raw() {
 }
 
 download_sutd() {
-    echo "Downloading preprocessed GENIA data from https://gitlab.com/sutd_nlp/overlapping_mentions."
     # Download preprocessed data from this project:
     # https://gitlab.com/sutd_nlp/overlapping_mentions/tree/master.
     # We preprocess the data to align our folds with theirs.
@@ -54,7 +51,6 @@ download_sutd() {
 }
 
 convert_sutd() {
-    echo "Converting SUTD-formatted GENIA data."
     # Run script from https://gitlab.com/sutd_nlp/overlapping_mentions/tree/master/data/GENIA
     # to format the entity data. I've modified the script so that each article
     # gets dumped in its own file.
@@ -81,14 +77,33 @@ convert_sutd() {
 
 ####################
 
-download_raw
-download_sutd
-convert_sutd
-python ./scripts/data/genia/genia_split_doc_by_fold.py
-python ./scripts/data/genia/fix_genia_article.py
-python ./scripts/data/genia/format_genia_sutd.py
-python ./scripts/data/genia/genia_align_ids.py
-python ./scripts/data/genia/genia_add_coref.py
-python ./scripts/data/genia/genia_add_coref.py --ident-only
+mkdir $out_dir
+mkdir $log_dir
 
-# python ./scripts/data/genia/check_genia_xml_sutd.py
+echo "Downloading raw GENIA data."
+download_raw > $log_dir/00-download-genia.log
+
+echo "Downloading preprocessed GENIA data from https://gitlab.com/sutd_nlp/overlapping_mentions."
+download_sutd > $log_dir/01-download-sutd.log
+
+echo "Converting SUTD-formatted GENIA data."
+convert_sutd > $log_dir/02-convert-sutd.log
+
+echo "Splitting GENIA docs into folds."
+python ./scripts/data/genia/split_folds.py > $log_dir/03-split-folds.log
+
+echo "Resolving differences between GENIA original version and SUTD version."
+python ./scripts/data/genia/resolve_differences.py > $log_dir/04-resolve-differences.log
+
+echo "Converting to JSON form."
+python ./scripts/data/genia/convert_to_json.py > $log_dir/05-convert-to-json.log
+
+echo "Aligning article ID's from NER and coref version."
+python ./scripts/data/genia/align_articles.py > $log_dir/06-align-articles.log
+
+# To include the 10 training documents with off-by-one errors, add the flag
+# --keep-excluded below. For instance,
+# python ./scripts/data/genia/merge_coref.py --keep-excluded.
+echo "Merging coreference annotations into NER data."
+python ./scripts/data/genia/merge_coref.py > $log_dir/07-merge-coref-all.log
+python ./scripts/data/genia/merge_coref.py --ident-only > $log_dir/08-merge-coref-ident-only.log
