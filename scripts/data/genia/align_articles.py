@@ -15,7 +15,7 @@ from Levenshtein.StringMatcher import StringMatcher
 
 genia_base = "./data/genia"
 genia_raw = f"{genia_base}/raw-data"
-genia_align = f"{genia_base}/processed-data/align"
+genia_align = f"{genia_base}/raw-data/align"
 
 os.mkdir(genia_align)
 

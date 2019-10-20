@@ -25,7 +25,7 @@ genia_processed = f"{genia_base}/processed-data"
 
 json_dir = f"{genia_processed}/json-ner"
 coref_dir = f"{genia_raw}/GENIA_MedCo_coreference_corpus_1.0"
-alignment_file = f"{genia_processed}/align/alignment.csv"
+alignment_file = f"{genia_raw}/align/alignment.csv"
 
 alignment = pd.read_csv(alignment_file).set_index("ner")
 
