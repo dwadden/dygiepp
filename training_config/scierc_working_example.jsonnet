@@ -13,7 +13,7 @@ local stringToBool(s) =
 
 local params = {
   // Primary prediction target. Watch metrics associated with this target.
-  target: "ner",
+  target: "rel",
 
   // If debugging, don't load expensive embedding files.
   debug: false,
@@ -23,8 +23,9 @@ local params = {
   use_char: false,
   use_elmo: false,
   use_attentive_span_extractor: false,
-  use_bert_base: true,
+  use_bert_base: false,
   use_bert_large: false,
+  use_scibert: true,
   finetune_bert: true,
   rel_prop: 0,
   coref_prop: 1,
@@ -46,7 +47,7 @@ local params = {
   loss_weights: {          // Loss weights for the modules.
     ner: 1.0,
     relation: 1.0,
-    coref: 0.2,
+    coref: 1.0,
     events: 0.0
   },
   loss_weights_events: {   // Loss weights for trigger and argument ID in events.
@@ -55,7 +56,7 @@ local params = {
   },
 
   // Coref settings.
-  coref_spans_per_word: 0.4,
+  coref_spans_per_word: 0.3,
   coref_max_antecedents: 100,
 
   // Relation settings.
@@ -63,23 +64,27 @@ local params = {
   relation_positive_label_weight: 1.0,
 
   // Event settings.
-  trigger_spans_per_word: 0.4,
+  trigger_spans_per_word: 0.3,
   argument_spans_per_word: 0.8,
   events_positive_label_weight: 1.0,
 
   // Model training
-  batch_size: 2,
-  instances_per_epoch: 1000,
+  batch_size: 8,
   num_epochs: 250,
   patience: 15,
   optimizer: {
     type: "bert_adam",
     lr: 1e-3,
     warmup: 0.1,
-    t_total: 200000,
+    t_total: 10000,
     weight_decay: 0.0,
     parameter_groups: [
-      [["_text_field_embedder"], {"type": "bert_adam", "lr": 5e-5, "warmup": 0.2, "t_total": 200000, "weight_decay": 0.01}],
+      [["_text_field_embedder"],
+       {"lr": 5e-5,
+        "warmup": 0.2,
+        "t_total": 10000,
+        "weight_decay": 0.01,
+        "finetune": true},],
     ],
   },
   learning_rate_scheduler:  {

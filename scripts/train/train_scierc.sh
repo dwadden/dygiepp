@@ -7,6 +7,7 @@ data_root="./data/scierc/processed_data/json"
 config_file="./training_config/scierc_working_example.jsonnet"
 cuda_device=$1
 
+# Train model.
 ie_train_data_path=$data_root/train.json \
     ie_dev_data_path=$data_root/dev.json \
     ie_test_data_path=$data_root/test.json \
@@ -15,3 +16,14 @@ ie_train_data_path=$data_root/train.json \
     --cache-directory $data_root/cached \
     --serialization-dir ./models/$experiment_name \
     --include-package dygie
+
+# Evaluate.
+for fold in dev test
+do
+    allennlp evaluate \
+        ./models/$experiment_name/model.tar.gz \
+        $data_root/${fold}.json \
+        --output-file ./models/$experiment_name/metrics_${fold}.json \
+        --cuda-device $cuda_device \
+        --include-package dygie
+done

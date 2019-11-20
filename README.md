@@ -14,9 +14,13 @@ The only dependencies for the modeling code are [AllenNLP](https://allennlp.org/
 
 For data preprocessing a few additional data and string processing libraries are required including, [Pandas](https://pandas.pydata.org) and [Beautiful Soup 4](https://www.crummy.com/software/BeautifulSoup/bs4/doc/).
 
+Finally, you'll need SciBERT for the scientific datasets. Run `python scripts/pretrained/get_scibert.py` to download and extract the SciBERT model to `./pretrained`.
+
 ## Training a model
 
 ### SciERC
+
+**Status**: Should give test set F1 results close to those in Table 1 of the paper.
 
 To train a model for named entity recognition, relation extraction, and coreference resolution on the SciERC dataset:
 
@@ -28,10 +32,17 @@ The model uses BERT and coreference propagation to create globally-contextualize
 
 ### GENIA
 
+**Status**: In progress. May not reproduce paper yet.
+
 The steps are similar to SciERC.
 
 - **Download the data**. From the top-level folder for this repo, enter `bash ./scripts/data/get_genia.sh`.
 - **Train the model**. Enter `bash ./scripts/train/train_genia.sh [gpu-id]`. The program will train a model and save a model at `./models/genia`.
+
+
+## Using pretrained models
+
+We will be releasing pretrained models soon.
 
 
 
