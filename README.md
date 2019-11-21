@@ -11,7 +11,7 @@ This repository is under construction and we're in the process of adding support
 - [Pretrained models](#pretrained-models)
 
 
-## Depenencies
+## Dependencies
 
 This code was developed using Python 3.7. To create a new Conda environment using Python 3.7, do `conda create --name dygiepp python=3.7`.
 
