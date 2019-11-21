@@ -40,19 +40,31 @@ The steps are similar to SciERC.
 - **Train the model**. Enter `bash ./scripts/train/train_genia.sh [gpu-id]`. The program will train a model and save a model at `./models/genia`.
 
 
+## Evaluating a model
+
+To check the performance of one of your models or a pretrained model,, you can run the script `bash scripts/evaluate/evaluate_model.sh`. See the script for usage instructions. For example, to evaluate the [pretrained SciERC model](#pretrained-models), you could do
+
+```shell
+bash scripts/evaluate/evaluate_model.sh \
+  pretrained/scierc.tar.gz \  # Path to model.
+  data/scierc/processed_data/json/test.json \  # Path to test data.
+  2  # CUDA device
+```
+
 ## Pretrained models
 
-We have a version of DyGIE++ trained on SciERC available. More coming soon.
+We versions of DyGIE++ trained on SciERC and GENIA available. More coming soon.
 
 ### Downloads
 
 Run `./scripts/pretrained/get_dygiepp_pretrained.sh` to download all the available pretrained models to the `pretrained` directory. If you only want one model, here are the download links:
 
 - [SciERC](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/scierc.tar.gz)
+- [GENIA](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/scierc.tar.gz)
 
-### Evaluating
+#### Performance of downloaded models
 
-To check the performance of the pretrained SciERC model, you can run the script `bash scripts/evaluate/evaluate_scierc_pretrained.sh [gpu-id]`. The model should get results slightly better than reported in the paper:
+The SciERC model gives slightly better test set performance than reported in the paper:
 
 ```
 2019-11-20 16:03:12,692 - INFO - allennlp.commands.evaluate - Finished evaluating.
@@ -60,6 +72,11 @@ To check the performance of the pretrained SciERC model, you can run the script 
 2019-11-20 16:03:12,693 - INFO - allennlp.commands.evaluate - _ner_f1: 0.6855290303565666
 ...
 2019-11-20 16:03:12,693 - INFO - allennlp.commands.evaluate - rel_f1: 0.4867781975175391
+```
+
+Similarly for GENIA:
+```
+2019-11-21 14:45:44,505 - INFO - allennlp.commands.evaluate - ner_f1: 0.7818707451272466
 ```
 
 ### Predicting
