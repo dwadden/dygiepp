@@ -5,7 +5,7 @@ Implements the model described in the paper [Entity, Relation, and Event Extract
 This repository is under construction and we're in the process of adding support for more datasets.
 
 ## Table of Contents
-- [Dependencies](#depencencies)
+- [Dependencies](#dependencies)
 - [Model training](#training-a-model)
 - [Model evaluation](#evaluating-a-model)
 - [Pretrained models](#pretrained-models)
