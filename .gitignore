@@ -3,3 +3,4 @@
 data/*
 models/*
 pretrained/*
+predictions/*

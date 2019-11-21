@@ -2,7 +2,7 @@
 
 Implements the model described in the paper [Entity, Relation, and Event Extraction with Contextualized Span Representations](https://www.semanticscholar.org/paper/Entity%2C-Relation%2C-and-Event-Extraction-with-Span-Wadden-Wennberg/fac2368c2ec81ef82fd168d49a0def2f8d1ec7d8).
 
-This repository is under construction. To train a joint IE model on the `SciERC` or `GENIA` dataset, see the [model training instructions](#training-a-model). Support for more datasets will be added.
+This repository is under construction. To train a joint IE model on the `SciERC` or `GENIA` dataset, see the [model training instructions](#training-a-model). To download a pretrained model a evaluate it, see the section on [pretrained models](#pretrained-models). Support for more datasets will be added.
 
 ## Depenencies
 
@@ -40,10 +40,33 @@ The steps are similar to SciERC.
 - **Train the model**. Enter `bash ./scripts/train/train_genia.sh [gpu-id]`. The program will train a model and save a model at `./models/genia`.
 
 
-## Using pretrained models
+## Pretrained models
 
-We will be releasing pretrained models soon.
+We have a version of DyGIE++ trained on SciERC available. More coming soon.
 
+### Downloads
+
+Run `./scripts/pretrained/get_dygiepp_pretrained.sh` to download all the available pretrained models to the `pretrained` directory. If you only want one model, here are the download links:
+
+- [SciERC](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/scierc.tar.gz)
+
+### Evaluating
+
+To check the performance of the pretrained SciERC model, you can run the script `bash scripts/evaluate/evaluate_scierc_pretrained.sh [gpu-id]`. The model should get results slightly better than reported in the paper:
+
+```
+2019-11-20 16:03:12,692 - INFO - allennlp.commands.evaluate - Finished evaluating.
+...
+2019-11-20 16:03:12,693 - INFO - allennlp.commands.evaluate - _ner_f1: 0.6855290303565666
+...
+2019-11-20 16:03:12,693 - INFO - allennlp.commands.evaluate - rel_f1: 0.4867781975175391
+```
+
+### Predicting
+
+To make a prediction on the SciERC test set with the pretrained SciERC model, run the script `bash ./scripts/predict/predict_scierc_pretrained.sh`. The predictions will be output to `predictions/scierc_test.json`. The gold labels are also included for easy comparison. All predicted fields start with the prefix `predicted_`, for instance `predicted_ner`.
+
+The prediction code should work but is not cleaned up yet, so please file an issue if you run into problems!
 
 
 <!-- TODO: multi-GPU training. -->
