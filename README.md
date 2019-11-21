@@ -32,7 +32,7 @@ The model uses BERT and coreference propagation to create globally-contextualize
 
 ### GENIA
 
-**Status**: In progress. May not reproduce paper yet.
+**Status**: Should give test set F1 results comparable to paper.
 
 The steps are similar to SciERC.
 
