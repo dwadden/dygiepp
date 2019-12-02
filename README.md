@@ -45,15 +45,48 @@ The steps are similar to SciERC.
 - **Train the model**. Enter `bash ./scripts/train/train_genia.sh [gpu-id]`. The program will train a model and save a model at `./models/genia`.
 
 
+<!-- ### ACE Event
+
+- **Create a virtualenv to preprocess the data**. The preprocessing code I wrote breaks with the newest version of Spacy. So unfortunately, we need to create a separate virtualenv that uses an old version of Spacy and use that for preprocessing.
+```shell
+conda deactivate
+conda create --name ace-event-preprocess python=3.7
+conda activate ace-event-preprocess
+pip install -r scripts/data/ace-event/requirements.txt
+python -m spacy download en
+bash scripts/data/get_ace_event.sh
+```
+When finished, you should `conda deactivate` the `ace-event-preprocess` environment and re-activate your modeling environment. -->
+
+
 ## Evaluating a model
 
-To check the performance of one of your models or a pretrained model,, you can run the script `bash scripts/evaluate/evaluate_model.sh`. See the script for usage instructions. For example, to evaluate the [pretrained SciERC model](#pretrained-models), you could do
+To check the performance of one of your models or a pretrained model,, you can use the `allennlp evaluate` command. In general, it can be used like this:
 
 ```shell
-bash scripts/evaluate/evaluate_model.sh \
-  pretrained/scierc.tar.gz \  # Path to model.
-  data/scierc/processed_data/json/test.json \  # Path to test data.
-  2  # CUDA device
+allennlp evaluate \
+  [model-file] \
+  [data-path] \
+  --cuda-device [cuda-device] \
+  --include-package dygie \
+  --output-file [output-file] # Optional; if not given, prints metrics to console.
+```
+For example, to evaluate the [pretrained SciERC model](#pretrained-models), you could do
+```shell
+allennlp evaluate \
+  pretrained/scierc.tar.gz \
+  data/scierc/processed_data/json/test.json \
+  --cuda-device 2 \
+  --include-package dygie
+```
+To evaluate a model you trained on the SciERC data, you could do
+```shell
+allennlp evaluate \
+  models/scierc/model.tar.gz \
+  data/scierc/processed_data/json/test.json \
+  --cuda-device 2  \
+  --include-package dygie \
+  --output-file models/scierc/metrics_test.json
 ```
 
 ## Pretrained models
