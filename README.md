@@ -60,7 +60,7 @@ bash scripts/evaluate/evaluate_model.sh \
 
 ## Pretrained models
 
-We versions of DyGIE++ trained on SciERC and GENIA available. More coming soon.
+We have versions of DyGIE++ trained on SciERC and GENIA available. More coming soon.
 
 ### Downloads
 
@@ -91,6 +91,14 @@ Similarly for GENIA:
 To make a prediction on the SciERC test set with the pretrained SciERC model, run the script `bash ./scripts/predict/predict_scierc_pretrained.sh`. The predictions will be output to `predictions/scierc_test.json`. The gold labels are also included for easy comparison. All predicted fields start with the prefix `predicted_`, for instance `predicted_ner`.
 
 The prediction code should work but is not cleaned up yet, so please file an issue if you run into problems!
+
+
+## Relation extraction evaluation metric
+
+Following [Li and Ji (2014)](https://www.semanticscholar.org/paper/Incremental-Joint-Extraction-of-Entity-Mentions-and-Li-Ji/ab3f1a4480c1ef8409d1685889600f7efb76af24), we consider a predicted relation to be correct if "its relation type is
+correct, and the head offsets of two entity mention arguments are both correct".
+
+In particular, we do *not* require the types of the entity mention arguments to be correct, as is done in some work (e.g. [Zhang et al. (2017)](https://www.semanticscholar.org/paper/End-to-End-Neural-Relation-Extraction-with-Global-Zhang-Zhang/ee13e1a3c1d5f5f319b0bf62f04974165f7b0a37)). We welcome a pull request that implements this alternative evaluation metric. Please open an issue if you're interested in this.
 
 
 <!-- TODO: multi-GPU training. -->
