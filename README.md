@@ -34,8 +34,6 @@ To train a model for named entity recognition, relation extraction, and corefere
 - **Download the data**. From the top-level folder for this repo, enter `bash ./scripts/data/get_scierc.sh`. This will download the scierc dataset into a folder `./data/scierc`
 - **Train the model**. Enter `bash ./scripts/train/train_scierc.sh [gpu-id]`. The `gpu-id` should be an integer like `1`, or `-1` to train on CPU. The program will train a model and save a model at `./models/scierc`.
 
-The model uses BERT and coreference propagation to create globally-contextualized embeddings. During training, you may get warnings `WARNING - root - NaN or Inf found in input tensor`. This is due to a [tensorboard logging issue](https://github.com/allenai/allennlp/issues/3116) and doesn't mean your model is diverging.
-
 
 ### GENIA
 
