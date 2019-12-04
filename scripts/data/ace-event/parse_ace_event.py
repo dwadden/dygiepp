@@ -7,6 +7,7 @@ import json
 from os import path
 import os
 import re
+import argparse
 from dataclasses import dataclass
 from typing import List
 import spacy
@@ -229,7 +230,7 @@ class Doc:
         self.adjust_spans_doc()
         by_entry = [entry.to_json() for entry in self.entries]
         res = {}
-        for field in ["sentences", "ner", "relations", "events", "sentence_start", "ner_flavor"]:
+        for field in ["sentences", "ner", "relations", "events", "sentence_start"]:
             res[field] = [entry[field] for entry in by_entry]
         res["doc_key"] = self.doc_key
         return res
@@ -263,7 +264,8 @@ def get_token_of(doc, char):
 # Copied over from Heng Ji's student's code.
 
 class Document:
-    def __init__(self, annotation_path, text_path, doc_key, fold, heads_only=True, real_entities_only=False):
+    def __init__(self, annotation_path, text_path, doc_key, fold, heads_only=True,
+                 real_entities_only=True, include_pronouns=False):
         '''
         A base class for ACE xml annotation
         :param annotation_path:
@@ -280,12 +282,14 @@ class Document:
         assert self.doc.text == self._text
         self.entity_list, self.entity_ids = self._populate_entity_list()
         self.entity_lookup = self._populate_entity_lookup()
+        if self._real_entities_only:
+            self._allowed_flavors = ["entity", "pronoun"] if include_pronouns else ["entity"]
+            self.entity_list = [x for x in self.entity_list if x.flavor in self._allowed_flavors]
+        else:
+            self._allowed_flavors = None
         self.event_list = self._populate_event_list()
         self.relation_list = self._populate_relation_list()
         self._fold = fold
-        if self._real_entities_only:
-            allowed_flavors = ["entity", "pronoun"]
-            self.entity_list = [x for x in self.entity_list if x.flavor in allowed_flavors]
 
     def _make_nlp(self, text):
         '''
@@ -523,7 +527,7 @@ class Document:
                         assert argument_id in self.entity_lookup
                         this_entity = self.entity_lookup[argument_id]
                         # If we're only doing real entities and this isn't one, don't append.
-                        if self._real_entities_only and this_entity.flavor not in ["entity", "pronoun"]:
+                        if self._real_entities_only and this_entity.flavor not in self._allowed_flavors:
                             continue
                         start_char, end_char, text_string = (this_entity.start_char,
                                                              this_entity.end_char,
@@ -582,7 +586,7 @@ class Document:
                     # Skip if not a real entity and we're only keeping real entities.
                     if self._heads_only and self._real_entities_only:
                         this_entity = self.entity_lookup[this_argument.argument_id]
-                        if this_entity.flavor not in ["entity", "pronoun"]:
+                        if this_entity.flavor not in self._allowed_flavors:
                             include = False
 
                     if this_argument.relation_role == "Arg-1":
@@ -704,35 +708,50 @@ class Document:
 
 ####################
 
+# Main function.
 
-def one_fold(fold, heads_only=True, real_entities_only=False):
-    doc_path = "./data/ace-event/ace-collected/raw-data"
+
+def one_fold(fold, output_dir, heads_only=True, real_entities_only=True, include_pronouns=False):
+    doc_path = "./data/ace-event/raw-data"
     split_path = "./scripts/data/ace-event/event-split"
-
-    # if heads_only:
-    #     if real_entities_only:
-    #         out_path = "/data/dwadden/proj/dygie/dygie-experiments/datasets/ace-event-heads-only-real-entities/json"
-    #     else:
-    #         out_path = "/data/dwadden/proj/dygie/dygie-experiments/datasets/ace-event-heads-only/json"
-    # else:
-    #     out_path = "/data/dwadden/proj/dygie/dygie-experiments/datasets/ace-event/json"
-    out_path = "./data/ace-event/processed-data/tongtao-pronouns/json"
-    os.makedirs(out_path, exist_ok=True)
 
     doc_keys = []
     with open(path.join(split_path, fold + ".filelist")) as f:
         for line in f:
             doc_keys.append(line.strip())
 
-    with open(path.join(out_path, fold + ".json"), "w") as g:
+    with open(path.join(output_dir, fold + ".json"), "w") as g:
         for doc_key in doc_keys:
             print(doc_key)
             annotation_path = path.join(doc_path, doc_key + ".apf.xml")
             text_path = path.join(doc_path, doc_key + ".sgm")
-            document = Document(annotation_path, text_path, doc_key, fold, heads_only, real_entities_only)
+            document = Document(annotation_path, text_path, doc_key, fold, heads_only,
+                                real_entities_only, include_pronouns)
             js = document.to_json()
             g.write(json.dumps(js, default=int) + "\n")
 
 
-for fold in ["train", "dev", "test"]:
-    one_fold(fold, heads_only=True, real_entities_only=True)
+def main():
+    parser = argparse.ArgumentParser(description="Preprocess ACE event data.")
+    parser.add_argument("output_name", help="Name for output directory.")
+    parser.add_argument("--use_span_extent", action="store_true",
+                        help="Use full extent of entity mentions instead of just heads.")
+    parser.add_argument("--include_times_and_values", action="store_true",
+                        help="Treat times and values as entities and include them as event arguments.")
+    parser.add_argument("--include_pronouns", action="store_true",
+                        help="Include pronouns as entities and include them as event arguments.")
+    args = parser.parse_args()
+
+    output_dir = f"./data/ace-event/processed-data/{args.output_name}/json"
+    os.makedirs(output_dir, exist_ok=True)
+
+    for fold in ["train", "dev", "test"]:
+        one_fold(fold,
+                 output_dir,
+                 heads_only=(not args.use_span_extent),
+                 real_entities_only=(not args.include_times_and_values),
+                 include_pronouns=args.include_pronouns)
+
+
+if __name__ == "__main__":
+    main()
