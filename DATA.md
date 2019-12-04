@@ -26,9 +26,55 @@ We followed the preprocessing and train / dev / test split from the [SUTD NLP gr
 We encountered off-by-one errors stitching together the coref and ner annotations for 10 training documents, and excluded these. They are listed in `./scripts/data/genia/exclude.txt`. If for some reason you want to include these documents anyhow, pass the `--keep-excluded` flag as detailed in a comment at the end of  `./scripts/data/get_genia.sh`.
 
 
-## ACE
+## ACE Relation
 
 TODO
+
+
+## ACE Event
+
+The [ACE 2005](https://catalog.ldc.upenn.edu/LDC2006T06) dataset contains entity, relation, and event annotations for an assortment of newswire and online text. For ACE Event, we use the standard split for event extraction used in [Yang and Mitchell (2016)](https://www.semanticscholar.org/paper/Joint-Extraction-of-Events-and-Entities-within-a-Yang-Mitchell/c558e2b5dcab8d89f957f3045a9bbd43fd6a28ed). Unfortunately, there are a number of different ways that the ACE data can be preprocessed. We follow the conventions of [Zhang et al. 2019](https://www.semanticscholar.org/paper/Joint-Entity-and-Event-Extraction-with-Generative-Zhang-Ji/ea00a63c2acd145839eb6f6bbc01a5cfb4930d43), which claimed SOTA at the time our paper was submitted.
+
+Unfortunately, different papers have used different conventions and therefore our results may not be directly comparable. However, we have included flags in the script `./scripts/data/ace-event/parse_ace_event.py` to allow researchers to make different preprocessing choices. The available flags are:
+
+- **use_span_extent**: By default, when defining entity mentions, we use the `head` of the mention, rather than its `extent`, as in this example:
+  ```xml
+  <entity_mention ID="AFP_ENG_20030330.0211-E3-1" TYPE="NOM" LDCTYPE="NOM" LDCATR="FALSE">
+    <extent>
+      <charseq START="134" END="170">Some 2,500 mainly university students</charseq>
+    </extent>
+    <head>
+      <charseq START="163" END="170">students</charseq>
+    </head>
+  </entity_mention>
+  ```
+  Running `parse_ace_event.py` with the flag `--use_span_extent` will use `extent`s rather than `head`s.
+
+- **include_times_and_values**: By default, `timex2` and `value` mentions are *not* treated as entity mentions, and are ignored. For instance, this annotation would be ignored:
+  ```xml
+  <timex2 ID="AFP_ENG_20030327.0022-T1" VAL="2003-03-27">
+    <timex2_mention ID="AFP_ENG_20030327.0022-T1-1">
+      ...
+    </timex2_mention>
+  </timex2>
+  ```
+  So would this one:
+  ```xml
+  <value ID="AFP_ENG_20030330.0211-V1" TYPE="Numeric" SUBTYPE="Percent">
+    <value_mention ID="AFP_ENG_20030330.0211-V1-1">
+      ...
+    </value_mention>
+  </value>
+  ```
+  To include these mentions as entity mentions, use the flag `--include_times_and_values`.
+
+- **include_pronouns**: By default, pronouns (entities with `TYPE="PRO"`) are also *ignored*. For instance, this annotation  would be ignored:
+  ```xml
+  <entity_mention ID="AFP_ENG_20030330.0211-E3-2" TYPE="PRO" LDCTYPE="WHQ" LDCATR="FALSE">
+    ...
+  </entity_mention>
+  ```
+  To include pronouns as entity mentions, use the flag `--include_pronouns`.
 
 
 ## WLPC

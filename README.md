@@ -45,7 +45,7 @@ The steps are similar to SciERC.
 - **Train the model**. Enter `bash ./scripts/train/train_genia.sh [gpu-id]`. The program will train a model and save a model at `./models/genia`.
 
 
-<!-- ### ACE Event
+### ACE Event
 
 - **Create a virtualenv to preprocess the data**. The preprocessing code I wrote breaks with the newest version of Spacy. So unfortunately, we need to create a separate virtualenv that uses an old version of Spacy and use that for preprocessing.
 ```shell
@@ -54,9 +54,23 @@ conda create --name ace-event-preprocess python=3.7
 conda activate ace-event-preprocess
 pip install -r scripts/data/ace-event/requirements.txt
 python -m spacy download en
-bash scripts/data/get_ace_event.sh
 ```
-When finished, you should `conda deactivate` the `ace-event-preprocess` environment and re-activate your modeling environment. -->
+Then, do
+```
+bash ./scripts/data/ace-event/collect_ace_event.sh [path-to-ACE-data]
+```
+which will collect the relevant files from the ACE data distribution.
+
+Now, run the script
+```
+python ./scripts/data/ace-event/parse_ace_event.py [name-of-output-dir] [options]
+```
+You can see the available options by calling `parse_ace_event.py -h`. For detailed descriptions, see [DATA.md](DATA.md).
+
+
+
+
+When finished, you should `conda deactivate` the `ace-event-preprocess` environment and re-activate your modeling environment.
 
 
 ## Evaluating a model
