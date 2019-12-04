@@ -70,7 +70,7 @@ python ./scripts/data/ace-event/parse_ace_event.py [output-name] [optional-flags
 You can see the available flags by calling `parse_ace_event.py -h`. For detailed descriptions, see [DATA.md](DATA.md). The results will go in `./data/ace-event/processed-data/[output-name]`. We require an output name because you may want to preprocess the ACE data multiple times using different flags. For default preprocessing settings, you could do:
 
 ```
-python ./scripts/data/ace-event/pasre_ace_event.py default-settings
+python ./scripts/data/ace-event/parse_ace_event.py default-settings
 ```
 
 When finished, you should `conda deactivate` the `ace-event-preprocess` environment and re-activate your modeling environment.

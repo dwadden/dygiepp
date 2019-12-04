@@ -625,6 +625,7 @@ class Document:
     def _check_in_range(span, sent):
         # The end character inequality must be string. since end character for spans are inclusive
         # and end characters for sentences are exclusive.
+        # Raise an exception if the span crosses a sentence boundary.
         if span.start_char >= sent.start_char and span.end_char < sent.end_char:
             return True
         if span.end_char <= sent.start_char:
@@ -632,16 +633,34 @@ class Document:
         if span.start_char >= sent.end_char:
             return False
         else:
-            import ipdb; ipdb.set_trace()
-
+            raise CrossSentenceException
 
     def _sentence_get_ner(self, sent):
         entities = []
+        to_remove = []  # Only relevant for full extents.
         for entity in self.entity_list:
-            if self._check_in_range(entity, sent):
+            try:
+                in_range = self._check_in_range(entity, sent)
+            # If the entity crosses a sentence boundary
+            except CrossSentenceException as e:
+                # This shouldn't happen if we're only using entity heads; raise an exception.
+                if self._heads_only:
+                    raise e
+                # With full extents this may happen; notify user and skip this example.
+                else:
+                    # Add to list of entities that will be removed.
+                    to_remove.append(entity)
+                    msg = f'Entity "{entity.text_string}" crosses sentence boundary. Skipping.'
+                    print(msg)
+                    continue
+            if in_range:
                 debug_if(entity in self._seen_so_far['entity'])
                 self._seen_so_far["entity"].append(entity)
                 entities.append(entity)
+        # If doing full entity extents, remove entities that crossed sentence boundaries.
+        for failure in to_remove:
+            self.entity_list.remove(failure)
+
         return entities
 
     def _sentence_get_relations(self, sent):
@@ -722,7 +741,6 @@ def one_fold(fold, output_dir, heads_only=True, real_entities_only=True, include
 
     with open(path.join(output_dir, fold + ".json"), "w") as g:
         for doc_key in doc_keys:
-            print(doc_key)
             annotation_path = path.join(doc_path, doc_key + ".apf.xml")
             text_path = path.join(doc_path, doc_key + ".sgm")
             document = Document(annotation_path, text_path, doc_key, fold, heads_only,
@@ -746,6 +764,8 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
 
     for fold in ["train", "dev", "test"]:
+        msg = f"Parsing {fold} set."
+        print(msg)
         one_fold(fold,
                  output_dir,
                  heads_only=(not args.use_span_extent),
