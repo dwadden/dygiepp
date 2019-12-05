@@ -45,7 +45,7 @@ The steps are similar to SciERC.
 
 #### Creating the dataset
 
-We use preprocessing code adapted from the [DyGIE repo](https://github.com/luanyi/DyGIE), which is in turn adapted from the [LSTM-ER repo](https://github.com/tticoin/LSTM-ER). The following additional software is required:
+We use preprocessing code adapted from the [DyGIE repo](https://github.com/luanyi/DyGIE), which is in turn adapted from the [LSTM-ER repo](https://github.com/tticoin/LSTM-ER). The following software is required:
 - Java, to run CoreNLP.
 - Perl.
 - zsh. If this isn't available on your system, you can create a conda environment and install [zsh](https://anaconda.org/conda-forge/zsh).
@@ -58,6 +58,12 @@ Then, run the driver script to preprocess the data:
 ```
 bash scripts/data/get_ace05.sh [path-to-ACE-data]
 ```
+
+The results will go in `./data/ace05/processed-data`. The intermediate files will go in `./data/ace05/raw-data`.
+
+#### Training a model
+
+In progress.
 
 
 ### ACE05 Event
