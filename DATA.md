@@ -64,7 +64,7 @@ Unfortunately, different papers have used different conventions and therefore ou
     </value_mention>
   </value>
   ```
-  To include these mentions as entity mentions, use the flag `--include_times_and_values`.
+  To include these mentions as entity mentions, use the flag `--include_times_and_values`. Note that all values are given entity type `VALUE`. Some work has assigned entity types using the `TYPE` of the value - for instance `"Numeric"` in the example above. We welcome a pull request to add this feature.
 
 - **include_pronouns**: By default, pronouns (entities with `TYPE="PRO"`) are also *ignored*. For instance, this annotation  would be ignored:
   ```xml

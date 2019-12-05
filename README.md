@@ -27,8 +27,6 @@ Finally, you'll need SciBERT for the scientific datasets. Run `python scripts/pr
 
 ### SciERC
 
-**Status**: Should give test set F1 results close to those in Table 1 of the paper.
-
 To train a model for named entity recognition, relation extraction, and coreference resolution on the SciERC dataset:
 
 - **Download the data**. From the top-level folder for this repo, enter `bash ./scripts/data/get_scierc.sh`. This will download the scierc dataset into a folder `./data/scierc`
@@ -36,8 +34,6 @@ To train a model for named entity recognition, relation extraction, and corefere
 
 
 ### GENIA
-
-**Status**: Should give test set F1 results comparable to paper.
 
 The steps are similar to SciERC.
 
@@ -68,14 +64,14 @@ Now, run the script
 python ./scripts/data/ace-event/parse_ace_event.py [output-name] [optional-flags]
 ```
 You can see the available flags by calling `parse_ace_event.py -h`. For detailed descriptions, see [DATA.md](DATA.md). The results will go in `./data/ace-event/processed-data/[output-name]`. We require an output name because you may want to preprocess the ACE data multiple times using different flags. For default preprocessing settings, you could do:
-
 ```
 python ./scripts/data/ace-event/parse_ace_event.py default-settings
 ```
-
 When finished, you should `conda deactivate` the `ace-event-preprocess` environment and re-activate your modeling environment.
 
 #### Training the model
+
+In progress.
 
 
 ## Evaluating a model
