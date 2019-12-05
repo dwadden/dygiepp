@@ -1,0 +1,8 @@
+annotators=tokenize,ssplit,pos,lemma,depparse
+#tokenize.whitespace=true
+#ssplit.isOneSentence=true
+tokenize.options=ptb3Escaping=false
+ssplit.newlineIsSentenceBreak=always
+#tokenize.options=untokenizable=firstKeep
+#parse.originalDependencies=true
+depparse.model=edu/stanford/nlp/models/parser/nndep/english_SD.gz

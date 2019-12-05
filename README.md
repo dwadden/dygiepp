@@ -41,7 +41,26 @@ The steps are similar to SciERC.
 - **Train the model**. Enter `bash ./scripts/train/train_genia.sh [gpu-id]`. The program will train a model and save a model at `./models/genia`.
 
 
-### ACE Event
+### ACE05 (ACE for entities and relations)
+
+#### Creating the dataset
+
+We use preprocessing code adapted from the [DyGIE repo](https://github.com/luanyi/DyGIE), which is in turn adapted from the [LSTM-ER repo](https://github.com/tticoin/LSTM-ER). The following additional software is required:
+- Java, to run CoreNLP.
+- Perl.
+- zsh. If this isn't available on your system, you can create a conda environment and install [zsh](https://anaconda.org/conda-forge/zsh).
+
+First, we need to download Stanford CoreNLP:
+```
+bash scripts/data/ace05/get_corenlp.sh
+```
+Then, run the driver script to preprocess the data:
+```
+bash scripts/data/get_ace05.sh [path-to-ACE-data]
+```
+
+
+### ACE05 Event
 
 #### Creating the dataset
 

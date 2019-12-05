@@ -1,0 +1,201 @@
+#!/usr/bin/perl
+# Convert CoNLL-2007 dependency format to stand-off
+use utf8;
+binmode STDIN,  ":utf8";
+binmode STDOUT, ":utf8";
+use strict;
+
+my $sentence_id = 0;
+my $tok_id = 0;
+
+my $ignore_blank_line = 1;
+
+if ( $ARGV[ 0 ] eq "-b" ) {
+    $ignore_blank_line = 0;
+    print STDERR "Do not ignore blank lines\n";
+    shift;
+} else {
+    print STDERR "Ignore blank lines\n";
+}
+my $label_file = "";
+if ( @ARGV == 4 && $ARGV[ 0 ] eq "-labels" ) {
+    shift;
+    $label_file = shift;
+}
+if ( @ARGV != 2 || $ARGV[ 0 ] eq "-h" ) {
+    die "Usage: perl [-b] dep2so.prl dep_file txt_file\n  -b: do not ignore blank lines\n";
+}
+
+my $dep_file = shift;
+my $txt_file = shift;
+my $log_file = "$dep_file.log";
+
+open DEP, $dep_file or die "Cannot open dependency file: $dep_file\n";
+open TXT, $txt_file or die "Cannot open txt file: $txt_file\n";
+
+sub escape_label {
+    my $label = shift;
+    $label =~ s/``/-DQS-/g;
+    $label =~ s/''/-DQE-/g;
+    $label =~ s/\(/-LRB-/g;
+    $label =~ s/\)/-RRB-/g;
+    $label =~ s/,/-COMMA-/g;
+    $label =~ s/:/-COLON-/g;
+    $label =~ s/;/-SEMICOLON-/g;
+    $label =~ s/\./-PERIOD-/g;
+    $label =~ s/\$/-DOLLAR-/g;
+    $label =~ s/\|//g;
+    $label =~ s/%//g;
+    return $label;
+}
+
+sub escape_base {
+    my $label = shift;
+    $label =~ s/``/-DQS-/g;
+    $label =~ s/''/-DQE-/g;
+    $label =~ s/\(/-LRB-/g;
+    $label =~ s/\)/-RRB-/g;
+    $label =~ s/,/-COMMA-/g;
+    $label =~ s/:/-COLON-/g;
+    $label =~ s/;/-SEMICOLON-/g;
+    $label =~ s/\./-PERIOD-/g;
+    $label =~ s/\$/-DOLLAR-/g;
+    $label =~ s/\|//g;
+    $label =~ s/%/-PERCENT-/g;
+    return $label;
+}
+
+sub escape_word {
+    my $sym = shift;
+#     $sym =~ s/\\(.)/\1/g;
+#     $sym =~ s/-LRB-/\(/g;
+#     $sym =~ s/-RRB-/\)/g;
+#     $sym =~ s/-LCB-/\{/g;
+#     $sym =~ s/-RCB-/\}/g;
+#     $sym =~ s/-LSB-/\[/g;
+#     $sym =~ s/-RSB-/\]/g;
+#     $sym =~ s/&lt;/</g;
+#     $sym =~ s/&gt;/>/g;
+#     $sym =~ s/&amp;&//g;
+#     $sym =~ s/&quot;/"/g;  #"
+    return $sym;
+}
+
+sub find_word {
+    my $word = shift;
+    my $sentence = shift;
+    my $position = shift;
+    my $index = index( $sentence, $word, $position );
+    my $length = length( $word );
+    if ( $word eq "``" || $word eq "''" ) {
+        my $index2 = index( $sentence, "\"", $position );
+        if ( $index < 0 || ( $index2 >= 0 && $index2 < $index ) ) {
+            $index = $index2;
+            $length = 1;
+        }
+    }
+    if ( $word eq "`") {
+        my $index2 = index( $sentence, "'", $position );
+        if ( $index < 0 || ( $index2 >= 0 && $index2 < $index ) ) {
+            $index = $index2;
+            $length = 1;
+        }
+    }
+    ## to handle MST parser's escaper
+    if ( $word eq "<num>" ) {
+        if ( my( $word2 ) = substr( $sentence, $position ) =~ /(\d+)/ ) {
+            my $index2 = index( $sentence, $word2, $position );
+            if ( $index < 0 || ( $index2 >= 0 && $index2 < $index ) ) {
+                $index = $index2;
+                $length = length( $word2 );
+            }
+        }
+    }
+    if ( $index < 0 ) {
+        chop $sentence;
+        die "Cannot find word \"$word\" in \"$sentence\"\n at $.";
+    } else {
+        return ( $index, $index + $length );
+    }
+}
+
+## read failed sentences from log file
+my @error_sentences = ();
+if ( -f $log_file ) {
+    print STDERR "Reading log file \"$log_file\"... ";
+    open LOG, $log_file or die "Cannot open log file: $log_file\n";
+    while ( <LOG> ) {
+        if ( /^ERROR:/ ) {
+            $_ = <LOG>;
+            if ( /At line (\d+)/ ) {
+                push @error_sentences, $1;
+            }
+        }
+    }
+    close LOG;
+    print STDERR "done.\n";
+}
+
+## start conversion
+my $offset = 0;
+my $num_deps = 0;  ## used to skip failed sentences
+my %dep_labels = ();  ## dependency labels
+while ( my $sentence = <TXT> ) {
+    my $new_offset = $offset + length( $sentence ) - 1;
+    #print STDERR "$num_deps\n";
+    if ( @error_sentences && $error_sentences[ 0 ] == $num_deps + 1 ) {
+        my $line = shift @error_sentences;
+        print "$offset\t$new_offset\tsentence id=\"s" . $sentence_id++ . "\" parse_status=\"no successful parse\"\n\n";
+        print STDERR "Line $line is skipped\n";
+        ++$num_deps;
+    } elsif ( $sentence =~ /^\s*$/ ) {
+        # empty sentence
+        ##print " parse_status=\"empty line\"\n";
+        <DEP> unless $ignore_blank_line;
+    } else {
+        print "$offset\t$new_offset\tsentence id=\"s" . $sentence_id++ . "\" parse_status=\"success\"\n";
+        ++$num_deps;
+        my %words = ();
+        while ( my $line = <DEP> ) {
+            chop;
+            last if $line =~ /^\s*$/;
+            if ( my( $id, $surface, $base, $pos, $base_pos, $dep, $rel )
+                 = $line =~ /^\t*(\d+)\t+([^\t]+)\t+([^\t]+)\t+(\S+)\t+(\S+)\t+(\d+)\t+(\S+).*$/ ) {
+                $surface = &escape_word( $surface );
+                $base = &escape_base( $base );
+                $pos = &escape_word( $pos );
+                $rel = &escape_label( $rel );
+                $words{ $id } = [ $tok_id, $surface, $base, $pos, $dep, $rel ];
+                ++$tok_id;
+                ++$dep_labels{ $rel };
+            } else {
+                print STDERR "Illegal format: $line\n";
+            }
+        }
+        my $position = 0;
+        my @ids = sort { $a <=> $b } keys %words;
+        foreach my $id ( @ids ) {
+            my( $tid, $word, $base, $pos, $dep, $rel ) = @{ $words{ $id } };
+            my( $left, $right ) = &find_word( $word, $sentence, $position );
+            $position = $right;
+            $left += $offset;
+            $right += $offset;
+            my $dep_tid = ( $rel =~ /^ROOT/ ) ? "ROOT" : "t" . $words{ $dep }[ 0 ];
+            print "$left\t$right\ttok id=\"t$tid\" base=\"$base\" pos=\"$pos\" $rel=\"$dep_tid\"\n";
+        }
+        print "\n";
+    }
+    $offset = $new_offset + 1;
+}
+
+close TXT;
+close DEP;
+
+if ( $label_file ) {
+    open LABEL, ">$label_file" or die "Cannot open label file: $label_file\n";
+    foreach my $label ( sort( keys %dep_labels ) ) {
+        print LABEL "$label\n";
+    }
+    close LABEL;
+}
+
