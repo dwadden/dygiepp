@@ -14,6 +14,7 @@ import json
 from sys import argv
 from os import path
 import os
+import sys
 
 import numpy as np
 import torch
@@ -23,6 +24,12 @@ from allennlp.common.util import import_submodules
 from allennlp.data import DatasetReader
 from allennlp.data.dataset import Batch
 from allennlp.nn import util as nn_util
+
+# Hack to get dygie on Pythonpath, since we're not predicing using Allennlp CLI.
+path_to_add = os.path.dirname(os.path.realpath(__file__))
+for _ in range(2):
+    path_to_add = os.path.dirname(path_to_add)
+sys.path.append(path_to_add)
 
 from dygie.data.iterators.document_iterator import DocumentIterator
 

@@ -1,5 +1,6 @@
 import json
 from dygie.models.shared import fields_to_batches
+from collections import Counter
 import numpy as np
 
 
@@ -220,6 +221,9 @@ class Relation:
     def __repr__(self):
         return self.pair[0].__repr__() + ", " + self.pair[1].__repr__() + ": " + self.label
 
+    def __eq__(self, other):
+        return (self.pair == other.pair) and (self.label == other.label)
+
 
 class Event:
     def __init__(self, event, text, sentence_start):
@@ -310,3 +314,56 @@ class ClusterMember:
 
     def __repr__(self):
         return f"<{self.sentence.sentence_ix}> " + self.span.__repr__()
+
+
+####################
+
+# Code to do evaluation of predictions for a loaded dataset.
+
+def safe_div(num, denom):
+    if denom > 0:
+        return num / denom
+    else:
+        return 0
+
+
+def compute_f1(predicted, gold, matched):
+    # F1 score.
+    precision = safe_div(matched, predicted)
+    recall = safe_div(matched, gold)
+    f1 = safe_div(2 * precision * recall, precision + recall)
+    return dict(precision=precision, recall=recall, f1=f1)
+
+
+def evaluate_sent(sent, counts):
+    # Entities.
+    counts["ner_gold"] += len(sent.ner)
+    counts["ner_predicted"] += len(sent.predicted_ner)
+    for prediction in sent.predicted_ner:
+        if any([prediction == actual for actual in sent.ner]):
+            counts["ner_matched"] += 1
+
+    # Relations.
+    counts["relations_gold"] += len(sent.relations)
+    counts["relations_predicted"] += len(sent.predicted_relations)
+    for prediction in sent.predicted_relations:
+        if any([prediction == actual for actual in sent.relations]):
+            counts["relations_matched"] += 1
+
+    # Return the updated counts.
+    return counts
+
+
+def evaluate_predictions(dataset):
+    counts = Counter()
+
+    for doc in dataset:
+        for sent in doc:
+            counts = evaluate_sent(sent, counts)
+
+    scores_ner = compute_f1(
+        counts["ner_predicted"], counts["ner_gold"], counts["ner_matched"])
+    scores_relations = compute_f1(
+        counts["relations_predicted"], counts["relations_gold"], counts["relations_matched"])
+
+    return dict(ner=scores_ner, relation=scores_relations)
