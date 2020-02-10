@@ -171,6 +171,8 @@ allennlp predict pretrained/scierc.tar.gz \
     --cuda-device 0
 ```
 
+**Caveat**: Models trained to predict coreference clusters will make predictions on a whole document at once. This can cause memory issues. If you just need entity and relation extraction, re-train a model with the [coref loss weight](https://github.com/dwadden/dygiepp/blob/master/training_config/scierc_working_example.jsonnet#L50) set to 0. During evaluation, models with no coref objective will predict a sentence at a time, mitigating the memory issues.
+
 See the [docs](https://allenai.github.io/allennlp-docs/api/commands/predict/) for more prediction options.
 
 ## Relation extraction evaluation metric
