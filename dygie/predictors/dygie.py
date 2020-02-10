@@ -12,9 +12,6 @@ from allennlp.data import DatasetReader
 from allennlp.models import Model
 from allennlp.predictors.predictor import Predictor
 
-import sys
-from IPython.core.ultratb import FormattedTB
-sys.excepthook = FormattedTB(mode='Verbose', color_scheme='Linux', call_pdb=1)
 
 @Predictor.register("dygie")
 class DyGIEPredictor(Predictor):

@@ -159,10 +159,17 @@ Similarly for GENIA:
 
 ### Predicting
 
-To make a prediction on the SciERC test set with the pretrained SciERC model, run the script `bash ./scripts/predict/predict_scierc_pretrained.sh`. The predictions will be output to `predictions/scierc_test.json`. The gold labels are also included for easy comparison. All predicted fields start with the prefix `predicted_`, for instance `predicted_ner`.
+To make a prediction, you can use `allennlp predict`. For example, to make a prediction with the pretrained scierc model, you can do:
 
-The prediction code should work but is not cleaned up yet, so please file an issue if you run into problems!
+allennlp predict pretrained/scierc.tar.gz \
+    data/scierc/processed_data/json/test.json \
+    --predictor dygie \
+    --include-package dygie \
+    --use-dataset-reader \
+    --output-file predictions/scierc-test.jsonl \
+    --cuda-device 0
 
+See the [docs](https://allenai.github.io/allennlp-docs/api/commands/predict/) for more prediction options.
 
 ## Relation extraction evaluation metric
 
