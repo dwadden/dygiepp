@@ -12,6 +12,9 @@ from allennlp.data import DatasetReader
 from allennlp.models import Model
 from allennlp.predictors.predictor import Predictor
 
+import sys
+from IPython.core.ultratb import FormattedTB
+sys.excepthook = FormattedTB(mode='Verbose', color_scheme='Linux', call_pdb=1)
 
 @Predictor.register("dygie")
 class DyGIEPredictor(Predictor):
@@ -91,7 +94,8 @@ class DyGIEPredictor(Predictor):
         predictions["doc_key"] = doc_key
         predictions["sentences"] = [x["metadata"]["sentence"] for x in instance]
         for k, v in decoded_instance.items():
-            if all([not x for x in v]):
+            # If we didn't train on this task, don't predict on it.
+            if self._model._loss_weights[k] == 0:
                 continue
             predictions[self._decode_names[k]] = self._cleanup(
                 k, v, sentence_starts)

@@ -1,4 +1,5 @@
 import json
+import copy
 from dygie.models.shared import fields_to_batches
 from collections import Counter
 import numpy as np
@@ -18,10 +19,27 @@ def get_sentence_of_span(span, sentence_starts, doc_tokens):
 
 
 class Dataset:
-    def __init__(self, json_file):
-        with open(json_file) as f:
-            self.js = [json.loads(line) for line in f]
+    def __init__(self, json_file, pred_file=None):
+        self.js = self._read(json_file, pred_file)
         self.documents = [Document(js) for js in self.js]
+
+    def _read(self, json_file, pred_file=None):
+        gold_docs = [json.loads(line) for line in open(json_file)]
+        if pred_file is None:
+            return gold_docs
+
+        pred_docs = [json.loads(line) for line in open(pred_file)]
+        merged_docs = []
+        for gold, pred in zip(gold_docs, pred_docs):
+            assert gold["doc_key"] == pred["doc_key"]
+            assert gold["sentences"] == pred["sentences"]
+            merged = copy.deepcopy(gold)
+            for k, v in pred.items():
+                if "predicted" in k:
+                    merged[k] = v
+            merged_docs.append(merged)
+
+        return merged_docs
 
     def __getitem__(self, ix):
         return self.documents[ix]
