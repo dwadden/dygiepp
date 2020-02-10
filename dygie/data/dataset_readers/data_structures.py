@@ -226,6 +226,7 @@ class NER:
                 self.label == other.label and
                 self.flavor == other.flavor)
 
+
 class Relation:
     def __init__(self, relation, text, sentence_start):
         start1, end1 = relation[0], relation[1]
@@ -241,6 +242,24 @@ class Relation:
 
     def __eq__(self, other):
         return (self.pair == other.pair) and (self.label == other.label)
+
+
+class AtomicRelation:
+    def __init__(self, ent0, ent1, label):
+        self.ent0 = ent0
+        self.ent1 = ent1
+        self.label = label
+
+    @classmethod
+    def from_relation(cls, relation):
+        ent0 = " ".join(relation.pair[0].text)
+        ent1 = " ".join(relation.pair[1].text)
+        label = relation.label
+        return cls(ent0, ent1, label)
+
+    def __repr__(self):
+        return f"({self.ent0} | {self.ent1} | {self.label})"
+
 
 
 class Event:
