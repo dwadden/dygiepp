@@ -122,12 +122,15 @@ class IEJsonReader(DatasetReader):
     Reads a single JSON-formatted file. This is the same file format as used in the
     scierc, but is preprocessed
     """
+    # The predict_hack flag was added post_hoc when I realized I needed to
+    # return full documents as a single batch when doing prediction.
     def __init__(self,
                  max_span_width: int,
                  token_indexers: Dict[str, TokenIndexer] = None,
                  context_width: int = 1,
                  debug: bool = False,
-                 lazy: bool = False) -> None:
+                 lazy: bool = False,
+                 predict_hack: bool = False) -> None:
         super().__init__(lazy)
         assert (context_width % 2 == 1) and (context_width > 0)
         self.k = int( (context_width - 1) / 2)
@@ -135,6 +138,7 @@ class IEJsonReader(DatasetReader):
         self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
         self._debug = debug
         self._n_debug_docs = 10
+        self._predict_hack = predict_hack
 
     @overrides
     def _read(self, file_path: str):
@@ -179,6 +183,9 @@ class IEJsonReader(DatasetReader):
             zipped = zip(js["sentences"], js["ner"], js["relations"], js["events"], js["sentence_groups"], js["sentence_start_index"], js["sentence_end_index"])
 
             # Loop over the sentences.
+            if self._predict_hack:
+                instances = []
+
             for sentence_num, (sentence, ner, relations, events, groups, start_ix, end_ix) in enumerate(zipped):
 
                 sentence_end = sentence_start + len(sentence) - 1
@@ -193,7 +200,14 @@ class IEJsonReader(DatasetReader):
                 instance = self.text_to_instance(
                     sentence, ner_dict, relation_dict, cluster_dict, trigger_dict, argument_dict,
                     doc_key, dataset, sentence_num, groups, start_ix, end_ix)
-                yield instance
+
+                if self._predict_hack:
+                    instances.append(instance)
+                else:
+                    yield instance
+
+            if self._predict_hack:
+                yield(instances)
 
 
     @overrides
