@@ -17,6 +17,10 @@ from allennlp.predictors.predictor import Predictor
 class DyGIEPredictor(Predictor):
     """
     Predictor for DyGIE model.
+
+    If model was trained on coref, prediction is done on a whole document at
+    once. This risks overflowing memory on large documents.
+    If the model was trained without coref, prediction is done by sentence.
     """
     def __init__(
             self, model: Model, dataset_reader: DatasetReader) -> None:
@@ -66,8 +70,14 @@ class DyGIEPredictor(Predictor):
 
         decoded_instance = {x: [] for x in self._decode_fields}
 
-        for sentence in instance:
-            dataset = Batch([sentence])
+        # If we're doing coref, predict on the whole document together. This may
+        # run out of memory. Otherwise just predict a sentence at a time.
+        if self._model._loss_weights["coref"]:
+            batches = [Batch(instance)]
+        else:
+            batches = [Batch([sentence]) for sentence in instance]
+
+        for dataset in batches:
             dataset.index_instances(model.vocab)
             model_input = util.move_to_device(dataset.as_tensor_dict(), cuda_device)
             pred = model(**model_input)
