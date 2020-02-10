@@ -161,6 +161,7 @@ Similarly for GENIA:
 
 To make a prediction, you can use `allennlp predict`. For example, to make a prediction with the pretrained scierc model, you can do:
 
+```
 allennlp predict pretrained/scierc.tar.gz \
     data/scierc/processed_data/json/test.json \
     --predictor dygie \
@@ -168,6 +169,7 @@ allennlp predict pretrained/scierc.tar.gz \
     --use-dataset-reader \
     --output-file predictions/scierc-test.jsonl \
     --cuda-device 0
+```
 
 See the [docs](https://allenai.github.io/allennlp-docs/api/commands/predict/) for more prediction options.
 
