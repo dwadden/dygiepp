@@ -31,14 +31,14 @@ Each line has (at least some of) the following items:
      [[13, 13, 17, 17, "Elected-In"]]
    ]
    ```
-- `clusters`: The coreference clusters. This is a nested list, but here each sublist gives the spans of each mention in the coreference cluster. Clusters can cross sentence boundaries. For instance,
+- `clusters`: The coreference clusters. This is a nested list, but here each sublist gives the spans of each mention in the coreference cluster. Clusters can cross sentence boundaries. For instance, the first cluster in this example is for Seattle and the second is for the mayor.
   ```json
   [
     [
-      [0, 0], [9, 10]  // Seattle cluster.
+      [0, 0], [9, 10]
     ],
     [
-      [6, 7], [13, 13]  // Mayor Durkan cluster.
+      [6, 7], [13, 13]
     ]
   ]
   ```
