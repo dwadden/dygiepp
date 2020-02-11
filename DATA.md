@@ -2,7 +2,56 @@ We provide details on the data preprocessing for each of the datasets available 
 
 ## Data format
 
-TODO
+After preprocessing, all the datasets will be formatted like the [SciERC dataset](http://nlp.cs.washington.edu/sciIE/). After downloading the data, you can look at `data/scierc/processed_data/json/train.json` as an example. Each line in the dataset is a JSON representation of a document (technically, the files should be given the `.jsonl` extension since each line is a JSON object, sorry for the confusion).
+
+Each line has (at least some of) the following items:
+
+- `doc_key`: A unique string identifier for the document.
+- `sentences`: The senteces in the document, written as a nested list of tokens. For instance,
+  ```json
+  [
+    ["Seattle", "is", "a", "rainy", "city", "."],
+    ["Jenny", "Durkan", "is", "the", "city's", "mayor", "."],
+    ["She", "was", "elected", "in", "2017", "."]
+  ]
+  ```
+- `ner`: The named entities in the document, written as a nested list - one sublist per sentence. Each list entry is of the form `[start_tok, end_tok, label]`. The `start_tok` and `end_tok` token indices are with respect to the _document_, not the sentence. For instance the entities in the sentence above might be:
+  ```json
+  [
+    [[0, 0, "City"]],
+    [[6, 7, "Person"], [9, 10, "City"]],
+    [[13, 13, "Person"], [17, 17, "Year"]]
+  ]
+  ```
+- `relations`: The relations in the document, also one sublist per sentence. Each list entry is of the form `[start_tok_1, end_tok_1, start_tok_2, end_tok_2, label]`.
+   ```json
+   [
+     [],
+     [[6, 7, 9, 10, "Mayor-Of"]],
+     [[13, 13, 17, 17, "Elected-In"]]
+   ]
+   ```
+- `clusters`: The coreference clusters. This is a nested list, but here each sublist gives the spans of each mention in the coreference cluster. Clusters can cross sentence boundaries. For instance,
+  ```json
+  [
+    [
+      [0, 0], [9, 10]  // Seattle cluster.
+    ],
+    [
+      [6, 7], [13, 13]  // Mayor Durkan cluster.
+    ]
+  ]
+  ```
+
+The `Dataset` class in `dygie/data/dataset_readers/data_structures.py` provides some convenience functions to view the annotations. This class isn't "officially supported", but here's an example.
+
+```python
+from dygie.data.dataset_readers.data_structures import Dataset
+
+data = Dataset("data/scierc/processed_data/json/train.json")
+print(data[0])  # Print the first document.
+print(data[0][1].ner)  # Print the named entities in the second sentence of the first document.
+```
 
 ## SciERC
 
