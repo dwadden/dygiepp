@@ -45,7 +45,7 @@ The steps are similar to SciERC.
 
 #### Creating the dataset
 
-For more information on ACE relation and event preprocessing, see [DATA.md](DATA.md) or [this issue](https://github.com/dwadden/dygiepp/issues/11).
+For more information on ACE relation and event preprocessing, see [DATA.md](DATA.md) and [this issue](https://github.com/dwadden/dygiepp/issues/11).
 
 We use preprocessing code adapted from the [DyGIE repo](https://github.com/luanyi/DyGIE), which is in turn adapted from the [LSTM-ER repo](https://github.com/tticoin/LSTM-ER). The following software is required:
 - Java, to run CoreNLP.
