@@ -103,8 +103,15 @@ In progress.
 
 ## Evaluating a model
 
-To check the performance of one of your models or a pretrained model,, you can use the `allennlp evaluate` command. In general, it can be used like this:
+To check the performance of one of your models or a pretrained model, you can use the `allennlp evaluate` command.
 
+Note that `allennlp` commands will only be able to discover the code in this package if:
+- You run the commands from the root folder of this project, `dygiepp`, or:
+- You add the code to your Python path by running `conda develop .` from the root folder of this project.
+
+Otherwise, you will get an error `ModuleNotFoundError: No module named 'dygie'`.
+
+In general, you can make evaluate a model like this:
 ```shell
 allennlp evaluate \
   [model-file] \
@@ -140,7 +147,7 @@ We have versions of DyGIE++ trained on SciERC and GENIA available. More coming s
 Run `./scripts/pretrained/get_dygiepp_pretrained.sh` to download all the available pretrained models to the `pretrained` directory. If you only want one model, here are the download links:
 
 - [SciERC](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/scierc.tar.gz)
-- [GENIA](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/scierc.tar.gz)
+- [GENIA](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/genia.tar.gz)
 
 #### Performance of downloaded models
 
@@ -159,7 +166,7 @@ Similarly for GENIA:
 2019-11-21 14:45:44,505 - INFO - allennlp.commands.evaluate - ner_f1: 0.7818707451272466
 ```
 
-### Predicting
+## Making predictions
 
 To make a prediction, you can use `allennlp predict`. For example, to make a prediction with the pretrained scierc model, you can do:
 
