@@ -140,6 +140,20 @@ class IEJsonReader(DatasetReader):
         self._n_debug_docs = 10
         self._predict_hack = predict_hack
 
+    def add_context(self, sentences, n_sentences, sentence_context_width=1):
+        k = sentence_context_width
+        sentences_with_context = [[self._normalize_word(word) for sentence in sentences[max(0, i-self.k):min(n_sentences, i + self.k + 1)] for word in sentence] for i in range(n_sentences)]
+        sentence_start_ixs = [sum(len(sentences[i-j-1]) for j in range(min(self.k, i))) if i > 0 else 0 for i in range(n_sentences)]
+        sentence_end_ixs = [sentence_start_ixs[i] + len(sentences[i]) for i in range(n_sentences)]
+        for sentence_group_nr in range(len(sentences_with_context)):
+            if len(sentences_with_context[sentence_group_nr]) > 300:
+                sentences_with_context[sentence_group_nr] = sentences[sentence_group_nr]
+                sentence_start_ixs[sentence_group_nr] = 0
+                sentence_end_ixs[sentence_group_nr] = len(sentences[sentence_group_nr])
+                print("Warning: Long sentences with more than 512 word-part tokens will break the BERT embedder. Welcoming a PR to make even longer context possible")
+        
+        return (sentences_with_context, sentence_start_ixs, sentence_end_ixs)
+
     @overrides
     def _read(self, file_path: str):
         # if `file_path` is a URL, redirect to the cache
@@ -161,17 +175,8 @@ class IEJsonReader(DatasetReader):
             # If some fields are missing in the data set, fill them with empties.
             # TODO(dwadden) do this more cleanly once things are running.
             n_sentences = len(js["sentences"])
-            # TODO(Ulme) Make it so that the
-            js["sentence_groups"] = [[self._normalize_word(word) for sentence in js["sentences"][max(0, i-self.k):min(n_sentences, i + self.k + 1)] for word in sentence] for i in range(n_sentences)]
-            js["sentence_start_index"] = [sum(len(js["sentences"][i-j-1]) for j in range(min(self.k, i))) if i > 0 else 0 for i in range(n_sentences)]
-            js["sentence_end_index"] = [js["sentence_start_index"][i] + len(js["sentences"][i]) for i in range(n_sentences)]
-            for sentence_group_nr in range(len(js["sentence_groups"])):
-                if len(js["sentence_groups"][sentence_group_nr]) > 300:
-                    js["sentence_groups"][sentence_group_nr] = js["sentences"][sentence_group_nr]
-                    js["sentence_start_index"][sentence_group_nr] = 0
-                    js["sentence_end_index"][sentence_group_nr] = len(js["sentences"][sentence_group_nr])
-                    if len(js["sentence_groups"][sentence_group_nr])>300:
-                        import ipdb;
+            (js["sentences_with_context"], js["sentence_start_ixs"], js["sentence_end_ixs"]) = self.add_context(js["sentences"], n_sentences, self.k)
+
             if "clusters" not in js:
                 js["clusters"] = []
             for field in ["ner", "relations", "events"]:
@@ -179,8 +184,7 @@ class IEJsonReader(DatasetReader):
                     js[field] = [[] for _ in range(n_sentences)]
 
             cluster_dict_doc = make_cluster_dict(js["clusters"])
-            #zipped = zip(js["sentences"], js["ner"], js["relations"], js["events"])
-            zipped = zip(js["sentences"], js["ner"], js["relations"], js["events"], js["sentence_groups"], js["sentence_start_index"], js["sentence_end_index"])
+            zipped = zip(js["sentences"], js["ner"], js["relations"], js["events"], js["sentences_with_context"], js["sentence_start_ixs"], js["sentence_end_ixs"])
 
             # Loop over the sentences.
             if self._predict_hack:

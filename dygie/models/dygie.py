@@ -174,39 +174,31 @@ class DyGIE(Model):
 
         text_embeddings = self._lexical_dropout(text_embeddings)
 
-        # Shape: (batch_size, max_sentence_length)
-        text_mask = util.get_text_field_mask(text).float()
-        sentence_group_lengths = text_mask.sum(dim=1).long()
-
-        sentence_lengths = 0*text_mask.sum(dim=1).long()
-        for i in range(len(metadata)):
-            sentence_lengths[i] = metadata[i]["end_ix"] - metadata[i]["start_ix"]
-            for k in range(sentence_lengths[i], sentence_group_lengths[i]):
-                text_mask[i][k] = 0
+        # Lengths of sentences as well as of sentences with surrounding context
+        sentence_lengths = torch.tensor([len(el["sentence"]) for el in metadata])
+        sentence_group_lengths = torch.tensor([len(el["groups"]) for el in metadata])
 
         max_sentence_length = sentence_lengths.max().item()
 
-        # TODO(Ulme) Speed this up by tensorizing
-        new_text_embeddings = torch.zeros([text_embeddings.shape[0], max_sentence_length, text_embeddings.shape[2]], device=text_embeddings.device)
-        for i in range(len(new_text_embeddings)):
-            new_text_embeddings[i][0:metadata[i]["end_ix"] - metadata[i]["start_ix"]] = text_embeddings[i][metadata[i]["start_ix"]:metadata[i]["end_ix"]]
+        # Create text mask for current sentence
+        # Shape: (batch_size, max_sentence_length)
+        text_mask = self.create_text_mask(text_embeddings.shape[0], sentence_lengths, max_sentence_length)
 
-        #max_sent_len = max(sentence_lengths)
-        #the_list = [list(k+metadata[i]["start_ix"] if k < max_sent_len else 0 for k in range(text_embeddings.shape[1])) for i in range(len(metadata))]
-        #import ipdb; ipdb.set_trace()
-        #text_embeddings = torch.gather(text_embeddings, 1, torch.tensor(the_list, device=text_embeddings.device).unsqueeze(2).repeat(1, 1, text_embeddings.shape[2]))
-        text_embeddings = new_text_embeddings
+        # Extract text embeddings for the words in the current sentence only
+        # Shape: (batch_size, max_sentence_length, emb_dim)
+        text_embeddings = self.extract_current_sentence_embeddings(text_embeddings, sentence_lengths, metadata, max_sentence_length)
 
+        # Done(Ulme): Removed the dims on these lines below since they are already right shape
         # Only keep the text embeddings that correspond to actual tokens.
-        # text_embeddings = text_embeddings[:, :max_sentence_length, :].contiguous()
-        text_mask = text_mask[:, :max_sentence_length].contiguous()
+        # text_embeddings = text_embeddings.contiguous()
+        text_mask = text_mask.contiguous()
 
         # Shape: (batch_size, max_sentence_length, encoding_dim)
         contextualized_embeddings = self._lstm_dropout(self._context_layer(text_embeddings, text_mask))
         assert spans.max() < contextualized_embeddings.shape[1]
 
         if self._attentive_span_extractor is not None:
-            # Shape: (batch_size, num_spans, emebedding_size)
+            # Shape: (batch_size, num_spans, embedding_size)
             attended_span_embeddings = self._attentive_span_extractor(text_embeddings, spans)
 
         # Shape: (batch_size, num_spans)
@@ -315,6 +307,22 @@ class DyGIE(Model):
         #     self._joint_metrics(decoded_ner, decoded_events)
 
         return output_dict
+
+    def create_text_mask(self, batch_size, sentence_lengths, max_sentence_length):
+        text_mask = torch.zeros([batch_size, max_sentence_length])
+        for i, el in enumerate(sentence_lengths):
+            text_mask[i, range(el)] = 1
+        return text_mask
+
+    def extract_current_sentence_embeddings(self, text_embeddings, sentence_lengths, metadata, max_sentence_length):
+
+        # Copy over the text embeddings for the current sentence only
+        new_text_emb_dims = [text_embeddings.shape[0], max_sentence_length, text_embeddings.shape[2]]
+        new_text_embeddings = torch.zeros(new_text_emb_dims, device=text_embeddings.device)
+        for i in range(len(new_text_embeddings)):
+            new_text_embeddings[i][0:sentence_lengths[i]] = text_embeddings[i][metadata[i]["start_ix"]:metadata[i]["end_ix"]]
+
+        return new_text_embeddings
 
     def update_span_embeddings(self, span_embeddings, span_mask, top_span_embeddings, top_span_mask, top_span_indices):
         # TODO(Ulme) Speed this up by tensorizing
