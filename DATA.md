@@ -23,6 +23,7 @@ Each line has (at least some of) the following items:
     [[13, 13, "Person"], [17, 17, "Year"]]
   ]
   ```
+  These entity types are just an example; they don't reflect an entity schema for an actual dataset.
 - `relations`: The relations in the document, also one sublist per sentence. Each list entry is of the form `[start_tok_1, end_tok_1, start_tok_2, end_tok_2, label]`.
    ```json
    [
@@ -42,6 +43,24 @@ Each line has (at least some of) the following items:
     ]
   ]
   ```
+
+The SciERC dataset does not have any event data. To see an example of event data, run the ACE event preprocessing steps described in [README.md] and look at one of the files in `data/ace-event/processed-data`. You will see the following additional field:
+- `events`: The events in the document, with one sublist per sentence. An event with `N` arguments will be written as a list of the form `[[trigger_tok, event_type], [start_tok_arg1, end_tok_arg1, arg1_type], [start_tok_arg2, end_tok_arg2, arg2_type], ..., [start_tok_argN, end_tok_argN, argN_type]]`. Note that in ACE, event triggers can only be a single token. For instance,
+  ```json
+  [
+    [],
+    [],
+    [
+      [
+        [15, "Peronnel.Election"],
+        [13, 13, "Person"],
+        [17, 17, "Date"]
+      ]
+    ]
+
+  ]
+  ```
+There may also be a `sentence_start` field indicating the token index of the start of each sentence with respect to the document. This can be ignored.
 
 The `Dataset` class in `dygie/data/dataset_readers/data_structures.py` provides some convenience functions to view the annotations. This class isn't "officially supported", but here's an example.
 
