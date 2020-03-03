@@ -44,7 +44,7 @@ Each line has (at least some of) the following items:
   ]
   ```
 
-The SciERC dataset does not have any event data. To see an example of event data, run the ACE event preprocessing steps described in [README.md] and look at one of the files in `data/ace-event/processed-data`. You will see the following additional field:
+The SciERC dataset does not have any event data. To see an example of event data, run the ACE event preprocessing steps described in the [README](README.md) and look at one of the files in `data/ace-event/processed-data`. You will see the following additional field:
 - `events`: The events in the document, with one sublist per sentence. An event with `N` arguments will be written as a list of the form `[[trigger_tok, event_type], [start_tok_arg1, end_tok_arg1, arg1_type], [start_tok_arg2, end_tok_arg2, arg2_type], ..., [start_tok_argN, end_tok_argN, argN_type]]`. Note that in ACE, event triggers can only be a single token. For instance,
   ```json
   [
