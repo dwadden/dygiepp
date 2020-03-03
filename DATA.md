@@ -57,7 +57,6 @@ The SciERC dataset does not have any event data. To see an example of event data
         [17, 17, "Date"]
       ]
     ]
-
   ]
   ```
 There may also be a `sentence_start` field indicating the token index of the start of each sentence with respect to the document. This can be ignored.
