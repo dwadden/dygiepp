@@ -61,10 +61,10 @@ class Document:
                           for sentence_ix, (entry, sentence_start)
                           in enumerate(zip(entries, sentence_starts))]
         if "clusters" in js:
-            self.clusters = [Cluster(entry, i, self)
+            self.clusters = [Cluster(entry, i, self, predicted=False)
                              for i, entry in enumerate(js["clusters"])]
         if "predicted_clusters" in js:
-            self.predicted_clusters = [Cluster(entry, i, self)
+            self.predicted_clusters = [Cluster(entry, i, self, predicted=True)
                                        for i, entry in enumerate(js["predicted_clusters"])]
 
     def __repr__(self):
@@ -320,13 +320,17 @@ class Events:
 
 
 class Cluster:
-    def __init__(self, cluster, cluster_id, document):
+    def __init__(self, cluster, cluster_id, document, predicted):
         members = []
         for entry in cluster:
             sentence_ix = get_sentence_of_span(entry, document.sentence_starts, document.n_tokens)
             sentence = document[sentence_ix]
             span = Span(entry[0], entry[1], sentence.text, sentence.sentence_start)
-            ners = [x for x in sentence.ner if x.span == span]
+            # If we're doing predicted clusters, use the predicted entities.
+            if predicted:
+                ners = [x for x in sentence.predicted_ner if x.span == span]
+            else:
+                ners = [x for x in sentence.ner if x.span == span]
             assert len(ners) <= 1
             ner = ners[0] if len(ners) == 1 else None
             to_append = ClusterMember(span, ner, sentence, cluster_id)
