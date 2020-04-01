@@ -9,6 +9,7 @@ This repository is under construction and we're in the process of adding support
 - [Model training](#training-a-model)
 - [Model evaluation](#evaluating-a-model)
 - [Pretrained models](#pretrained-models)
+- [Making predictions](#making-predictions)
 
 
 ## Dependencies
@@ -31,6 +32,7 @@ To train a model for named entity recognition, relation extraction, and corefere
 
 - **Download the data**. From the top-level folder for this repo, enter `bash ./scripts/data/get_scierc.sh`. This will download the scierc dataset into a folder `./data/scierc`
 - **Train the model**. Enter `bash ./scripts/train/train_scierc.sh [gpu-id]`. The `gpu-id` should be an integer like `1`, or `-1` to train on CPU. The program will train a model and save a model at `./models/scierc`.
+- To train a "lightweight" version of the model that doesn't do coreference propagation, do `bash ./scripts/train/train_scierc_lightweight.sh [gpu-id]` instead. The result will go in `./models/scierc-lightweight`. More info on why you'd want to do this in the section on [making predictions](#making-predictions).
 
 
 ### GENIA
@@ -140,13 +142,14 @@ allennlp evaluate \
 
 ## Pretrained models
 
-We have versions of DyGIE++ trained on SciERC and GENIA available. More coming soon.
+We have versions of DyGIE++ trained on SciERC and GENIA available. We also have a "lightweight" version of SciERC trained without coreference propagation. See details on this in the caveat below.
 
 ### Downloads
 
 Run `./scripts/pretrained/get_dygiepp_pretrained.sh` to download all the available pretrained models to the `pretrained` directory. If you only want one model, here are the download links:
 
 - [SciERC](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/scierc.tar.gz)
+- [SciERC lightweight (no coref)](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/scierc-lightweight.tar.gz)
 - [GENIA](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/genia.tar.gz)
 
 #### Performance of downloaded models
@@ -159,6 +162,16 @@ The SciERC model gives slightly better test set performance than reported in the
 2019-11-20 16:03:12,693 - INFO - allennlp.commands.evaluate - _ner_f1: 0.6855290303565666
 ...
 2019-11-20 16:03:12,693 - INFO - allennlp.commands.evaluate - rel_f1: 0.4867781975175391
+```
+
+The lightweight version of SciERC does slightly worse, but should be more memory-friendly.
+
+```
+2020-03-31 21:23:34,708 - INFO - allennlp.commands.evaluate - Finished evaluating.
+...
+2020-03-31 21:23:34,709 - INFO - allennlp.commands.evaluate - _ner_f1: 0.6778959810874204
+...
+2020-03-31 21:23:34,709 - INFO - allennlp.commands.evaluate - rel_f1: 0.4638157894736842
 ```
 
 Similarly for GENIA:
@@ -180,7 +193,10 @@ allennlp predict pretrained/scierc.tar.gz \
     --cuda-device 0
 ```
 
-**Caveat**: Models trained to predict coreference clusters will make predictions on a whole document at once. This can cause memory issues. If you just need entity and relation extraction, re-train a model with the [coref loss weight](https://github.com/dwadden/dygiepp/blob/master/training_config/scierc_working_example.jsonnet#L50) set to 0. During evaluation, models with no coref objective will predict a sentence at a time, mitigating the memory issues.
+**Caveat**: Models trained to predict coreference clusters need to make predictions on a whole document at once. This can cause memory issues. To get around this there are two options:
+
+- Make predictions using a model that doesn't do coreference propagation. These models predict a sentence at a time, and shouldn't run into memory issues. For SciERC, use `scierc-lightweight`. To train your own coref-free model, set [coref loss weight](https://github.com/dwadden/dygiepp/blob/master/training_config/scierc_working_example.jsonnet#L50) to 0 in the relevant training config.
+- Split documents up into smaller chunks (5 sentences should be safe), make predictions using a model with coref prop, and stitch things back together.
 
 See the [docs](https://allenai.github.io/allennlp-docs/api/commands/predict/) for more prediction options.
 
