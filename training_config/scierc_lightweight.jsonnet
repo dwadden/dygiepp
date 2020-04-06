@@ -1,6 +1,6 @@
 // Import template file.
 
-local template = import "/data/dwadden/proj/dygie/dygiepp/training_config/template_dw.libsonnet";
+local template = import "template_dw.libsonnet";
 
 ////////////////////
 
