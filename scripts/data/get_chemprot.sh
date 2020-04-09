@@ -18,3 +18,6 @@ done
 rm -r $unzip_dir/__MACOSX
 rm -r $unzip_dir/*.zip
 rm -r $out_dir/raw_data/ChemProt_Corpus.zip
+
+# Get rid of the `_gs` suffix on the test data.
+python scripts/data/chemprot/01_rename_test.py
