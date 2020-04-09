@@ -12,7 +12,7 @@ unzip $out_dir/raw_data/ChemProt_Corpus.zip -d $out_dir/raw_data
 unzip_dir=$out_dir/raw_data/ChemProt_Corpus
 ls $unzip_dir | while read name
 do
-    unzip $unzip_dir/$name -d $unzip_dir
+    unzip -q $unzip_dir/$name -d $unzip_dir
 done
 
 rm -r $unzip_dir/__MACOSX
@@ -21,3 +21,10 @@ rm -r $out_dir/raw_data/ChemProt_Corpus.zip
 
 # Get rid of the `_gs` suffix on the test data.
 python scripts/data/chemprot/01_rename_test.py
+
+# Run formatting.
+mkdir $out_dir/processed_data
+python scripts/data/chemprot/02_chemprot_to_input.py
+
+# Spot-check output
+python scripts/data/chemprot/03_spot_check.py

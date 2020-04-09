@@ -1,12 +1,12 @@
+# Courtesy of Jiechen Chen https://www.linkedin.com/in/jiechen-chen/.
+
 import os
 import json
 import csv
 
 import spacy
-import scispacy
 
-DIRECTORY = "dygiepp/data/chemprot"
-RAW_SUBDIRECTORY = "/raw_data/chemprot_test_gs/"
+DIRECTORY = "data/chemprot"
 PROCESSED_SUBDIRECTORY = "/processed_data/"
 nlp = spacy.load("en_core_sci_sm")
 
@@ -120,7 +120,9 @@ def save_entities_info(entities_dict, results):
         results[file_id]['ner'] = ner
         results[file_id]['term_location'] = term_location
 
-    print ("Fraction of annotations thrown out: " + str((special_case)/(special_case + regular_case)))
+    frac_discarded = special_case / (special_case + regular_case)
+    # Throw out cases where the token didn't line up with an entity boundary.
+    print(f"Fraction entities discarded due to entity boundary / token index mismatch: {frac_discarded:0.4f}")
 
 
 def read_relations(file_name):
@@ -161,21 +163,36 @@ def save_relations(relations_dict, results):
                     different_lines += 1
         #relation = sorted(relation, key=lambda x: x[0])
         results[file_id]['relations'] = relation
-    print("Different lines percentage: " + str(different_lines/(different_lines + same_lines)))
+    frac_cross_sent = different_lines / (different_lines + same_lines)
+
+    # Remove relations that cross sentence boundaries.
+    print(f"Fraction cross-sentence relations (discarded): {frac_cross_sent:0.4f}")
 
 
-abstracts_dict = read_abstract(DIRECTORY + RAW_SUBDIRECTORY + 'chemprot_test_abstracts_gs.tsv')
-results = save_abstract_info(abstracts_dict)
-entities_dict = read_entities(DIRECTORY + RAW_SUBDIRECTORY + 'chemprot_test_entities_gs.tsv')
-save_entities_info(entities_dict, results)
-relations_dict = read_relations(DIRECTORY + RAW_SUBDIRECTORY + 'chemprot_test_relations_gs.tsv')
-save_relations(relations_dict, results)
+def process_fold(fold):
+    print(f"Processing fold {fold}.")
+    raw_subdirectory = f"/raw_data/ChemProt_Corpus/chemprot_{fold}/"
+    abstracts_dict = read_abstract(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_abstracts.tsv')
+    results = save_abstract_info(abstracts_dict)
+    entities_dict = read_entities(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_entities.tsv')
+    save_entities_info(entities_dict, results)
+    relations_dict = read_relations(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_relations.tsv')
+    save_relations(relations_dict, results)
 
-with open(DIRECTORY + PROCESSED_SUBDIRECTORY + 'test.jsonl', 'w') as outfile:
-    for file_id in results:
-        print(json.dumps({
-            'doc_key': results[file_id].get('doc_key'),
-            'sentences': results[file_id].get('sentences'),
-            'ner': results[file_id].get('ner'),
-            'relations': results[file_id].get('relations'),
-        }), file=outfile)
+    with open(DIRECTORY + PROCESSED_SUBDIRECTORY + f'{fold}.jsonl', 'w') as outfile:
+        for file_id in results:
+            print(json.dumps({
+                'doc_key': results[file_id].get('doc_key'),
+                'sentences': results[file_id].get('sentences'),
+                'ner': results[file_id].get('ner'),
+                'relations': results[file_id].get('relations'),
+            }), file=outfile)
+
+
+def main():
+    for fold in ["training", "development", "test"]:
+        process_fold(fold)
+
+
+if __name__ == "__main__":
+    main()

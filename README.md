@@ -20,7 +20,7 @@ The necessary dependencies can be installed with `pip install -r requirements.tx
 
 The only dependencies for the modeling code are [AllenNLP](https://allennlp.org/) 0.9.0 and [PyTorch](https://pytorch.org/) 1.2.0. It may run with newer versions, but this is not guarenteed. For PyTorch GPU support, follow the instructions on the [PyTorch](https://pytorch.org/).
 
-For data preprocessing a few additional data and string processing libraries are required including, [Pandas](https://pandas.pydata.org) and [Beautiful Soup 4](https://www.crummy.com/software/BeautifulSoup/bs4/doc/).
+For data preprocessing a few additional data and string processing libraries are required including, [Pandas](https://pandas.pydata.org) [Beautiful Soup 4](https://www.crummy.com/software/BeautifulSoup/bs4/doc/), and [scispacy](scispacy).
 
 Finally, you'll need SciBERT for the scientific datasets. Run `python scripts/pretrained/get_scibert.py` to download and extract the SciBERT model to `./pretrained`.
 

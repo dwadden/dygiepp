@@ -12,3 +12,9 @@ pandas==0.25.2
 beautifulsoup4==4.8.1
 lxml
 python-Levenshtein
+
+# SciSpacy for ChemProt preprocessing.
+
+spacy==2.1.9   # For compatibility.
+scispacy==0.2.3
+https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.2.3/en_core_sci_sm-0.2.3.tar.gz
