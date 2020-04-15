@@ -43,6 +43,15 @@ The steps are similar to SciERC.
 - **Train the model**. Enter `bash ./scripts/train/train_genia.sh [gpu-id]`. The program will train a model and save a model at `./models/genia`.
 
 
+### ChemProt
+
+The [ChemProt](https://biocreative.bioinformatics.udel.edu/news/corpora/chemprot-corpus-biocreative-vi/) corpus contains entity and relation annotations for drug / protein interaction. Follow these steps:
+
+- **Get the data**. Run `bash ./scripts/data/get_chemprot.sh`. This will download the data and process it into the DyGIE input format.
+  - TODO: The processing script `scripts/data/chemprot/02_chemprot_to_input.py` doesn't do the right thing. Right now it tries to align ChemProt entities with entities tagged by SciSpacy. It should ignore the SciSpacy entities entirely and use SciSpacy for tokenization only.
+- **Train the model**. Enter `bash ./scripts/train/train_chemprot.sh [gpu-id]`. The model will be saved in `./models/chemprot`.
+
+
 ### ACE05 (ACE for entities and relations)
 
 #### Creating the dataset

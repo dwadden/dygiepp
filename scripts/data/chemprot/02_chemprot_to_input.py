@@ -91,6 +91,7 @@ def read_entities(file_name):
 def save_entities_info(entities_dict, results):
     special_case = 0  # Spacy did not successfully tokenize this sentence
     regular_case = 0  # Spacy did successfully tokenize this sentence
+    merged_case = 0  # Entity token is a substring of Spacy token.
     for file_id in results:
         ner = [[] for i in range(len(results[file_id]['sentences']))]  # Create a list of lists equal to number of setences in text
         term_location = {}  # Create a map of term number of start index, end index, and line number of that term
@@ -113,16 +114,25 @@ def save_entities_info(entities_dict, results):
                     'end_index': end_index,
                     'line_index': end_token_info['line_index']
                 }
-                regular_case += 1
+                if token["text"] != start_token_info["text"]:
+                    print(token["text"])
+                    print(start_token_info["text"])
+                    print()
+                    merged_case += 1
+                else:
+                    regular_case += 1
             else:
                 special_case += 1
         #ner = sorted(ner, key=lambda x: x[0])
         results[file_id]['ner'] = ner
         results[file_id]['term_location'] = term_location
 
-    frac_discarded = special_case / (special_case + regular_case)
+    total = special_case + regular_case + merged_case
+    frac_discarded = special_case / total
+    frac_merged = merged_case / total
     # Throw out cases where the token didn't line up with an entity boundary.
     print(f"Fraction entities discarded due to entity boundary / token index mismatch: {frac_discarded:0.4f}")
+    print(f"Fraction entities where entity token is substring of Spacy token: {frac_merged:0.4f}")
 
 
 def read_relations(file_name):
