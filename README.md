@@ -34,7 +34,7 @@ To train a model for named entity recognition, relation extraction, and corefere
 
 - **Download the data**. From the top-level folder for this repo, enter `bash ./scripts/data/get_scierc.sh`. This will download the scierc dataset into a folder `./data/scierc`
 - **Train the model**. Enter `bash ./scripts/train/train_scierc.sh [gpu-id]`. The `gpu-id` should be an integer like `1`, or `-1` to train on CPU. The program will train a model and save a model at `./models/scierc`.
-- To train a "lightweight" version of the model that doesn't do coreference propagation, do `bash ./scripts/train/train_scierc_lightweight.sh [gpu-id]` instead. The result will go in `./models/scierc-lightweight`. More info on why you'd want to do this in the section on [making predictions](#making-predictions).
+- To train a "lightweight" version of the model that doesn't do coreference propagation and uses a context width of 1, do `bash ./scripts/train/train_scierc_lightweight.sh [gpu-id]` instead. The result will go in `./models/scierc-lightweight`. More info on why you'd want to do this in the section on [making predictions](#making-predictions).
 
 
 ### GENIA
@@ -43,6 +43,7 @@ The steps are similar to SciERC.
 
 - **Download the data**. From the top-level folder for this repo, enter `bash ./scripts/data/get_genia.sh`.
 - **Train the model**. Enter `bash ./scripts/train/train_genia.sh [gpu-id]`. The program will train a model and save a model at `./models/genia`.
+- As with SciERC, we also offer a "lightweight" version with a context width of 1 and no coreference propagation.
 
 
 ### ACE05 (ACE for entities and relations)
@@ -144,15 +145,18 @@ allennlp evaluate \
 
 ## Pretrained models
 
-We have versions of DyGIE++ trained on SciERC and GENIA available. We also have a "lightweight" version of SciERC trained without coreference propagation. See details on this in the caveat below.
+We have versions of DyGIE++ trained on SciERC and GENIA available. There are two versions:
+- The "lightweight" versions don't use coreference propagation, and use a context window of 1. If you've got a new dataset and you just want to get some reasonable predictions, use these.
+- The "full" versions use coreference propagatation and a context window of 3. Use these if you need to squeeze out another F1 point or two. These models take longer to run, and they may break if they're given inputs that are too long.
 
 ### Downloads
 
-Run `./scripts/pretrained/get_dygiepp_pretrained.sh` to download all the available pretrained models to the `pretrained` directory. If you only want one model, here are the download links:
+Run `./scripts/pretrained/get_dygiepp_pretrained.sh` to download all the available pretrained models to the `pretrained` directory. If you only want one model, here are the download links.
 
 - [SciERC](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/scierc.tar.gz)
-- [SciERC lightweight (no coref)](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/scierc-lightweight.tar.gz)
+- [SciERC lightweight](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/scierc-lightweight.tar.gz)
 - [GENIA](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/genia.tar.gz)
+- [GENIA lightweight](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/genia-lightweight.tar.gz)
 
 #### Performance of downloaded models
 
@@ -181,6 +185,11 @@ Similarly for GENIA:
 2019-11-21 14:45:44,505 - INFO - allennlp.commands.evaluate - ner_f1: 0.7818707451272466
 ```
 
+And the lightweight version:
+```
+2020-05-08 11:18:59,761 - INFO - allennlp.commands.evaluate - ner_f1: 0.7671077504725398
+```
+
 ## Making predictions
 
 To make a prediction, you can use `allennlp predict`. For example, to make a prediction with the pretrained scierc model, you can do:
@@ -197,7 +206,7 @@ allennlp predict pretrained/scierc.tar.gz \
 
 **Caveat**: Models trained to predict coreference clusters need to make predictions on a whole document at once. This can cause memory issues. To get around this there are two options:
 
-- Make predictions using a model that doesn't do coreference propagation. These models predict a sentence at a time, and shouldn't run into memory issues. For SciERC, use `scierc-lightweight`. To train your own coref-free model, set [coref loss weight](https://github.com/dwadden/dygiepp/blob/master/training_config/scierc_working_example.jsonnet#L50) to 0 in the relevant training config.
+- Make predictions using a model that doesn't do coreference propagation. These models predict a sentence at a time, and shouldn't run into memory issues. Use the "lightweight" models to avoid this. To train your own coref-free model, set [coref loss weight](https://github.com/dwadden/dygiepp/blob/master/training_config/scierc_working_example.jsonnet#L50) to 0 in the relevant training config.
 - Split documents up into smaller chunks (5 sentences should be safe), make predictions using a model with coref prop, and stitch things back together.
 
 See the [docs](https://allenai.github.io/allennlp-docs/api/commands/predict/) for more prediction options.

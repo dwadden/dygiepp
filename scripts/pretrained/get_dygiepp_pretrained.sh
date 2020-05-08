@@ -15,3 +15,8 @@ wget --directory-prefix=./pretrained \
 # Genia
 wget --directory-prefix=./pretrained \
     https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/genia.tar.gz
+
+
+# Genia lightweight
+wget --directory-prefix=./pretrained \
+    https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/genia-lightweight.tar.gz
