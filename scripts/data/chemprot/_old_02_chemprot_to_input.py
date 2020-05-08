@@ -1,6 +1,4 @@
-import spacy
-import pandas as pd
-
+# Courtesy of Jiechen Chen https://www.linkedin.com/in/jiechen-chen/.
 
 import os
 import json
@@ -184,56 +182,27 @@ def save_relations(relations_dict, results):
 def process_fold(fold):
     print(f"Processing fold {fold}.")
     raw_subdirectory = f"/raw_data/ChemProt_Corpus/chemprot_{fold}/"
-    abstracts = pd.read_table(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_abstracts.tsv')
-    entities = pd.read_table(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_entities.tsv')
-    relations = pd.read_table(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_relations.tsv')
+    abstracts_dict = read_abstract(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_abstracts.tsv')
+    results = save_abstract_info(abstracts_dict)
+    entities_dict = read_entities(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_entities.tsv')
+    save_entities_info(entities_dict, results)
+    relations_dict = read_relations(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_relations.tsv')
+    save_relations(relations_dict, results)
+
+    with open(DIRECTORY + PROCESSED_SUBDIRECTORY + f'{fold}.jsonl', 'w') as outfile:
+        for file_id in results:
+            print(json.dumps({
+                'doc_key': results[file_id].get('doc_key'),
+                'sentences': results[file_id].get('sentences'),
+                'ner': results[file_id].get('ner'),
+                'relations': results[file_id].get('relations'),
+            }), file=outfile)
 
 
-# def main():
-#     for fold in ["training", "development", "test"]:
-#         process_fold(fold)
+def main():
+    for fold in ["training", "development", "test"]:
+        process_fold(fold)
 
 
-# if __name__ == "__main__":
-#     main()
-
-
-fold = "training"
-print(f"Processing fold {fold}.")
-raw_subdirectory = f"/raw_data/ChemProt_Corpus/chemprot_{fold}/"
-df_abstracts = pd.read_table(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_abstracts.tsv',
-                             header=None, names=["doc_key", "title", "abstract"])
-df_entities = pd.read_table(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_entities.tsv',
-                            header=None, names=["doc_key", "entity_id", "label", "char_start", "char_end", "text"])
-df_relations = pd.read_table(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_relations.tsv',
-                             header=None, names=["doc_key", "cpr_group", "eval_type", "label", "arg1", "arg2"])
-
-####################
-
-# NOTE: Right index is exclusive for both the chemprot data and for spacy.
-
-# for _, abstract in df_abstracts.iterrows():
-row = df_abstracts.iloc[1]
-doc = row["title"] + " " + row["abstract"]
-doc_key = row["doc_key"]
-entities = df_entities.query(f"doc_key == '{doc_key}'")
-relations = df_relations.query(f"doc_key == '{doc_key}'")
-
-####################
-
-processed = nlp(doc)
-
-for sent in processed.sents:
-    pass
-
-
-def in_sentence(ent_row, sent):
-    good_beginning = ent_row["char_start"] >= sent.start_char
-    good_end = ent_row["char_end"] <= sent.end_char
-    return good_beginning and good_end
-
-# Get the entities
-for _, ent_row in entities.iterrows():
-    if not in_sentence(ent_row, sent):
-        continue
-    break
+if __name__ == "__main__":
+    main()
