@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional, Tuple, DefaultDict, Set, Union
 import json
 import itertools
 import pickle as pkl
+import warnings
 
 from overrides import overrides
 
@@ -171,7 +172,7 @@ class IEJsonReader(DatasetReader):
                     js["sentence_start_index"][sentence_group_nr] = 0
                     js["sentence_end_index"][sentence_group_nr] = len(js["sentences"][sentence_group_nr])
                     if len(js["sentence_groups"][sentence_group_nr])>300:
-                        import ipdb;
+                        warnings.warn("Sentence with > 300 words; BERT may truncate.")
             if "clusters" not in js:
                 js["clusters"] = []
             for field in ["ner", "relations", "events"]:
