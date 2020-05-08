@@ -3,7 +3,7 @@
 # gpu-id can be an integer GPU ID, or -1 for CPU.
 
 experiment_name="genia-lightweight"
-data_root="./data/genia/processed-data/json-ner"
+data_root="./data/genia/processed-data/json-coref-ident-only"
 config_file="./training_config/genia_lightweight.jsonnet"
 cuda_device=$1
 
