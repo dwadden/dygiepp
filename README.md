@@ -26,6 +26,8 @@ Finally, you'll need SciBERT for the scientific datasets. Run `python scripts/pr
 
 ## Training a model
 
+Warning about coreference resolution: The coreference code will break on sentences with only a single token. If you have these in your dataset, either get rid of them or deactivate the coreference resolution part of the model.
+
 ### SciERC
 
 To train a model for named entity recognition, relation extraction, and coreference resolution on the SciERC dataset:
