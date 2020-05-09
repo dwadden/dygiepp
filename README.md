@@ -166,38 +166,43 @@ Run `./scripts/pretrained/get_dygiepp_pretrained.sh` to download all the availab
 - [SciERC lightweight](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/scierc-lightweight.tar.gz)
 - [GENIA](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/genia.tar.gz)
 - [GENIA lightweight](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/genia-lightweight.tar.gz)
+- [ChemProt (lightweight only)](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/chemprot.tar.gz)
 
 #### Performance of downloaded models
 
-The SciERC model gives slightly better test set performance than reported in the paper:
+- SciERC
+  ```
+  2019-11-20 16:03:12,692 - INFO - allennlp.commands.evaluate - Finished evaluating.
+  2019-11-20 16:03:12,693 - INFO - allennlp.commands.evaluate - _ner_f1: 0.6855290303565666
+  2019-11-20 16:03:12,693 - INFO - allennlp.commands.evaluate - rel_f1: 0.4867781975175391
+  ```
 
-```
-2019-11-20 16:03:12,692 - INFO - allennlp.commands.evaluate - Finished evaluating.
-...
-2019-11-20 16:03:12,693 - INFO - allennlp.commands.evaluate - _ner_f1: 0.6855290303565666
-...
-2019-11-20 16:03:12,693 - INFO - allennlp.commands.evaluate - rel_f1: 0.4867781975175391
-```
+- SciERC lightweight
+  ```
+  2020-03-31 21:23:34,708 - INFO - allennlp.commands.evaluate - Finished evaluating.
+  2020-03-31 21:23:34,709 - INFO - allennlp.commands.evaluate - _ner_f1: 0.6778959810874204
+  2020-03-31 21:23:34,709 - INFO - allennlp.commands.evaluate - rel_f1: 0.4638157894736842
+  ```
 
-The lightweight version of SciERC does slightly worse, but should be more memory-friendly.
+- GENIA
+  ```
+  2019-11-21 14:45:44,505 - INFO - allennlp.commands.evaluate - ner_f1: 0.7818707451272466
+  ```
 
-```
-2020-03-31 21:23:34,708 - INFO - allennlp.commands.evaluate - Finished evaluating.
-...
-2020-03-31 21:23:34,709 - INFO - allennlp.commands.evaluate - _ner_f1: 0.6778959810874204
-...
-2020-03-31 21:23:34,709 - INFO - allennlp.commands.evaluate - rel_f1: 0.4638157894736842
-```
+- GENIA lightweight
+  And the lightweight version:
+  ```
+  2020-05-08 11:18:59,761 - INFO - allennlp.commands.evaluate - ner_f1: 0.7671077504725398
+  ```
 
-Similarly for GENIA:
-```
-2019-11-21 14:45:44,505 - INFO - allennlp.commands.evaluate - ner_f1: 0.7818707451272466
-```
+- ChemProt
+  ```
+  2020-05-08 23:20:59,648 - INFO - allennlp.commands.evaluate - _ner_f1: 0.8850947021684925
+  2020-05-08 23:20:59,648 - INFO - allennlp.commands.evaluate - rel_f1: 0.35027598896044154
+  ```
+  Note that we're doing span-level evaluation using predicted entities. We're also evaluating on all ChemProt relation classes, while the official task only evaluates on a subset (see [Liu et al.](https://www.semanticscholar.org/paper/Attention-based-Neural-Networks-for-Chemical-Liu-Shen/a6261b278d1c2155e8eab7ac12d924fc2207bd04) for details). Thus, our relation extraction performance is lower than, for instance, [Verga et al.](https://www.semanticscholar.org/paper/Simultaneously-Self-Attending-to-All-Mentions-for-Verga-Strubell/48f786f66eb846012ceee822598a335d0388f034), where they use gold entities as inputs for relation prediction.
 
-And the lightweight version:
-```
-2020-05-08 11:18:59,761 - INFO - allennlp.commands.evaluate - ner_f1: 0.7671077504725398
-```
+
 
 ## Making predictions
 
@@ -226,45 +231,3 @@ Following [Li and Ji (2014)](https://www.semanticscholar.org/paper/Incremental-J
 correct, and the head offsets of two entity mention arguments are both correct".
 
 In particular, we do *not* require the types of the entity mention arguments to be correct, as is done in some work (e.g. [Zhang et al. (2017)](https://www.semanticscholar.org/paper/End-to-End-Neural-Relation-Extraction-with-Global-Zhang-Zhang/ee13e1a3c1d5f5f319b0bf62f04974165f7b0a37)). We welcome a pull request that implements this alternative evaluation metric. Please open an issue if you're interested in this.
-
-
-<!-- TODO: multi-GPU training. -->
-
-<!-- ## To organize.
-
-This repository contains an implementation of the DyGIE++ information extraction model presented in TODO(Dave and Ulme's paper). DyGIE++ achieves state-of the art or competitive performance on three sentence-level IE tasks:
-
-- Named entity recognition, entities with nested or overlapping text spans.
-- Relation extraction.
-- Event extraction, which involves extracting event triggers together with their arguments.
-
-We have trained and evaluated DyGIE++ on the following datasets:
-
-- `ACE05`: Entity and relation extraction on the [Automatic Content Extraction](https://www.ldc.upenn.edu/collaborations/past-projects/ace) (ACE) corpus of newswire and internet text.
-- `ACE05-Event`: Entity, relation, and event extraction on the ACE corpus.
-- `SciERC`: Entiy and relation extraction on the [SciERC](http://nlp.cs.washington.edu/sciIE/) computer science abstract corpus.
-- `GENIA`: Entity extraction on the [GENIA](http://www.geniaproject.org/) corpus of biomedical abstracts.
-- `Wet Lab Protocol Corpus (WLPC)`: Entity and relation extraction for [Wet Lab Protocol Corpus](http://bionlp.osu.edu:5000/protocols) (WLPC). -->
-
-<!-- See TODO(cite the paper) for more details on the data. -->
-
-<!-- This repository provides scripts to obtain the data sets, run the primary experiments described in TODO(Dave and Ulme's paper), and make predictions using a pre-trained DyGIE++ model on new data sets. -->
-
-<!-- ## Installation
-
-DyGIE++ is implemented using the AllenNLP framework. TODO(add a requirements.txt file) of things we need to install.
-
-## Obtaining the data sets.
-
-We provide scripts to obtain and preprocess the data sets used to evaluate DyGIE++, located in the `scripts/data` directory.
-
-- `ACE05`: The ACE corpus requires a license and cannot be made available for download. We provide a script `get_ace05.sh` which accepts a path to a download of the ACE data as input, splits it into train, dev, and test as described in TODO(cite the paper), and places preprocessed data at TODO(where does it go)?
-- `ACE05-Event`: We provide a script `get_ace05_event.sh` which accepts a path to the ACE data, splits it as in TODO(the paper), and places the prcoessed data at TODO(where)?
-- `SciERC`: The SciERC corpus is freely available online. The `get_scierc.sh` script will download the corpus and place it in `data/scierc`.
-- `GENIA`: TODO The GENIA corpus can be downloaded from TODO.
-- `Wet Lab Protocol Corpus (WLPC)`: The WLPC can be downloaded with permission for the paper's authors. Once downloaded, run `get_wlpc.sh` on the downloaded data folder.
-
-
-## Making predictions on a new data set
-
-We have pre-trained DyGIE++ models on each of the five datasets described above. The models are available for download at TODO(add a URL). To make predictions on a new dataset, the data must be converted to DyGIE++ readable `.json` files. -->

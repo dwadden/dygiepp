@@ -20,3 +20,8 @@ wget --directory-prefix=./pretrained \
 # Genia lightweight
 wget --directory-prefix=./pretrained \
     https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/genia-lightweight.tar.gz
+
+
+# ChemProt
+wget --directory-prefix=./pretrained \
+    https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/chemprot.tar.gz
