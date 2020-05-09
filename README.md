@@ -51,7 +51,7 @@ The steps are similar to SciERC.
 The [ChemProt](https://biocreative.bioinformatics.udel.edu/news/corpora/chemprot-corpus-biocreative-vi/) corpus contains entity and relation annotations for drug / protein interaction. Follow these steps:
 
 - **Get the data**. Run `bash ./scripts/data/get_chemprot.sh`. This will download the data and process it into the DyGIE input format.
-  - TODO: The processing script `scripts/data/chemprot/02_chemprot_to_input.py` doesn't do the right thing. Right now it tries to align ChemProt entities with entities tagged by SciSpacy. It should ignore the SciSpacy entities entirely and use SciSpacy for tokenization only.
+  - NOTE: This is a quick-and-dirty script that skips entities whose character offsets don't align exactly with the tokenization produced by SciSpacy. We lose about 10% of the named entities and 20% of the relations in the dataset as a result.
 - **Train the model**. Enter `bash ./scripts/train/train_chemprot.sh [gpu-id]`. The model will be saved in `./models/chemprot`.
 
 
