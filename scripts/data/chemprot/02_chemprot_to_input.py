@@ -1,239 +1,184 @@
 import spacy
 import pandas as pd
-
-
-import os
+from collections import Counter
+from tqdm import tqdm
 import json
-import csv
 
-import spacy
 
-DIRECTORY = "data/chemprot"
-PROCESSED_SUBDIRECTORY = "/processed_data/"
 nlp = spacy.load("en_core_sci_sm")
 
 
-def read_abstract(file_name):
-    '''
-    Reads file and creates a dictionary to retrieve abstract information.
-    :param file_name: name of file that contains abstract info within the subdirectory
-    :return: abstracts_dict: a map of file_id to 'title' and 'abstract' inside that file
-    '''
-    abstracts_dict = {}
-    with open(file_name) as tsvfile:
-        reader = csv.reader(tsvfile, delimiter='\t')
-        for row in reader:
-            abstracts_dict[int(row[0])] = {
-                'title': row[1],
-                'abstract': row[2]
-            }
-    return abstracts_dict
+####################
+
+# Process entities and relations for a given abstract.
+
+def get_entities_in_sent(sent, entities):
+    start, end = sent.start_char, sent.end_char
+    start_ok = entities["char_start"] >= start
+    end_ok = entities["char_end"] <= end
+    keep = start_ok & end_ok
+    res = entities[keep]
+    return res
 
 
-def save_abstract_info(abstracts_dict):
-    '''
-    Takes initial abstract information and parses the document id, sentences, and tokens from it. Gets the token index
-    and line index of each token.
-    :param abstracts_dict: raw dictionary from the training file that maps file_id to title and abstract
-    :return: results: dictionary that will store all the information for each file, populated with doc_key, sentences,
-    and some meta info that will be used for later processing
-    '''
-    results = {}
-    for file_id in abstracts_dict:
-        file_result = dict()
-        sentence_lists = []
-        token_dict = {}
-        full_text = abstracts_dict[file_id].get('title') + " " + abstracts_dict[file_id].get('abstract')
+def align_one(sent, row):
+    # Don't distinguish b/w genes that can and can't be looked up in database.
+    lookup = {"GENE-Y": "GENE",
+              "GENE-N": "GENE",
+              "CHEMICAL": "CHEMICAL"}
 
-        doc = nlp(full_text)
+    start_tok = None
+    end_tok = None
 
-        sentence_index = 0
-        for sentence in doc.sents:
-            # USED FOR MODEL: Create a list of sentences, each with a sublist of tokens
-            tokens_list = [token.text for token in list(sentence)]
-            sentence_lists.append(tokens_list)  # Add list of tokens to overall list that contains all sentences
+    for tok in sent:
+        if tok.idx == row["char_start"]:
+            start_tok = tok
+        if tok.idx + len(tok) == row["char_end"]:
+            end_tok = tok
 
-            # USED FOR LOGIC: Create a token lookup by character index, used in the next section
-            previous_char_index = 0
-            for token in list(sentence):
-                token_dict[token.idx] = {  # Store token by character index
-                    'text': token.text,
-                    'token_index': token.i,
-                    'line_index': sentence_index,
-                }
-                token_dict[previous_char_index]['next_char_index'] = token.idx
-                previous_char_index = token.idx
-            sentence_index += 1
+    if start_tok is None or end_tok is None:
+        return None
+    else:
+        expected = sent[start_tok.i - sent.start:end_tok.i - sent.start + 1]
+        if expected.text != row.text:
+            raise Exception("Entity mismatch")
 
-        # Store all elements in overall dictionary
-        file_result["doc_key"] = file_id
-        file_result["sentences"] = sentence_lists
-        file_result["token_dict"] = token_dict
-        results[file_id] = file_result
-    return results
+        return (start_tok.i, end_tok.i, lookup[row["label"]])
 
 
-def read_entities(file_name):
-    entities_dict = {}
-    with open(file_name) as tsvfile:
-        reader = csv.reader(tsvfile, delimiter='\t')
-        for row in reader:
-            if int(row[0]) not in entities_dict:
-                entities_dict[int(row[0])] = []
-            entities_dict.get(int(row[0])).append({
-                'term': row[1],
-                'type': row[2],
-                'start_char': int(row[3]),
-                'end_char': int(row[4]),
-                'text': row[5]
-            })
-    return entities_dict
+def align_entities(sent, entities_sent):
+    aligned_entities = {}
+    missed_entities = {}
+    for _, row in entities_sent.iterrows():
+        aligned = align_one(sent, row)
+        if aligned is not None:
+            aligned_entities[row["entity_id"]] = aligned
+        else:
+            missed_entities[row["entity_id"]] = None
+
+    return aligned_entities, missed_entities
 
 
-def save_entities_info(entities_dict, results):
-    special_case = 0  # Spacy did not successfully tokenize this sentence
-    regular_case = 0  # Spacy did successfully tokenize this sentence
-    merged_case = 0  # Entity token is a substring of Spacy token.
-    for file_id in results:
-        ner = [[] for i in range(len(results[file_id]['sentences']))]  # Create a list of lists equal to number of setences in text
-        term_location = {}  # Create a map of term number of start index, end index, and line number of that term
-        token_dict = results[file_id]['token_dict']  # Map of character offset to text, token index, and line index
-        for token in entities_dict.get(file_id) or []:
-            start_token_info = token_dict.get(token['start_char'])
-            if start_token_info:  # If this entity's start char lines up with Spacy's tokenizer's starting char for a token
-                start_index = start_token_info['token_index']
-                tentative_end_char_index = token['start_char']
-                next_start_char_index = start_token_info.get('next_char_index')
-                while next_start_char_index and token['end_char'] > next_start_char_index:
-                    tentative_end_char_index = next_start_char_index
-                    next_start_char_index = token_dict[tentative_end_char_index].get('next_char_index')
+def format_relations(relations):
+    # Convert to dict.
+    res = {}
+    for _, row in relations.iterrows():
+        ent1 = row["arg1"].replace("Arg1:", "")
+        ent2 = row["arg2"].replace("Arg2:", "")
+        key = (ent1, ent2)
+        res[key] = row["label"]
 
-                end_token_info = token_dict[tentative_end_char_index]
-                end_index = end_token_info['token_index']
-                ner[end_token_info['line_index']].append([start_index, end_index, token['type']])
-                term_location[token['term']] = {
-                    'start_index': start_index,
-                    'end_index': end_index,
-                    'line_index': end_token_info['line_index']
-                }
-                if token["text"] != start_token_info["text"]:
-                    print(token["text"])
-                    print(start_token_info["text"])
-                    print()
-                    merged_case += 1
-                else:
-                    regular_case += 1
-            else:
-                special_case += 1
-        #ner = sorted(ner, key=lambda x: x[0])
-        results[file_id]['ner'] = ner
-        results[file_id]['term_location'] = term_location
-
-    total = special_case + regular_case + merged_case
-    frac_discarded = special_case / total
-    frac_merged = merged_case / total
-    # Throw out cases where the token didn't line up with an entity boundary.
-    print(f"Fraction entities discarded due to entity boundary / token index mismatch: {frac_discarded:0.4f}")
-    print(f"Fraction entities where entity token is substring of Spacy token: {frac_merged:0.4f}")
+    return res
 
 
-def read_relations(file_name):
-    relations_dict = {}
-    with open(file_name) as tsvfile:
-        reader = csv.reader(tsvfile, delimiter='\t')
-        for row in reader:
-            if int(row[0]) not in relations_dict:
-                relations_dict[int(row[0])] = []
-            relations_dict.get(int(row[0])).append({
-                'relationship': row[3],
-                'arg1': row[4][5:],
-                'arg2': row[5][5:],
-            })
-    return relations_dict
+def get_relations_in_sent(aligned, relations):
+    res = []
+    keys = set()
+    # Loop over the relations, and keep the ones relating entities in this sentences.
+    for ents, label in relations.items():
+        if ents[0] in aligned and ents[1] in aligned:
+            keys.add(ents)
+            ent1 = aligned[ents[0]]
+            ent2 = aligned[ents[1]]
+            to_append = ent1[:2] + ent2[:2] + (label,)
+            res.append(to_append)
+
+    return res, keys
 
 
-def save_relations(relations_dict, results):
-    different_lines = 0
-    same_lines = 0
-    for file_id in results:
-        relation = [[] for i in range(len(results[file_id]['sentences']))]  # Create a list of lists equal to number of setences in text
-        term_location_dict = results[file_id]['term_location']
-        for relation_entry in relations_dict.get(file_id) or []:
-            arg1_location = term_location_dict.get(relation_entry['arg1'])
-            arg2_location = term_location_dict.get(relation_entry['arg2'])
-            if arg1_location and arg2_location:  # Only if we have term location information for both terms
-                if arg1_location['line_index'] == arg2_location['line_index']:
-                    relation[arg1_location['line_index']].append([
-                        arg1_location['start_index'],
-                        arg1_location['end_index'],
-                        arg2_location['start_index'],
-                        arg2_location['end_index'],
-                        relation_entry['relationship'],
-                    ])
-                    same_lines += 1
-                else:
-                    different_lines += 1
-        #relation = sorted(relation, key=lambda x: x[0])
-        results[file_id]['relations'] = relation
-    frac_cross_sent = different_lines / (different_lines + same_lines)
+####################
 
-    # Remove relations that cross sentence boundaries.
-    print(f"Fraction cross-sentence relations (discarded): {frac_cross_sent:0.4f}")
+# Manage a single document and a single fold.
+
+def one_abstract(row, df_entities, df_relations):
+    doc = row["title"] + " " + row["abstract"]
+    doc_key = row["doc_key"]
+    entities = df_entities.query(f"doc_key == '{doc_key}'")
+    relations = format_relations(df_relations.query(f"doc_key == '{doc_key}'"))
+
+    processed = nlp(doc)
+
+    entities_seen = set()
+    entities_alignment = set()
+    entities_no_alignment = set()
+    relations_found = set()
+
+    scierc_format = {"doc_key": doc_key, "sentences": [], "ner": [], "relations": []}
+
+    for sent in processed.sents:
+        # Get the tokens.
+        toks = [tok.text for tok in sent]
+
+        # Align entities.
+        entities_sent = get_entities_in_sent(sent, entities)
+        aligned, missed = align_entities(sent, entities_sent)
+
+        # Align relations.
+        relations_sent, keys_found = get_relations_in_sent(aligned, relations)
+
+        # Append to result list
+        scierc_format["sentences"].append(toks)
+        entities_to_scierc = [list(x) for x in aligned.values()]
+        scierc_format["ner"].append(entities_to_scierc)
+        scierc_format["relations"].append(relations_sent)
+
+        # Keep track of which entities and relations we've found and which we haven't.
+        entities_seen |= set(entities_sent["entity_id"])
+        entities_alignment |= set(aligned.keys())
+        entities_no_alignment |= set(missed.keys())
+        relations_found |= keys_found
+
+    # Update counts.
+    entities_missed = set(entities["entity_id"]) - entities_seen
+    relations_missed = set(relations.keys()) - relations_found
+
+    COUNTS["entities_correct"] += len(entities_alignment)
+    COUNTS["entities_misaligned"] += len(entities_no_alignment)
+    COUNTS["entities_missed"] += len(entities_missed)
+    COUNTS["entities_total"] += len(entities)
+    COUNTS["relations_found"] += len(relations_found)
+    COUNTS["relations_missed"] += len(relations_missed)
+    COUNTS['relations_total'] += len(relations)
+
+    return scierc_format
 
 
-def process_fold(fold):
+def one_fold(fold):
+    directory = "data/chemprot"
     print(f"Processing fold {fold}.")
-    raw_subdirectory = f"/raw_data/ChemProt_Corpus/chemprot_{fold}/"
-    abstracts = pd.read_table(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_abstracts.tsv')
-    entities = pd.read_table(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_entities.tsv')
-    relations = pd.read_table(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_relations.tsv')
+    raw_subdirectory = "raw_data/ChemProt_Corpus"
+    df_abstracts = pd.read_table(f"{directory}/{raw_subdirectory}/chemprot_{fold}/chemprot_{fold}_abstracts.tsv",
+                                 header=None, keep_default_na=False,
+                                 names=["doc_key", "title", "abstract"])
+    df_entities = pd.read_table(f"{directory}/{raw_subdirectory}/chemprot_{fold}/chemprot_{fold}_entities.tsv",
+                                header=None, keep_default_na=False,
+                                names=["doc_key", "entity_id", "label", "char_start", "char_end", "text"])
+    df_relations = pd.read_table(f"{directory}/{raw_subdirectory}/chemprot_{fold}/chemprot_{fold}_relations.tsv",
+                                 header=None, keep_default_na=False,
+                                 names=["doc_key", "cpr_group", "eval_type", "label", "arg1", "arg2"])
 
+    res = []
+    for _, abstract in tqdm(df_abstracts.iterrows(), total=len(df_abstracts)):
+        to_append = one_abstract(abstract, df_entities, df_relations)
+        res.append(to_append)
 
-# def main():
-#     for fold in ["training", "development", "test"]:
-#         process_fold(fold)
+    # Write to file.
+    name_out = f"{directory}/processed_data/{fold}.jsonl"
+    with open(name_out, "w") as f_out:
+        for line in res:
+            print(json.dumps(line), file=f_out)
 
-
-# if __name__ == "__main__":
-#     main()
-
-
-fold = "training"
-print(f"Processing fold {fold}.")
-raw_subdirectory = f"/raw_data/ChemProt_Corpus/chemprot_{fold}/"
-df_abstracts = pd.read_table(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_abstracts.tsv',
-                             header=None, names=["doc_key", "title", "abstract"])
-df_entities = pd.read_table(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_entities.tsv',
-                            header=None, names=["doc_key", "entity_id", "label", "char_start", "char_end", "text"])
-df_relations = pd.read_table(DIRECTORY + raw_subdirectory + f'chemprot_{fold}_relations.tsv',
-                             header=None, names=["doc_key", "cpr_group", "eval_type", "label", "arg1", "arg2"])
 
 ####################
 
-# NOTE: Right index is exclusive for both the chemprot data and for spacy.
+# Driver
 
-# for _, abstract in df_abstracts.iterrows():
-row = df_abstracts.iloc[1]
-doc = row["title"] + " " + row["abstract"]
-doc_key = row["doc_key"]
-entities = df_entities.query(f"doc_key == '{doc_key}'")
-relations = df_relations.query(f"doc_key == '{doc_key}'")
+COUNTS = Counter()
 
-####################
+for fold in ["training", "development", "test"]:
+    one_fold(fold)
 
-processed = nlp(doc)
-
-for sent in processed.sents:
-    pass
-
-
-def in_sentence(ent_row, sent):
-    good_beginning = ent_row["char_start"] >= sent.start_char
-    good_end = ent_row["char_end"] <= sent.end_char
-    return good_beginning and good_end
-
-# Get the entities
-for _, ent_row in entities.iterrows():
-    if not in_sentence(ent_row, sent):
-        continue
-    break
+counts = pd.Series(COUNTS)
+print()
+print("Some entities were missed due to tokenization choices in SciSpacy. Here are the stats:")
+print(counts)

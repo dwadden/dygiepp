@@ -1,4 +1,4 @@
-# Train DyGIE++ model on the genia data set, without coreference.
+# Traic DyGIE++ model on the genia data set, without coreference.
 # Usage: bash scripts/train/train_genia_lightweight.sh [gpu-id]
 # gpu-id can be an integer GPU ID, or -1 for CPU.
 
