@@ -1,5 +1,7 @@
 import logging
 from typing import Any, Dict, List, Optional
+import pandas as pd
+import numpy as np
 
 import torch
 from overrides import overrides
@@ -96,7 +98,11 @@ class NERTagger(Model):
 
         if ner_labels is not None:
             self._ner_metrics(predicted_ner, ner_labels, span_mask)
-            ner_scores_flat = ner_scores.view(-1, self._n_labels)
+
+            # When computing the loss, set the scores for labels from different datasets to -inf.
+            ner_scores_masked = self._mask_irrelevant_labels(ner_scores, metadata)
+
+            ner_scores_flat = ner_scores_masked.view(-1, self._n_labels)
             ner_labels_flat = ner_labels.view(-1)
             mask_flat = span_mask.view(-1).bool()
 
@@ -107,6 +113,25 @@ class NERTagger(Model):
             output_dict["document"] = [x["sentence"] for x in metadata]
 
         return output_dict
+
+    def _mask_irrelevant_labels(self, ner_scores, metadata):
+        """
+        Mask out the NER scores for classes from different datasets.
+        """
+        datasets = pd.Series([x["doc_key"].split(":")[0] for x in metadata]).values
+        datasets = np.expand_dims(datasets, 1)
+        indices = pd.Series(self.vocab.get_index_to_token_vocabulary("ner_labels"))
+        indices = indices.str.split(":").str[0].values
+        indices = np.expand_dims(indices, 0)
+        # When mask == 1, we keep the score. When mask == 0, we ignore it.
+        mask = datasets == indices
+        mask[:, 0] = True  # Always keep the null label.
+        mask = mask.astype(np.float32)
+        mask = torch.from_numpy(mask)
+        mask = mask.unsqueeze(1).to(ner_scores.device)
+        masked_scores = util.replace_masked_values(ner_scores, mask, -1e20)
+        return masked_scores
+
 
     @overrides
     def decode(self, output_dict: Dict[str, torch.Tensor]):
