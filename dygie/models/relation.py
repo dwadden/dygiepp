@@ -117,7 +117,8 @@ class RelationExtractor(Model):
          top_span_indices, top_spans) = self._prune_spans(spans, span_mask, span_embeddings, sentence_lengths)
 
         relation_scores = self.get_relation_scores(top_span_embeddings,
-                                              top_span_mention_scores)
+                                                   top_span_mention_scores,
+                                                   metadata)
 
         output_dict = {"top_spans": top_spans,
                        "top_span_embeddings": top_span_embeddings,
@@ -151,6 +152,7 @@ class RelationExtractor(Model):
         return top_span_embeddings, top_span_mention_scores, num_spans_to_keep, top_span_mask, top_span_indices, top_spans
 
 
+    # NOTE(dwadden) This will break on this branch; doesn't mask out irrelevant labels.
     def relation_propagation(self, output_dict):
         relation_scores = output_dict["relation_scores"]
         top_span_embeddings = output_dict["top_span_embeddings"]
@@ -169,7 +171,8 @@ class RelationExtractor(Model):
             f_network_input = torch.cat([top_span_embeddings, entity_embs], dim=-1)
             f_weights = self._f_network(f_network_input)
             top_span_embeddings = f_weights * top_span_embeddings + (1.0 - f_weights) * entity_embs
-            relation_scores = self.get_relation_scores(top_span_embeddings, self._mention_pruner._scorer(top_span_embeddings))
+            relation_scores = self.get_relation_scores(top_span_embeddings, self._mention_pruner._scorer(top_span_embeddings),
+                                                       output_dict["metadata"])
 
         output_dict["relation_scores"] = relation_scores
         output_dict["top_span_embeddings"] = top_span_embeddings
@@ -190,9 +193,7 @@ class RelationExtractor(Model):
             gold_relations = self._get_pruned_gold_relations(
                 relation_labels, output_dict["top_span_indices"], output_dict["top_span_mask"])
 
-            # Mask out scores for relations from other datasets.
-            relation_scores_masked = self._mask_irrelevant_labels(relation_scores, metadata)
-            cross_entropy = self._get_cross_entropy_loss(relation_scores_masked, gold_relations)
+            cross_entropy = self._get_cross_entropy_loss(relation_scores, gold_relations)
 
             # Compute F1.
             predictions = self.decode(output_dict)["decoded_relations_dict"]
@@ -299,9 +300,11 @@ class RelationExtractor(Model):
 
         return pair_embeddings
 
-    def get_relation_scores(self, top_span_embeddings, top_span_mention_scores):
-        return self._compute_relation_scores(self._compute_span_pair_embeddings(top_span_embeddings),
-                                             top_span_mention_scores)
+    def get_relation_scores(self, top_span_embeddings, top_span_mention_scores, metadata):
+        scores = self._compute_relation_scores(
+            self._compute_span_pair_embeddings(top_span_embeddings), top_span_mention_scores)
+        # Mask out irrelevant labels.
+        return self._mask_irrelevant_labels(scores, metadata)
 
     def _compute_relation_scores(self, pairwise_embeddings, top_span_mention_scores):
         batch_size = pairwise_embeddings.size(0)

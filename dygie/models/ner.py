@@ -89,6 +89,9 @@ class NERTagger(Model):
         dummy_scores = ner_scores.new_zeros(*dummy_dims)
         ner_scores = torch.cat((dummy_scores, ner_scores), -1)
 
+        # Mask out irrelevant labels.
+        ner_scores = self._mask_irrelevant_labels(ner_scores, metadata)
+
         _, predicted_ner = ner_scores.max(2)
 
         output_dict = {"spans": spans,
@@ -99,10 +102,7 @@ class NERTagger(Model):
         if ner_labels is not None:
             self._ner_metrics(predicted_ner, ner_labels, span_mask)
 
-            # When computing the loss, set the scores for labels from different datasets to -inf.
-            ner_scores_masked = self._mask_irrelevant_labels(ner_scores, metadata)
-
-            ner_scores_flat = ner_scores_masked.view(-1, self._n_labels)
+            ner_scores_flat = ner_scores.view(-1, self._n_labels)
             ner_labels_flat = ner_labels.view(-1)
             mask_flat = span_mask.view(-1).bool()
 
