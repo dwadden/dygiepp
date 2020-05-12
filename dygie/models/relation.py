@@ -216,9 +216,9 @@ class RelationExtractor(Model):
         indices = np.expand_dims(indices, 0)
         # When mask == 1, we keep the score. When mask == 0, we ignore it.
         mask_no_dummy = datasets == indices
+        # Always keep the dummy label.
         mask_dummy = np.expand_dims(np.repeat([True], len(metadata)), 1)
         mask = np.concatenate([mask_dummy, mask_no_dummy], axis=1)
-        mask[:, 0] = True  # Always keep the null label.
         mask = mask.astype(np.float32)
         mask = torch.from_numpy(mask).unsqueeze(1).unsqueeze(2).to(relation_scores.device)
         masked_scores = util.replace_masked_values(relation_scores, mask, 1e-20)
