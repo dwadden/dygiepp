@@ -16,6 +16,7 @@ from allennlp.modules import TimeDistributed
 
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
 from dygie.models.entity_beam_pruner import Pruner
+from dygie.models import shared
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -127,6 +128,7 @@ class RelationExtractor(Model):
                        "num_spans_to_keep": num_spans_to_keep,
                        "top_span_indices": top_span_indices,
                        "top_span_mask": top_span_mask,
+                       "metadata": metadata,
                        "loss": 0}
 
         return output_dict
@@ -208,6 +210,9 @@ class RelationExtractor(Model):
         """
         Mask out relation scores for classes from different datasets.
         """
+        if not shared.is_seed_datasets(metadata):
+            return relation_scores
+
         datasets = pd.Series([x["doc_key"].split(":")[0] for x in metadata]).values
         datasets = np.expand_dims(datasets, 1)
         # The null label is not included in this list; need to add.

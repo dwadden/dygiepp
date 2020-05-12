@@ -3,6 +3,7 @@ Short utility functions.
 """
 
 import torch
+import pandas as pd
 
 
 def cumsum_shifted(xs):
@@ -41,3 +42,20 @@ def fields_to_batches(d, keys_to_ignore=[]):
     length = lengths[0]
     res = [{k: d[k][i] for k in keys} for i in range(length)]
     return res
+
+
+def is_seed_datasets(metadata):
+    """
+    For CORD experiments, all the seed datasets have a `:` in their `doc_key`s
+    but the CORD documents do not. This whether we're dealing with CORD or the
+    seed datasets.
+    """
+    doc_keys = pd.Series([x["doc_key"] for x in metadata])
+    has_colon = doc_keys.str.contains(":").values
+    # If they all have a colon then we're doing the seed datasets. If none of
+    # them do we're doing the CORD datasets. If there's some with and some
+    # without, there's a problem.
+    if not (has_colon.all() or (~has_colon).all()):
+        raise Exception("Can't tell whether we should make irrelevant labels.")
+    has_colon = has_colon.all()
+    return has_colon

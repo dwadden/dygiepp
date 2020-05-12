@@ -12,6 +12,7 @@ from allennlp.modules import FeedForward
 from allennlp.modules import TimeDistributed
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from dygie.training.ner_metrics import NERMetrics
+from dygie.models import shared
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -97,6 +98,7 @@ class NERTagger(Model):
         output_dict = {"spans": spans,
                        "span_mask": span_mask,
                        "ner_scores": ner_scores,
+                       "metadata": metadata,
                        "predicted_ner": predicted_ner}
 
         if ner_labels is not None:
@@ -118,6 +120,9 @@ class NERTagger(Model):
         """
         Mask out the NER scores for classes from different datasets.
         """
+        if not shared.is_seed_datasets(metadata):
+            return ner_scores
+
         datasets = pd.Series([x["doc_key"].split(":")[0] for x in metadata]).values
         datasets = np.expand_dims(datasets, 1)
         # The null label is the first class.
@@ -136,6 +141,20 @@ class NERTagger(Model):
 
     @overrides
     def decode(self, output_dict: Dict[str, torch.Tensor]):
+        if shared.is_seed_datasets(output_dict["metadata"]):
+            return self._decode_regular(output_dict)
+        else:
+            # If we're doing multi-label decoding, make sure we get the same
+            # spans as before (just a check since I'm doing this quickly).
+            decoded = self._decode_cord(output_dict)
+            check = self._decode_regular(output_dict)
+            for decoded_dict, check_dict in zip(decoded["decoded_ner_dict"], check["decoded_ner_dict"]):
+                if decoded_dict.keys() != check_dict.keys():
+                    raise Exception("Check on multi-label decoding failed.")
+
+            return decoded
+
+    def _decode_regular(self, output_dict):
         predicted_ner_batch = output_dict["predicted_ner"].detach().cpu()
         spans_batch = output_dict["spans"].detach().cpu()
         span_mask_batch = output_dict["span_mask"].detach().cpu().bool()
@@ -152,6 +171,45 @@ class NERTagger(Model):
                     the_label = self.vocab.get_token_from_index(ner, "ner_labels")
                     entry_list.append((the_span[0], the_span[1], the_label))
                     entry_dict[the_span] = the_label
+            res_list.append(entry_list)
+            res_dict.append(entry_dict)
+
+        output_dict["decoded_ner"] = res_list
+        output_dict["decoded_ner_dict"] = res_dict
+        return output_dict
+
+    def _decode_cord(self, output_dict):
+        predicted_ner_batch = output_dict["predicted_ner"].detach().cpu()
+        ner_scores_batch = output_dict["ner_scores"].detach().cpu()
+        spans_batch = output_dict["spans"].detach().cpu()
+        span_mask_batch = output_dict["span_mask"].detach().cpu().bool()
+
+        res_list = []
+        res_dict = []
+        for spans, span_mask, ner_scoress in zip(spans_batch, span_mask_batch, ner_scores_batch):
+            entry_list = []
+            entry_dict = {}
+            for span, ner_scores in zip(spans[span_mask], ner_scoress[span_mask]):
+                the_span = (span[0].item(), span[1].item())
+                span_labels = []
+
+                indices = pd.Series(self.vocab.get_index_to_token_vocabulary("ner_labels"))
+                ner_scores = pd.Series(ner_scores, index=indices).reset_index()
+                ner_scores.columns = ["label", "score"]
+                ner_scores["dataset"] = ner_scores["label"].str.split(":").str[0]
+                baseline_score = ner_scores[ner_scores["dataset"] == ""].iloc[0].score
+                for dataset, groupdf in ner_scores.groupby("dataset"):
+                    if dataset == "":
+                        continue
+                    # If there's multiple rows with same score, just pick one randomly.
+                    best_row = groupdf[groupdf["score"] == groupdf["score"].max()].sample(n=1).iloc[0]
+                    if best_row["score"] > baseline_score:
+                        span_labels.append({"label": best_row["label"], "score": best_row["score"]})
+
+                if span_labels:
+                    entry_list.append((the_span[0], the_span[1], span_labels))
+                    entry_dict[the_span] = span_labels
+
             res_list.append(entry_list)
             res_dict.append(entry_dict)
 
