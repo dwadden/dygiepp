@@ -120,6 +120,7 @@ class NERTagger(Model):
         """
         datasets = pd.Series([x["doc_key"].split(":")[0] for x in metadata]).values
         datasets = np.expand_dims(datasets, 1)
+        # The null label is the first class.
         indices = pd.Series(self.vocab.get_index_to_token_vocabulary("ner_labels"))
         indices = indices.str.split(":").str[0].values
         indices = np.expand_dims(indices, 0)

@@ -1,6 +1,8 @@
 import logging
 import itertools
 from typing import Any, Dict, List, Optional
+import numpy as np
+import pandas as pd
 
 import torch
 import torch.nn.functional as F
@@ -172,6 +174,7 @@ class RelationExtractor(Model):
         output_dict["relation_scores"] = relation_scores
         output_dict["top_span_embeddings"] = top_span_embeddings
         return output_dict
+
     def predict_labels(self, relation_labels, output_dict, metadata):
         relation_scores = output_dict["relation_scores"]
 
@@ -187,7 +190,9 @@ class RelationExtractor(Model):
             gold_relations = self._get_pruned_gold_relations(
                 relation_labels, output_dict["top_span_indices"], output_dict["top_span_mask"])
 
-            cross_entropy = self._get_cross_entropy_loss(relation_scores, gold_relations)
+            # Mask out scores for relations from other datasets.
+            relation_scores_masked = self._mask_irrelevant_labels(relation_scores, metadata)
+            cross_entropy = self._get_cross_entropy_loss(relation_scores_masked, gold_relations)
 
             # Compute F1.
             predictions = self.decode(output_dict)["decoded_relations_dict"]
@@ -197,6 +202,26 @@ class RelationExtractor(Model):
 
             output_dict["loss"] = cross_entropy
         return output_dict
+
+    def _mask_irrelevant_labels(self, relation_scores, metadata):
+        """
+        Mask out relation scores for classes from different datasets.
+        """
+        datasets = pd.Series([x["doc_key"].split(":")[0] for x in metadata]).values
+        datasets = np.expand_dims(datasets, 1)
+        # The null label is not included in this list; need to add.
+        indices = pd.Series(self.vocab.get_index_to_token_vocabulary("relation_labels"))
+        indices = indices.str.split(":").str[0].values
+        indices = np.expand_dims(indices, 0)
+        # When mask == 1, we keep the score. When mask == 0, we ignore it.
+        mask_no_dummy = datasets == indices
+        mask_dummy = np.expand_dims(np.repeat([True], len(metadata)), 1)
+        mask = np.concatenate([mask_dummy, mask_no_dummy], axis=1)
+        mask[:, 0] = True  # Always keep the null label.
+        mask = mask.astype(np.float32)
+        mask = torch.from_numpy(mask).unsqueeze(1).unsqueeze(2).to(relation_scores.device)
+        masked_scores = util.replace_masked_values(relation_scores, mask, 1e-20)
+        return masked_scores
 
     @overrides
     def decode(self, output_dict):
