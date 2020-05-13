@@ -195,21 +195,44 @@ class RelationExtractor(Model):
             gold_relations = self._get_pruned_gold_relations(
                 relation_labels, output_dict["top_span_indices"], output_dict["top_span_mask"])
 
-            cross_entropy = self._get_cross_entropy_loss(relation_scores, gold_relations)
+            # If we're training on the seed datasets, only evaluate on SciERC.
+            if shared.is_seed_datasets(metadata):
+                datasets = pd.Series([x["doc_key"].split(":")[0] for x in metadata]).values
+                keep = datasets == "scierc"
+                if not keep.any():
+                    # If no SciERC data, set the loss to 0 and continue.
+                    cross_entropy = torch.tensor(0).to(relation_scores.device)
+                else:
+                    # Otherwise. compute the loss on the SciERC entries.
+                    keep = torch.from_numpy(keep).to(relation_scores.device)
+                    cross_entropy = self._get_cross_entropy_loss(
+                        relation_scores[keep], gold_relations[keep])
 
             # Compute F1.
             predictions = self.decode(output_dict)["decoded_relations_dict"]
             assert len(predictions) == len(metadata)  # Make sure length of predictions is right.
-            self._candidate_recall(predictions, metadata)
-            self._relation_metrics(predictions, metadata)
+            if shared.is_seed_datasets(metadata):
+                # If we're training on seed datasets, only score the model on SciERC performance.
+                if keep.any():
+                    preds_to_evaluate = [pred for pred, kept in zip(predictions, keep) if kept]
+                    metadata_to_evaluate = [md for md, kept in zip(metadata, keep) if kept]
+                    self._candidate_recall(preds_to_evaluate, metadata_to_evaluate)
+                    self._relation_metrics(preds_to_evaluate, metadata_to_evaluate)
+                # Otherwise, don't do anything.
+            else:
+                # If we're not training on seed datasets, evaluate everything.
+                self._candidate_recall(predictions, metadata)
+                self._relation_metrics(predictions, metadata)
 
             output_dict["loss"] = cross_entropy
         return output_dict
 
     def _mask_irrelevant_labels(self, relation_scores, metadata):
-        """
-        Mask out relation scores for classes from different datasets.
-        """
+        # Don't bother; only assess loss on SciERC relations.
+        return relation_scores
+
+    def _mask_irrelevant_labels_old(self, relation_scores, metadata):
+        # Not gonna bother with this; just use scierc.
         if not shared.is_seed_datasets(metadata):
             return relation_scores
 
