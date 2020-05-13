@@ -207,6 +207,11 @@ class RelationExtractor(Model):
                     keep = torch.from_numpy(keep).to(relation_scores.device)
                     cross_entropy = self._get_cross_entropy_loss(
                         relation_scores[keep], gold_relations[keep])
+            # If not a seed datset, just compute cross-entropy loss like normal.
+            else:
+                cross_entropy = self._get_cross_entropy_loss(
+                    relation_scores, gold_relations)
+
 
             # Compute F1.
             predictions = self.decode(output_dict)["decoded_relations_dict"]
