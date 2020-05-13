@@ -186,27 +186,41 @@ class NERTagger(Model):
 
     def _decode_cord(self, ner_scores_batch, spans_batch, span_mask_batch):
         indices = pd.Series(self.vocab.get_index_to_token_vocabulary("ner_labels"))
+        datasets = indices.str.split(":").str[0].values
+        uniq_datasets = np.unique(datasets)
 
         res_list = []
         res_dict = []
-        for spans, span_mask, ner_scoress in zip(spans_batch, span_mask_batch, ner_scores_batch):
+        for spans, span_mask, ner_scores in zip(spans_batch, span_mask_batch, ner_scores_batch):
+            threshold = ner_scores[0, 0].item()
+            ner_np = ner_scores.numpy()[span_mask.numpy()]
+
+            scores_dataset = {}
+            for dataset in uniq_datasets:
+                if dataset == "":
+                    continue
+                scores_dataset[dataset] = {}
+                col_ix = datasets == dataset
+                labels = indices[col_ix].values
+                ner_dataset = ner_np[:, col_ix]
+                scores_dataset[dataset]["max_scores"] = ner_dataset.max(axis=1)
+                max_indices = ner_dataset.argmax(axis=1)
+                scores_dataset[dataset]["max_labels"] = labels[max_indices]
+
             entry_list = []
             entry_dict = {}
-            for span, ner_scores in zip(spans[span_mask], ner_scoress[span_mask]):
+            for i, span in enumerate(spans[span_mask]):
                 the_span = (span[0].item(), span[1].item())
                 span_labels = []
 
-                ner_scores = pd.Series(ner_scores.numpy(), index=indices).reset_index()
-                ner_scores.columns = ["label", "score"]
-                ner_scores["dataset"] = ner_scores["label"].str.split(":").str[0]
-                baseline_score = ner_scores[ner_scores["dataset"] == ""].iloc[0].score
-                for dataset, groupdf in ner_scores.groupby("dataset"):
+                for dataset in uniq_datasets:
                     if dataset == "":
                         continue
+                    this_score = scores_dataset[dataset]["max_scores"][i]
+                    this_label = scores_dataset[dataset]["max_labels"][i]
 
-                    best_row = groupdf[groupdf["score"] == groupdf["score"].max()].iloc[0]
-                    if best_row["score"] > baseline_score:
-                        span_labels.append({"label": best_row["label"], "score": best_row["score"]})
+                    if this_score > threshold:
+                        span_labels.append({"label": this_label, "score": this_score})
 
                 if span_labels:
                     entry_list.append((the_span[0], the_span[1], span_labels))
