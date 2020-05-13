@@ -220,7 +220,9 @@ class NERTagger(Model):
                     this_label = scores_dataset[dataset]["max_labels"][i]
 
                     if this_score > threshold:
-                        span_labels.append({"label": this_label, "score": this_score})
+                        # Convert to float and round for json output.
+                        clean_score = round(float(this_score), 4)
+                        span_labels.append({"label": this_label, "score": clean_score})
 
                 if span_labels:
                     entry_list.append((the_span[0], the_span[1], span_labels))
