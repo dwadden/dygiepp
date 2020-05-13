@@ -141,24 +141,32 @@ class NERTagger(Model):
 
     @overrides
     def decode(self, output_dict: Dict[str, torch.Tensor]):
-        if shared.is_seed_datasets(output_dict["metadata"]):
-            return self._decode_regular(output_dict)
-        else:
-            # If we're doing multi-label decoding, make sure we get the same
-            # spans as before (just a check since I'm doing this quickly).
-            decoded = self._decode_cord(output_dict)
-            check = self._decode_regular(output_dict)
-            for decoded_dict, check_dict in zip(decoded["decoded_ner_dict"], check["decoded_ner_dict"]):
-                if decoded_dict.keys() != check_dict.keys():
-                    raise Exception("Check on multi-label decoding failed.")
-
-            return decoded
-
-    def _decode_regular(self, output_dict):
         predicted_ner_batch = output_dict["predicted_ner"].detach().cpu()
+        ner_scores_batch = output_dict["ner_scores"].detach().cpu()
         spans_batch = output_dict["spans"].detach().cpu()
         span_mask_batch = output_dict["span_mask"].detach().cpu().bool()
 
+        if shared.is_seed_datasets(output_dict["metadata"]):
+            decoded_ner, decoded_ner_dict = self._decode_regular(
+                predicted_ner_batch, spans_batch, span_mask_batch)
+        else:
+            # If we're doing multi-label decoding, make sure we get the same
+            # spans as before (just a check since I'm doing this quickly).
+            decoded_ner, decoded_ner_dict = self._decode_cord(
+                ner_scores_batch, spans_batch, span_mask_batch)
+            check_ner, check_ner_dict = self._decode_regular(
+                predicted_ner_batch, spans_batch, span_mask_batch)
+
+            for decoded_dict, check_dict in zip(decoded_ner_dict, check_ner_dict):
+                if decoded_dict.keys() != check_dict.keys():
+                    raise Exception("Check on multi-label decoding failed.")
+
+        output_dict["decoded_ner"] = decoded_ner
+        output_dict["decoded_ner_dict"] = decoded_ner_dict
+
+        return output_dict
+
+    def _decode_regular(self, predicted_ner_batch, spans_batch, span_mask_batch):
         res_list = []
         res_dict = []
         for spans, span_mask, predicted_NERs in zip(spans_batch, span_mask_batch, predicted_ner_batch):
@@ -174,15 +182,10 @@ class NERTagger(Model):
             res_list.append(entry_list)
             res_dict.append(entry_dict)
 
-        output_dict["decoded_ner"] = res_list
-        output_dict["decoded_ner_dict"] = res_dict
-        return output_dict
+        return res_list, res_dict
 
-    def _decode_cord(self, output_dict):
-        predicted_ner_batch = output_dict["predicted_ner"].detach().cpu()
-        ner_scores_batch = output_dict["ner_scores"].detach().cpu()
-        spans_batch = output_dict["spans"].detach().cpu()
-        span_mask_batch = output_dict["span_mask"].detach().cpu().bool()
+    def _decode_cord(self, ner_scores_batch, spans_batch, span_mask_batch):
+        indices = pd.Series(self.vocab.get_index_to_token_vocabulary("ner_labels"))
 
         res_list = []
         res_dict = []
@@ -193,16 +196,15 @@ class NERTagger(Model):
                 the_span = (span[0].item(), span[1].item())
                 span_labels = []
 
-                indices = pd.Series(self.vocab.get_index_to_token_vocabulary("ner_labels"))
-                ner_scores = pd.Series(ner_scores, index=indices).reset_index()
+                ner_scores = pd.Series(ner_scores.numpy(), index=indices).reset_index()
                 ner_scores.columns = ["label", "score"]
                 ner_scores["dataset"] = ner_scores["label"].str.split(":").str[0]
                 baseline_score = ner_scores[ner_scores["dataset"] == ""].iloc[0].score
                 for dataset, groupdf in ner_scores.groupby("dataset"):
                     if dataset == "":
                         continue
-                    # If there's multiple rows with same score, just pick one randomly.
-                    best_row = groupdf[groupdf["score"] == groupdf["score"].max()].sample(n=1).iloc[0]
+
+                    best_row = groupdf[groupdf["score"] == groupdf["score"].max()].iloc[0]
                     if best_row["score"] > baseline_score:
                         span_labels.append({"label": best_row["label"], "score": best_row["score"]})
 
@@ -213,9 +215,7 @@ class NERTagger(Model):
             res_list.append(entry_list)
             res_dict.append(entry_dict)
 
-        output_dict["decoded_ner"] = res_list
-        output_dict["decoded_ner_dict"] = res_dict
-        return output_dict
+        return res_list, res_dict
 
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
