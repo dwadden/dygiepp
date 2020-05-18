@@ -10,6 +10,7 @@ This repository is under construction and we're in the process of adding support
 - [Model evaluation](#evaluating-a-model)
 - [Pretrained models](#pretrained-models)
 - [Making predictions](#making-predictions)
+- [Contact](#contact)
 
 
 ## Dependencies
@@ -231,3 +232,8 @@ Following [Li and Ji (2014)](https://www.semanticscholar.org/paper/Incremental-J
 correct, and the head offsets of two entity mention arguments are both correct".
 
 In particular, we do *not* require the types of the entity mention arguments to be correct, as is done in some work (e.g. [Zhang et al. (2017)](https://www.semanticscholar.org/paper/End-to-End-Neural-Relation-Extraction-with-Global-Zhang-Zhang/ee13e1a3c1d5f5f319b0bf62f04974165f7b0a37)). We welcome a pull request that implements this alternative evaluation metric. Please open an issue if you're interested in this.
+
+
+# Contact
+
+Email `dwadden@cs.washington.edu` with questions, or create a GitHub issue.
