@@ -5,6 +5,7 @@ import json
 import itertools
 import pickle as pkl
 import warnings
+import pathlib
 
 from overrides import overrides
 
@@ -131,6 +132,7 @@ class IEJsonReader(DatasetReader):
                  context_width: int = 1,
                  debug: bool = False,
                  lazy: bool = False,
+                 cache_directory: str = None,
                  predict_hack: bool = False) -> None:
         super().__init__(lazy)
         assert (context_width % 2 == 1) and (context_width > 0)
@@ -139,6 +141,8 @@ class IEJsonReader(DatasetReader):
         self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
         self._debug = debug
         self._n_debug_docs = 10
+        # Set the cache directory to be a PosixPath object.
+        self._cache_directory = pathlib.Path(cache_directory) if cache_directory is not None else None
         self._predict_hack = predict_hack
 
     @overrides

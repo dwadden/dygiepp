@@ -245,6 +245,7 @@ function(p) {
     max_span_width: p.max_span_width,
     context_width: p.context_width,
     debug: getattr(p, "debug", false),
+    cache_directory: getattr(p, "cache_directory", null),
   },
   train_data_path: std.extVar("ie_train_data_path"),
   validation_data_path: std.extVar("ie_dev_data_path"),
