@@ -267,14 +267,15 @@ class RelationExtractor(Model):
         top_spans_batch = output_dict["top_spans"].detach().cpu()
         predicted_relations_batch = output_dict["predicted_relations"].detach().cpu()
         num_spans_to_keep_batch = output_dict["num_spans_to_keep"].detach().cpu()
+        relation_scores = output_dict["relation_scores"].detach().cpu()
         res_dict = []
         res_list = []
 
         # Collect predictions for each sentence in minibatch.
-        zipped = zip(top_spans_batch, predicted_relations_batch, num_spans_to_keep_batch)
-        for top_spans, predicted_relations, num_spans_to_keep in zipped:
+        zipped = zip(top_spans_batch, predicted_relations_batch, num_spans_to_keep_batch, relation_scores)
+        for top_spans, predicted_relations, num_spans_to_keep, relation_score in zipped:
             entry_dict, entry_list = self._decode_sentence(
-                top_spans, predicted_relations, num_spans_to_keep)
+                top_spans, predicted_relations, num_spans_to_keep, relation_score)
             res_dict.append(entry_dict)
             res_list.append(entry_list)
 
@@ -291,7 +292,7 @@ class RelationExtractor(Model):
                 "rel_f1": f1,
                 "rel_span_recall": candidate_recall}
 
-    def _decode_sentence(self, top_spans, predicted_relations, num_spans_to_keep):
+    def _decode_sentence(self, top_spans, predicted_relations, num_spans_to_keep, relation_score):
         # TODO(dwadden) speed this up?
         # Throw out all predictions that shouldn't be kept.
         keep = num_spans_to_keep.item()
@@ -305,9 +306,11 @@ class RelationExtractor(Model):
             span_2 = top_spans[j]
             label = predicted_relations[i, j].item()
             if label >= 0:
+                score = F.softmax(relation_score[i, j], dim=0).detach().cpu()[label+1].item()
+                raw_score = relation_score[i, j, label + 1].item()
                 label_name = self.vocab.get_token_from_index(label, namespace="relation_labels")
-                res_dict[(span_1, span_2)] = label_name
-                list_entry = (span_1[0], span_1[1], span_2[0], span_2[1], label_name)
+                res_dict[(span_1, span_2)] = (label_name, score, raw_score)
+                list_entry = (span_1[0], span_1[1], span_2[0], span_2[1], label_name, score, raw_score)
                 res_list.append(list_entry)
 
         return res_dict, res_list

@@ -18,7 +18,7 @@ class RelationMetrics(Metric):
             gold_relations = metadata["relation_dict"]
             self._total_gold += len(gold_relations)
             self._total_predicted += len(predicted_relations)
-            for (span_1, span_2), label in predicted_relations.items():
+            for (span_1, span_2), (label, score, raw_score) in predicted_relations.items():
                 ix = (span_1, span_2)
                 if ix in gold_relations and gold_relations[ix] == label:
                     self._total_matched += 1

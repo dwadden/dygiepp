@@ -144,12 +144,17 @@ class DyGIEPredictor(Predictor):
     @staticmethod
     def _cleanup_relation(decoded, sentence_starts):
         "Add sentence offsets to relation results."
+        def fmt_score(x):
+            return round(float(x), 4)
+
         assert len(decoded) == len(sentence_starts)  # Length check.
         res = []
         for sentence, sentence_start in zip(decoded, sentence_starts):
             res_sentence = []
             for rel in sentence:
-                cleaned = [x + sentence_start for x in rel[:4]] + [rel[4]]
+                # Output the spans, the label, and the scores.
+                cleaned = ([x + sentence_start for x in rel[:4]] +
+                           [rel[4], fmt_score(rel[5]), fmt_score(rel[6])])
                 res_sentence.append(cleaned)
             res.append(res_sentence)
         return res
