@@ -1,5 +1,6 @@
 from typing import List
 import numpy as np
+from copy import deepcopy
 
 from overrides import overrides
 import numpy
@@ -11,6 +12,14 @@ from allennlp.data.dataset import Batch
 from allennlp.data import DatasetReader
 from allennlp.models import Model
 from allennlp.predictors.predictor import Predictor
+from allennlp.data.fields import AdjacencyField
+from allennlp.data.instance import Instance
+
+from dygie.interpret.dygie import DygieInterpreter
+
+import sys
+from IPython.core.ultratb import FormattedTB
+sys.excepthook = FormattedTB(mode='Verbose', color_scheme='Linux', call_pdb=1)
 
 
 @Predictor.register("dygie")
@@ -38,6 +47,8 @@ class DyGIEPredictor(Predictor):
                                   ner="predicted_ner",
                                   relation="predicted_relations",
                                   events="predicted_events")
+        # Model to interpret the predictions.
+        self._interpreter = DygieInterpreter(self)
 
     def predict(self, document):
         return self.predict_json({"document": document})
@@ -97,7 +108,62 @@ class DyGIEPredictor(Predictor):
             predictions[self._decode_names[k]] = self._cleanup(
                 k, v, sentence_starts)
 
+        labeled_instances = self.predictions_to_labeled_instances(instance, predictions)
+
+        interpretations = self._interpreter.saliency_interpret_from_labeled_instances(
+            labeled_instances)
+
+        import ipdb; ipdb.set_trace()
+
         return predictions
+
+    def predictions_to_labeled_instances(self, instances, predictions):
+        """
+        Convert predictions to labeled instances.
+        """
+        # Need to subtract off the sentence starts.
+        sentence_lengths = [len(entry["metadata"]["sentence"]) for entry in instances]
+        sentence_starts = np.cumsum(sentence_lengths)
+        sentence_starts = np.roll(sentence_starts, 1)
+        sentence_starts[0] = 0
+
+        # The result.
+        result_instances = []
+        assert len(instances) == len(predictions["predicted_relations"])
+        zipped = zip(instances, predictions["predicted_relations"], sentence_starts)
+        for instance, relations, sentence_start in zipped:
+            # The span field.
+            span_field = instance['spans']
+
+            for relation in relations:
+                start1, end1, start2, end2 = relation[:4] - sentence_start
+                relation_label = relation[4]
+
+                found = {"span1": False, "span2": False}
+                span_ix1 = span_ix2 = None
+                for i, span in enumerate(span_field):
+                    if start1 == span.span_start and end1 == span.span_end:
+                        span_ix1 = i
+                        found["span1"] = True
+                    if start2 == span.span_start and end2 == span.span_end:
+                        span_ix2 = i
+                        found["span2"] = True
+                if not (found["span1"] and found["span2"]):
+                    raise Exception("Couldn't find predicted spans.")
+
+                relation_indices = [(span_ix1, span_ix2)]
+                relation_label_field = AdjacencyField(
+                    indices=relation_indices,
+                    sequence_field=span_field,
+                    labels=[relation_label],
+                    label_namespace="relation_labels")
+
+                new_instance = deepcopy(instance)
+                new_instance.add_field("relation_labels", relation_label_field, self._model.vocab)
+
+                result_instances.append(new_instance)
+
+        return result_instances
 
     @staticmethod
     def _check_lengths(d):
@@ -181,3 +247,53 @@ class DyGIEPredictor(Predictor):
             res.append(this_sentence)
 
         return res
+
+    @overrides
+    def get_gradients(self, instances):
+        """
+        Gets the gradients of the loss with respect to the model inputs.
+
+        Parameters
+        ----------
+        instances: List[Instance]
+
+        Returns
+        -------
+        Tuple[Dict[str, Any], Dict[str, Any]]
+        The first item is a Dict of gradient entries for each input.
+        The keys have the form  ``{grad_input_1: ..., grad_input_2: ... }``
+        up to the number of inputs given. The second item is the model's output.
+
+        Notes
+        -----
+        Takes a ``JsonDict`` representing the inputs of the model and converts
+        them to :class:`~allennlp.data.instance.Instance`s, sends these through
+        the model :func:`forward` function after registering hooks on the embedding
+        layer of the model. Calls :func:`backward` on the loss and then removes the
+        hooks.
+        """
+        embedding_gradients = []
+        hooks = self._register_embedding_gradient_hooks(embedding_gradients)
+
+        dataset = Batch(instances)
+        dataset.index_instances(self._model.vocab)
+
+        # NOTE(dwadden) the problem happens here. For some reason, the data doesn't end up on the correct device.
+
+        outputs = self._model.decode(self._model.forward(**dataset.as_tensor_dict()))
+
+        import ipdb; ipdb.set_trace()
+
+        loss = outputs['loss']
+        self._model.zero_grad()
+        loss.backward()
+
+        for hook in hooks:
+            hook.remove()
+
+        grad_dict = dict()
+        for idx, grad in enumerate(embedding_gradients):
+            key = 'grad_input_' + str(idx + 1)
+            grad_dict[key] = grad.detach().cpu().numpy()
+
+        return grad_dict, outputs
