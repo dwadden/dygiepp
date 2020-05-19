@@ -160,6 +160,13 @@ class DyGIE(Model):
         # If we're doing Bert, get the sentence class token as part of the text embedding. This will
         # break if we use Bert together with other embeddings, but that won't happen much.
         if "bert-offsets" in text:
+            # NOTE(dwadden) This operation mutates the text. We clone it so that the input isn't
+            # mutated; otherwise, successive `forward` calls on the same data variable would give
+            # different results because the data got mutated silently.
+            new_text = {}
+            for k, v in text.items():
+                new_text[k] = v.clone()
+            text = new_text
             offsets = text["bert-offsets"]
             sent_ix = torch.zeros(offsets.size(0), device=offsets.device, dtype=torch.long).unsqueeze(1)
             padded_offsets = torch.cat([sent_ix, offsets], dim=1)
