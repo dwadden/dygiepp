@@ -17,10 +17,6 @@ from allennlp.data.instance import Instance
 
 from dygie.interpret.dygie import DygieInterpreter
 
-import sys
-from IPython.core.ultratb import FormattedTB
-sys.excepthook = FormattedTB(mode='Verbose', color_scheme='Linux', call_pdb=1)
-
 
 @Predictor.register("dygie")
 class DyGIEPredictor(Predictor):
@@ -250,37 +246,13 @@ class DyGIEPredictor(Predictor):
 
     @overrides
     def get_gradients(self, instances):
-        """
-        Gets the gradients of the loss with respect to the model inputs.
-
-        Parameters
-        ----------
-        instances: List[Instance]
-
-        Returns
-        -------
-        Tuple[Dict[str, Any], Dict[str, Any]]
-        The first item is a Dict of gradient entries for each input.
-        The keys have the form  ``{grad_input_1: ..., grad_input_2: ... }``
-        up to the number of inputs given. The second item is the model's output.
-
-        Notes
-        -----
-        Takes a ``JsonDict`` representing the inputs of the model and converts
-        them to :class:`~allennlp.data.instance.Instance`s, sends these through
-        the model :func:`forward` function after registering hooks on the embedding
-        layer of the model. Calls :func:`backward` on the loss and then removes the
-        hooks.
-        """
         embedding_gradients = []
         hooks = self._register_embedding_gradient_hooks(embedding_gradients)
 
         dataset = Batch(instances)
         dataset.index_instances(self._model.vocab)
-
-        # NOTE(dwadden) the problem happens here. For some reason, the data doesn't end up on the correct device.
-
-        outputs = self._model.decode(self._model.forward(**dataset.as_tensor_dict()))
+        dataset_tensor_dict = util.move_to_device(dataset.as_tensor_dict(), self.cuda_device)
+        outputs = self._model.decode(self._model.forward(**dataset_tensor_dict()))
 
         import ipdb; ipdb.set_trace()
 
