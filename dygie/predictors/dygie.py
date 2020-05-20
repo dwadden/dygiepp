@@ -82,6 +82,13 @@ class DyGIEPredictor(Predictor):
 
         decoded_instance = {x: [] for x in self._decode_fields}
 
+        # Keep track of BERT offsets for gradient attribution.
+        # TODO(dwadden) When we switch to AllenNLP 1.0 this shouldn't be necessary. Apparently the
+        # solution is in this PR: https://github.com/allenai/allennlp/pull/4179/files.
+        # Also relevant stuff here:
+        # https://github.com/allenai/allennlp/blob/master/allennlp/modules/token_embedders/pretrained_transformer_mismatched_embedder.py
+        bert_offsets_all = []
+
         # If we're doing coref, predict on the whole document together. This may
         # run out of memory. Otherwise just predict a sentence at a time.
         if self._model._loss_weights["coref"]:
@@ -93,6 +100,7 @@ class DyGIEPredictor(Predictor):
             dataset.index_instances(model.vocab)
             model_input = util.move_to_device(dataset.as_tensor_dict(), cuda_device)
             pred = model(**model_input)
+            bert_offsets_all.append(pred["text"]["bert-offsets"].detach().cpu().numpy()[0])
             decoded = model.decode(pred)
 
             for k, v in self._decode_fields.items():
@@ -110,15 +118,71 @@ class DyGIEPredictor(Predictor):
                 k, v, sentence_starts)
 
         labeled_instances = self.predictions_to_labeled_instances(instance, predictions)
+        if len(labeled_instances) != len(bert_offsets_all):
+            raise DyGIEPredictionException("There's confusion about the number of sentences.")
 
         # Loop over the sentences, getting interpretations for each relation.
         all_interpretations = []
-        for labeled_sentence in labeled_instances:
+        for labeled_sentence, bert_offsets in zip(labeled_instances, bert_offsets_all):
             interpretations = self._interpreter.saliency_interpret_from_labeled_instances(
                 labeled_sentence)
+            interpretations = self._aggregate_for_bert_offsets(interpretations, bert_offsets)
             all_interpretations.append(interpretations)
 
+        zipped = zip(predictions["sentences"], predictions["predicted_relations"], all_interpretations)
+        for sentence, predicted_relations, interpretations in zipped:
+            if len(predicted_relations) != len(interpretations):
+                raise DyGIEPredictionException("Length mistmatch pase")
+            for predicted_relation, interpretation in zip(predicted_relations, interpretations):
+                rounded = [round(x, 4) for x in interpretation]
+                predicted_relation.append(rounded)
+
+        import ipdb; ipdb.set_trace()
+
+
         return predictions
+
+    @staticmethod
+    def _aggregate_for_bert_offsets(interpretations, bert_offsets):
+        """
+        For gradient-based attribution models, there's on gradient per BERT wordpiece. We need to
+        convert this to gradients per token by summing over the wordpieces. The `bert_offsets`
+        give the mapping from tokens to wordpieces.
+        """
+        def aggregate_one(scores):
+            "Aggregate scores for a single input."
+            # Note: The entry in `scores` is on the CLS token, and the last is on the SEP token.
+            if max(bert_offsets) > len(scores) - 2:
+                raise DyGIEPredictionException("Something's weird with the offsets.")
+
+            aggregated_scores = []
+            offset_end = len(scores) - 1
+            offsets_with_end = bert_offsets.tolist() + [offset_end]
+            for i in range(len(offsets_with_end) - 1):
+                start = offsets_with_end[i]
+                end = offsets_with_end[i + 1]
+                token_scores = scores[start:end]
+                this_score = np.mean(token_scores)
+                aggregated_scores.append(this_score)
+
+            if len(aggregated_scores) != len(bert_offsets):
+                raise DyGIEPredictionException("Length mismatch in aggregate scores.")
+
+            return aggregated_scores
+
+        # Make sure the keys are in sorted order.
+        aggregated = []
+        keys = sorted(interpretations.keys(), key=lambda x: int(x.split("_")[1]))
+        for key in keys:
+            interp = interpretations[key]
+            if set(interp.keys()) != set(["grad_input_1"]):
+                raise DyGIEPredictionException("Unexpected outputs.")
+            interp = interp["grad_input_1"]
+            to_append = aggregate_one(interp)
+            aggregated.append(to_append)
+
+        return aggregated
+
 
     def predictions_to_labeled_instances(self, instances, predictions):
         """
@@ -326,9 +390,7 @@ class DyGIEPredictor(Predictor):
             if len(ix) != 1:
                 raise DyGIEPredictionException("Expected a tuple with one item.")
             ix = ix[0]
-            import ipdb; ipdb.set_trace()
             if len(ix) == 0:
-                import ipdb; ipdb.set_trace()
                 # Didn't find it. Return None.
                 return None
             if len(ix) > 1:

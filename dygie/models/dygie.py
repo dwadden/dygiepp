@@ -164,6 +164,7 @@ class DyGIE(Model):
             # mutated; otherwise, successive `forward` calls on the same data variable would give
             # different results because the data got mutated silently.
             new_text = {}
+            old_text = text
             for k, v in text.items():
                 new_text[k] = v.clone()
             text = new_text
@@ -311,7 +312,8 @@ class DyGIE(Model):
         output_dict = dict(coref=output_coref,
                            relation=output_relation,
                            ner=output_ner,
-                           events=output_events)
+                           events=output_events,
+                           text=old_text)  # Keep the original un-mutated text; needed for interpretation.
         output_dict['loss'] = loss
 
         # Check to see if event predictions are globally compatible (argument labels are compatible
