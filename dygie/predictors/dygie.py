@@ -1,6 +1,7 @@
 from typing import List
 import numpy as np
 from copy import deepcopy
+import torch
 
 from overrides import overrides
 import numpy
@@ -16,6 +17,10 @@ from allennlp.data.fields import AdjacencyField
 from allennlp.data.instance import Instance
 
 from dygie.interpret.dygie import DygieInterpreter
+
+
+class DyGIEPredictionException(Exception):
+    pass
 
 
 @Predictor.register("dygie")
@@ -106,10 +111,12 @@ class DyGIEPredictor(Predictor):
 
         labeled_instances = self.predictions_to_labeled_instances(instance, predictions)
 
-        interpretations = self._interpreter.saliency_interpret_from_labeled_instances(
-            labeled_instances)
-
-        import ipdb; ipdb.set_trace()
+        # Loop over the sentences, getting interpretations for each relation.
+        all_interpretations = []
+        for labeled_sentence in labeled_instances:
+            interpretations = self._interpreter.saliency_interpret_from_labeled_instances(
+                labeled_sentence)
+            all_interpretations.append(interpretations)
 
         return predictions
 
@@ -128,6 +135,8 @@ class DyGIEPredictor(Predictor):
         assert len(instances) == len(predictions["predicted_relations"])
         zipped = zip(instances, predictions["predicted_relations"], sentence_starts)
         for instance, relations, sentence_start in zipped:
+            # Accumulate the results for a single instance.
+            results_inst = []
             # The span field.
             span_field = instance['spans']
 
@@ -157,7 +166,10 @@ class DyGIEPredictor(Predictor):
                 new_instance = deepcopy(instance)
                 new_instance.add_field("relation_labels", relation_label_field, self._model.vocab)
 
-                result_instances.append(new_instance)
+                results_inst.append(new_instance)
+
+            # Append the results for this instance to the full list of results.
+            result_instances.append(results_inst)
 
         return result_instances
 
@@ -246,17 +258,42 @@ class DyGIEPredictor(Predictor):
 
     @overrides
     def get_gradients(self, instances):
+        "Get the gradients with respect to a single predicted relation."
         embedding_gradients = []
         hooks = self._register_embedding_gradient_hooks(embedding_gradients)
 
         dataset = Batch(instances)
         dataset.index_instances(self._model.vocab)
-        dataset_tensor_dict = util.move_to_device(dataset.as_tensor_dict(), self.cuda_device)
-        outputs = self._model.decode(self._model.forward(**dataset_tensor_dict()))
 
-        import ipdb; ipdb.set_trace()
+        # NOTE(dwadden) In v1.0, the predictor has a `device` attribute. This isn't available yet,
+        # so I'll hack it.
+        device = next(self._model._text_field_embedder.parameters()).device.index
+        dataset_tensor_dict = util.move_to_device(dataset.as_tensor_dict(), device)
+        outputs = self._model.decode(self._model.forward(**dataset_tensor_dict))
 
-        loss = outputs['loss']
+        relation_outputs = outputs["relation"]
+        relation_scores = relation_outputs["relation_scores"]
+        if relation_scores.size(0) != 1:
+            raise DyGIEPredictionException("Only expected a single instance.")
+        relation_scores = relation_scores[0]
+
+        # If the gold entities are in the beam, then this pair contributes to the loss. Otherwise,
+        # we don't get any information.
+        gold_indices = self._get_index_in_relation_scores(instances, relation_outputs)
+        if gold_indices is None:
+            loss = torch.tensor(0, dtype=torch.float, requires_grad=True)
+        else:
+            gold_label = instances[0]["relation_labels"].labels[0]
+            # Need to add one because of null class.
+            gold_number = self._model.vocab.get_token_index(gold_label, "relation_labels") + 1
+            # This is the gold label number.
+            gold_number = (torch.tensor([gold_number], requires_grad=False, dtype=int).
+                           to(relation_scores.device))
+            # Grab the scores that are relevant to this number.
+            relevant_scores = relation_scores[gold_indices[0], gold_indices[1]].unsqueeze(0)
+            # Compute the cross-entropy loss.
+            loss = self._model._relation._loss(relevant_scores, gold_number)
+
         self._model.zero_grad()
         loss.backward()
 
@@ -269,3 +306,34 @@ class DyGIEPredictor(Predictor):
             grad_dict[key] = grad.detach().cpu().numpy()
 
         return grad_dict, outputs
+
+    def _get_index_in_relation_scores(self, instances, relation_outputs):
+        """
+        Get the indices of the predicted span pair in the marix of relation scores. They may not
+        always be there (since we're sweeping the parameters during integrated gradients). When
+        either one is not there, return None.
+        """
+        if len(instances) != 1:
+            raise DyGIEPredictionException("Expected a single instance.")
+
+        gold_indices = instances[0]["relation_labels"].indices[0]
+        top_span_indices = relation_outputs["top_span_indices"].detach().cpu()[0]
+        ixs = {0: torch.where(gold_indices[0] == top_span_indices),
+               1: torch.where(gold_indices[1] == top_span_indices)}
+
+        for k in ixs:
+            ix = ixs[k]
+            if len(ix) != 1:
+                raise DyGIEPredictionException("Expected a tuple with one item.")
+            ix = ix[0]
+            import ipdb; ipdb.set_trace()
+            if len(ix) == 0:
+                import ipdb; ipdb.set_trace()
+                # Didn't find it. Return None.
+                return None
+            if len(ix) > 1:
+                raise DyGIEPredictionException("There shouldn't be multiple occurrences.")
+            ix = ix.item()
+            ixs[k] = ix
+
+        return (ixs[0], ixs[1])
