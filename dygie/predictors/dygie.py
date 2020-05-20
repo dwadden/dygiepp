@@ -16,7 +16,7 @@ from allennlp.predictors.predictor import Predictor
 from allennlp.data.fields import AdjacencyField
 from allennlp.data.instance import Instance
 
-from dygie.interpret.dygie import DygieInterpreter
+from dygie.interpret.dygie import DyGIEInterpreter
 
 
 class DyGIEPredictionException(Exception):
@@ -49,7 +49,7 @@ class DyGIEPredictor(Predictor):
                                   relation="predicted_relations",
                                   events="predicted_events")
         # Model to interpret the predictions.
-        self._interpreter = DygieInterpreter(self)
+        self._interpreter = DyGIEInterpreter(self)
 
     def predict(self, document):
         return self.predict_json({"document": document})
@@ -136,9 +136,6 @@ class DyGIEPredictor(Predictor):
             for predicted_relation, interpretation in zip(predicted_relations, interpretations):
                 rounded = [round(x, 4) for x in interpretation]
                 predicted_relation.append(rounded)
-
-        import ipdb; ipdb.set_trace()
-
 
         return predictions
 
