@@ -4,6 +4,11 @@ from dygie.models.shared import fields_to_batches
 from collections import Counter
 import numpy as np
 import pandas as pd
+import spacy
+
+
+NLP = spacy.load("en_core_sci_sm")
+NLP.tokenizer = NLP.tokenizer.tokens_from_list
 
 
 def get_sentence_of_span(span, sentence_starts, doc_tokens):
@@ -106,6 +111,7 @@ class Sentence:
         self.text = entry["sentences"]
         self.sentence_ix = sentence_ix
         self.document = doc
+        self.processed = None
         # Gold
         if "ner_flavor" in entry:
             self.ner = [NER(this_ner, self.text, sentence_start, flavor=this_flavor)
@@ -152,6 +158,11 @@ class Sentence:
         else:
             the_flavor = None
         return the_flavor
+
+    def process(self):
+        "Process the sentence using spacy."
+        if self.processed is None:
+            self.processed = NLP(self.text)
 
 
 class Span:
@@ -264,6 +275,7 @@ class Relation:
         res["label"] = self.label
         res["raw_score"] = self.raw_score
         res["softmax_score"] = self.softmax_score
+        res["lca"] = " ".join([str(x) for x in self._get_lca()])
 
         grads = self.gradients / self.gradients.max()
 
@@ -281,6 +293,33 @@ class Relation:
 
         res = pd.Series(res)
         return res
+
+    def _get_lca(self):
+        """
+        Given a relation, get the dep. parse least common ancestor.
+        """
+        self.sentence.process()
+        doc = self.sentence.processed
+        span_ix_0 = self.pair[0].span_sent
+        span_ix_1 = self.pair[1].span_sent
+        span_0 = doc[span_ix_0[0]:span_ix_0[1] + 1]
+        span_1 = doc[span_ix_1[0]:span_ix_1[1] + 1]
+
+        root_0 = span_0.root
+        root_1 = span_1.root
+
+        # Start with the word itself.
+        ancestors_0 = [x for x in root_0.ancestors]
+        ancestors_0.insert(0, root_0)
+        ancestors_1 = [x for x in root_1.ancestors]
+        ancestors_1.insert(0, root_1)
+
+        for cand in ancestors_0:
+            if cand in ancestors_1:
+                lca = cand
+                break
+
+        return lca.text, lca.i
 
 
 class AtomicRelation:
