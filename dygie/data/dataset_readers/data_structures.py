@@ -257,10 +257,13 @@ class Relation:
         res["doc_key"] = self.sentence.document._doc_key
         res["sentence_ix"] = self.sentence.sentence_ix
         res["sentence_text"] = " ".join(self.sentence.text)
-        res["arg0"] = " ".join(self.pair[0].text)
-        res["arg1"] = " ".join(self.pair[1].text)
-
+        res["arg0_text"] = " ".join(self.pair[0].text)
+        res["arg0_indices"] = f"{self.pair[0].start_sent} {self.pair[0].end_sent}"
+        res["arg1_text"] = " ".join(self.pair[1].text)
+        res["arg1_indices"] = f"{self.pair[1].start_sent} {self.pair[1].end_sent}"
         res["label"] = self.label
+        res["raw_score"] = self.raw_score
+        res["softmax_score"] = self.softmax_score
 
         grads = self.gradients / self.gradients.max()
 
@@ -271,9 +274,10 @@ class Relation:
 
         for i, (grad, ix) in enumerate(zip(sorted_grads[:n_toks], sorted_ixs[:n_toks])):
             tok = self.sentence.text[ix]
-            res[f"tok_{i}"] = tok
-            res[f"ix_{i}"] = ix
-            res[f"grad_{i}"] = f"{grad:0.4f}"
+            msg = f"{tok} {ix} {grad:0.4f}"
+            res[f"grad_{i}"] = msg
+
+        res["all_grads"] = " ".join([f"{x:0.4f}" for x in grads])
 
         res = pd.Series(res)
         return res
