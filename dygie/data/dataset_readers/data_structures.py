@@ -3,6 +3,7 @@ import copy
 from dygie.models.shared import fields_to_batches
 from collections import Counter
 import numpy as np
+import pandas as pd
 
 
 def get_sentence_of_span(span, sentence_starts, doc_tokens):
@@ -57,7 +58,7 @@ class Document:
         sentence_starts = np.roll(sentence_starts, 1)
         sentence_starts[0] = 0
         self.sentence_starts = sentence_starts
-        self.sentences = [Sentence(entry, sentence_start, sentence_ix)
+        self.sentences = [Sentence(entry, sentence_start, sentence_ix, self)  # Include a pointer to containing document.
                           for sentence_ix, (entry, sentence_start)
                           in enumerate(zip(entries, sentence_starts))]
         if "clusters" in js:
@@ -100,10 +101,11 @@ class Document:
 
 
 class Sentence:
-    def __init__(self, entry, sentence_start, sentence_ix):
+    def __init__(self, entry, sentence_start, sentence_ix, doc):
         self.sentence_start = sentence_start
         self.text = entry["sentences"]
         self.sentence_ix = sentence_ix
+        self.document = doc
         # Gold
         if "ner_flavor" in entry:
             self.ner = [NER(this_ner, self.text, sentence_start, flavor=this_flavor)
@@ -112,7 +114,7 @@ class Sentence:
             self.ner = [NER(this_ner, self.text, sentence_start)
                         for this_ner in entry["ner"]]
         if "relations" in entry:
-            self.relations = [Relation(this_relation, self.text, sentence_start) for
+            self.relations = [Relation(this_relation, self.text, self) for
                               this_relation in entry["relations"]]
         if "events" in entry:
             self.events = Events(entry["events"], self.text, sentence_start)
@@ -122,7 +124,7 @@ class Sentence:
             self.predicted_ner = [NER(this_ner, self.text, sentence_start, flavor=None) for
                                   this_ner in entry["predicted_ner"]]
         if "predicted_relations" in entry:
-            self.predicted_relations = [Relation(this_relation, self.text, sentence_start) for
+            self.predicted_relations = [Relation(this_relation, self.text, self) for
                                         this_relation in entry["predicted_relations"]]
         if "predicted_events" in entry:
             self.predicted_events = Events(entry["predicted_events"], self.text, sentence_start)
@@ -228,20 +230,53 @@ class NER:
 
 
 class Relation:
-    def __init__(self, relation, text, sentence_start):
+    def __init__(self, relation, text, sentence):
         start1, end1 = relation[0], relation[1]
         start2, end2 = relation[2], relation[3]
         label = relation[4]
-        span1 = Span(start1, end1, text, sentence_start)
-        span2 = Span(start2, end2, text, sentence_start)
+        span1 = Span(start1, end1, text, sentence.sentence_start)
+        span2 = Span(start2, end2, text, sentence.sentence_start)
         self.pair = (span1, span2)
         self.label = label
+        self.sentence = sentence  # Pointer back to the sentence this relation is from.
+        if len(relation) > 5:
+            self.softmax_score = relation[5]
+            self.raw_score = relation[6]
+        if len(relation) == 8:
+            self.gradients = np.array(relation[7])
 
     def __repr__(self):
         return self.pair[0].__repr__() + ", " + self.pair[1].__repr__() + ": " + self.label
 
     def __eq__(self, other):
         return (self.pair == other.pair) and (self.label == other.label)
+
+    def to_series(self):
+        "Export a summary of a relation."
+        res = {}
+        res["doc_key"] = self.sentence.document._doc_key
+        res["sentence_ix"] = self.sentence.sentence_ix
+        res["sentence_text"] = " ".join(self.sentence.text)
+        res["arg0"] = " ".join(self.pair[0].text)
+        res["arg1"] = " ".join(self.pair[1].text)
+
+        res["label"] = self.label
+
+        grads = self.gradients / self.gradients.max()
+
+        sorted_grads = np.sort(grads)[::-1]
+        sorted_ixs = grads.argsort()[::-1]
+
+        n_toks = 4
+
+        for i, (grad, ix) in enumerate(zip(sorted_grads[:n_toks], sorted_ixs[:n_toks])):
+            tok = self.sentence.text[ix]
+            res[f"tok_{i}"] = tok
+            res[f"ix_{i}"] = ix
+            res[f"grad_{i}"] = f"{grad:0.4f}"
+
+        res = pd.Series(res)
+        return res
 
 
 class AtomicRelation:
