@@ -76,6 +76,7 @@ local params = {
     parameter_groups: [
       [["_text_field_embedder"],
       {"lr": 1e-4,
+      "finetune": true,
       "warmup": 0.4,
       "t_total": 200000,
       "weight_decay": 0.01}],

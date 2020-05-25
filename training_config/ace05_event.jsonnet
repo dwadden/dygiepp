@@ -1,6 +1,6 @@
 // Import template file.
 
-local template = import "/data/dwadden/proj/dygie/dygie/training_config/template_dw.libsonnet";
+local template = import "template_dw.libsonnet";
 
 ////////////////////
 
@@ -25,6 +25,7 @@ local params = {
   use_bert_base: false,
   use_bert_large: true,
   finetune_bert: false,
+  use_scibert: false,
   context_width: 3,
 
   // Specifies the model parameters.

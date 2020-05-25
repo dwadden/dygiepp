@@ -376,10 +376,11 @@ class DyGIE(Model):
         metrics_ner = self._ner.get_metrics(reset=reset)
         metrics_relation = self._relation.get_metrics(reset=reset)
         metrics_events = self._events.get_metrics(reset=reset)
-        if self._loss_weights["ner"] > 0 and self._loss_weights["events"] > 0:
-            metrics_joint = self._joint_metrics.get_metric(reset=reset)
-        else:
-            metrics_joint = {}
+        # if self._loss_weights["ner"] > 0 and self._loss_weights["events"] > 0:
+        #     metrics_joint = self._joint_metrics.get_metric(reset=reset)
+        # else:
+        #     metrics_joint = {}
+        metrics_joint = {}
 
         # Make sure that there aren't any conflicting names.
         metric_names = (list(metrics_coref.keys()) + list(metrics_ner.keys()) +

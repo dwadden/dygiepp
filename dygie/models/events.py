@@ -175,7 +175,10 @@ class EventExtractor(Model):
         the text mask. For the arguments, we consider all the spans.
         """
         cls_projected = self._cls_projection(cls_embeddings)
-        auxiliary_loss = self._compute_auxiliary_loss(cls_projected, trigger_labels, trigger_mask)
+
+        # This didn't really help much.
+        # auxiliary_loss = self._compute_auxiliary_loss(cls_projected, trigger_labels, trigger_mask)
+        auxiliary_loss = 0
 
         ner_scores = output_ner["ner_scores"]
         predicted_ner = output_ner["predicted_ner"]
