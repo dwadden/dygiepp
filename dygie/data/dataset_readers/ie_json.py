@@ -200,7 +200,7 @@ class IEJsonReader(DatasetReader):
                 sentence_start += len(sentence)
                 instance = self.text_to_instance(
                     sentence, ner_dict, relation_dict, cluster_dict, trigger_dict, argument_dict,
-                    doc_key, dataset, sentence_num, groups, start_ix, end_ix)
+                    doc_key, dataset, sentence_num, groups, start_ix, end_ix, ner, relations, events)
 
                 if self._predict_hack:
                     instances.append(instance)
@@ -224,7 +224,10 @@ class IEJsonReader(DatasetReader):
                          sentence_num: int,
                          groups: List[str],
                          start_ix: int,
-                         end_ix: int):
+                         end_ix: int,
+                         ner: List,
+                         relations: List,
+                         events: List):
         """
         TODO(dwadden) document me.
         """
@@ -246,7 +249,11 @@ class IEJsonReader(DatasetReader):
                         groups=groups,
                         start_ix=start_ix,
                         end_ix=end_ix,
-                        sentence_num=sentence_num)
+                        sentence_num=sentence_num,
+                        ner=ner,
+                        relations=relations,
+                        events=events)
+
         metadata_field = MetadataField(metadata)
 
         # Trigger labels. One label per token in the input.

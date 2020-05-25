@@ -97,6 +97,17 @@ class DyGIEPredictor(Predictor):
             predictions[self._decode_names[k]] = self._cleanup(
                 k, v, sentence_starts)
 
+        # Include the gold fields corresponding to the predicted fields.
+        for field in ["ner", "relation", "events"]:
+            assert field not in predictions
+            predicted_field = f"predicted_{field}"
+            if f"predicted_{field}" in predictions:
+                values = [inst["metadata"][field] for inst in instance]
+                # If we have data, store it.
+                if any([x != [] for x in values]):
+                    assert len(values) == len(predictions[predicted_field])
+                    predictions[field] = values
+
         return predictions
 
     @staticmethod

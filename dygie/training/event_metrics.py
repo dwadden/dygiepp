@@ -38,9 +38,10 @@ class EventMetrics(Metric):
             self._score_triggers(predicted_triggers, gold_triggers)
 
             # Argument scoring.
-            predicted_arguments = _invert_arguments(predicted_events["argument_dict"], predicted_triggers)
-            gold_arguments = _invert_arguments(metadata["argument_dict"], gold_triggers)
-            self._score_arguments(predicted_arguments, gold_arguments)
+            predicted_arguments = predicted_events["argument_dict"]
+            gold_arguments = metadata["argument_dict"]
+            self._score_arguments(
+                predicted_triggers, gold_triggers, predicted_arguments, gold_arguments)
 
     def _score_triggers(self, predicted_triggers, gold_triggers):
         self._gold_triggers += len(gold_triggers)
@@ -52,19 +53,35 @@ class EventMetrics(Metric):
                 if gold_triggers[token_ix] == label:
                     self._matched_trigger_classes += 1
 
-    def _score_arguments(self, predicted_arguments, gold_arguments):
-        self._gold_arguments += len(gold_arguments)
-        self._predicted_arguments += len(predicted_arguments)
-        for prediction in predicted_arguments:
-            ix, trigger, arg = prediction
-            gold_id_matches = {entry for entry in gold_arguments
-                               if entry[0] == ix
-                               and entry[1] == trigger}
-            if gold_id_matches:
-                self._matched_argument_ids += 1
-                gold_class_matches = {entry for entry in gold_id_matches if entry[2] == arg}
-                if gold_class_matches:
-                    self._matched_argument_classes += 1
+    def _score_arguments(self, predicted_triggers, gold_triggers, predicted_arguments, gold_arguments):
+        # Note that the index of the trigger doesn't actually need to be correct to get full credit;
+        # the event type and event role need to be correct (see Sec. 3 of paper).
+        def format(arg_dict, trigger_dict):
+            # Make it a list of [index, event_type, arg_label].
+            res = []
+            for (trigger_ix, arg_ix), label in arg_dict.items():
+                # If it doesn't match a trigger, don't predict it (enforced in decoding).
+                if trigger_ix not in trigger_dict:
+                    continue
+                event_type = trigger_dict[trigger_ix]
+                res.append((arg_ix, event_type, label))
+            return res
+
+        formatted_gold_arguments = format(gold_arguments, gold_triggers)
+        formatted_predicted_arguments = format(predicted_arguments, predicted_triggers)
+
+        self._gold_arguments += len(formatted_gold_arguments)
+        self._predicted_arguments += len(formatted_predicted_arguments)
+
+        # Go through each predicted arg and look for a match.
+        for entry in formatted_predicted_arguments:
+            # No credit if not associated with a predicted trigger.
+            class_match = int(any([entry == gold for gold in formatted_gold_arguments]))
+            id_match = int(any([entry[:2] == gold[:2] for gold in formatted_gold_arguments]))
+
+            self._matched_argument_classes += class_match
+            self._matched_argument_ids += id_match
+
 
     @overrides
     def get_metric(self, reset=False):
