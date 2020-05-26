@@ -25,3 +25,8 @@ wget --directory-prefix=./pretrained \
 # ChemProt
 wget --directory-prefix=./pretrained \
     https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/chemprot.tar.gz
+
+
+# ACE05-Event
+wget --directory-prefix=./pretrained \
+    https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/ace05-event.tar.gz

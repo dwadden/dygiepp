@@ -80,8 +80,7 @@ The results will go in `./data/ace05/processed-data`. The intermediate files wil
 
 #### Training a model
 
-In progress.
-
+Enter `bash ./scripts/train/train_ace05_relation.sh [gpu-id]`. A model trained this way will not reproduce the numbers in the paper. We're in the process of debugging and will update.
 
 ### ACE05 Event
 
@@ -113,8 +112,20 @@ When finished, you should `conda deactivate` the `ace-event-preprocess` environm
 
 #### Training the model
 
-In progress.
+Enter `bash ./scripts/train/train_ace05_event.sh [gpu-id]`. The result will go in `models/ace05-event`.  A model trained in this fashion will reproduce (within 0.1 F1 or so) the results in Table 4 of the paper. To reproduce the results in Table 1 requires training an ensemble model of 4 trigger detectors. The basic process is as follows:
 
+- Merge the ACE event train + dev data, then create 4 new train / dev splits.
+- Train a separate trigger detection model on each split. To do this, modify `training-config/ace05_event.jsonnet` by setting
+  ```jsonnet
+  loss_weights_events: {   // Loss weights for trigger and argument ID in events.
+    trigger: 1.0,
+    arguments: 0.5
+  },
+  ```
+- Make trigger predictions using a majority vote of the 4 ensemble models.
+- Use these predicted triggers when making event argument predictions based on the event argument scores output by the model saved at `models/ace05-event`.
+
+If you need more details, email me.
 
 ## Evaluating a model
 
@@ -168,6 +179,7 @@ Run `./scripts/pretrained/get_dygiepp_pretrained.sh` to download all the availab
 - [GENIA](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/genia.tar.gz)
 - [GENIA lightweight](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/genia-lightweight.tar.gz)
 - [ChemProt (lightweight only)](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/chemprot.tar.gz)
+- [ACE05 event (uses BERT large)](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/ace05-event.tar.gz)
 
 #### Performance of downloaded models
 
@@ -203,6 +215,14 @@ Run `./scripts/pretrained/get_dygiepp_pretrained.sh` to download all the availab
   ```
   Note that we're doing span-level evaluation using predicted entities. We're also evaluating on all ChemProt relation classes, while the official task only evaluates on a subset (see [Liu et al.](https://www.semanticscholar.org/paper/Attention-based-Neural-Networks-for-Chemical-Liu-Shen/a6261b278d1c2155e8eab7ac12d924fc2207bd04) for details). Thus, our relation extraction performance is lower than, for instance, [Verga et al.](https://www.semanticscholar.org/paper/Simultaneously-Self-Attending-to-All-Mentions-for-Verga-Strubell/48f786f66eb846012ceee822598a335d0388f034), where they use gold entities as inputs for relation prediction.
 
+- ACE05-Event
+  ```
+  2020-05-25 17:05:14,044 - INFO - allennlp.commands.evaluate - _ner_f1: 0.906369532679145
+  2020-05-25 17:05:14,044 - INFO - allennlp.commands.evaluate - _trig_id_f1: 0.735042735042735
+  2020-05-25 17:05:14,044 - INFO - allennlp.commands.evaluate - trig_class_f1: 0.7029914529914529
+  2020-05-25 17:05:14,044 - INFO - allennlp.commands.evaluate - _arg_id_f1: 0.5414364640883979
+  2020-05-25 17:05:14,044 - INFO - allennlp.commands.evaluate - arg_class_f1: 0.5130228887134964
+  ```
 
 
 ## Making predictions
