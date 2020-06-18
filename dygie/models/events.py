@@ -290,7 +290,7 @@ class EventExtractor(Model):
             argument_loss = self._get_argument_loss(argument_scores, gold_arguments)
 
             # Compute F1.
-            predictions = self.decode(output_dict)["decoded_events"]
+            predictions = self.make_output_human_readable(output_dict)["decoded_events"]
             assert len(predictions) == len(metadata)  # Make sure length of predictions is right.
             self._metrics(predictions, metadata)
             self._argument_stats(predictions)
@@ -304,7 +304,7 @@ class EventExtractor(Model):
         return output_dict
 
     @overrides
-    def decode(self, output_dict):
+    def make_output_human_readable(self, output_dict):
         """
         Take the output and convert it into a list of dicts. Each entry is a sentence. Each key is a
         pair of span indices for that sentence, and each value is the relation label on that span

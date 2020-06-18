@@ -190,7 +190,7 @@ class RelationExtractor(Model):
             cross_entropy = self._get_cross_entropy_loss(relation_scores, gold_relations)
 
             # Compute F1.
-            predictions = self.decode(output_dict)["decoded_relations_dict"]
+            predictions = self.make_output_human_readable(output_dict)["decoded_relations_dict"]
             assert len(predictions) == len(metadata)  # Make sure length of predictions is right.
             self._candidate_recall(predictions, metadata)
             self._relation_metrics(predictions, metadata)
@@ -199,7 +199,7 @@ class RelationExtractor(Model):
         return output_dict
 
     @overrides
-    def decode(self, output_dict):
+    def make_output_human_readable(self, output_dict):
         """
         Take the output and convert it into a list of dicts. Each entry is a sentence. Each key is a
         pair of span indices for that sentence, and each value is the relation label on that span

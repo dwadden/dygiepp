@@ -15,8 +15,8 @@ from allennlp.data.fields import (Field, ListField, TextField, SpanField, Metada
 from allennlp.data.instance import Instance
 from allennlp.data.tokenizers import Token
 from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
-from allennlp.data.dataset_readers.dataset_utils import Ontonotes, enumerate_spans
-
+from allennlp.data.dataset_readers.dataset_utils import enumerate_spans
+from allennlp_models.common.ontonotes import Ontonotes
 
 from allennlp.data.fields.span_field import SpanField
 
