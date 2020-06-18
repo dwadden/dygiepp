@@ -139,7 +139,7 @@ function(p) {
       type: "elmo_characters"
     },
     [if use_bert then "bert"]: {
-      type: "bert-pretrained",
+      type: "pretrained_transformer",
       pretrained_model: (if p.use_bert_base then "bert-base-cased"
                          else if p.use_bert_large then "bert-large-cased"
                          else "pretrained/scibert_scivocab_cased/vocab.txt"),
