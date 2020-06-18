@@ -7,14 +7,14 @@ from overrides import overrides
 
 from allennlp.common.util import lazy_groups_of
 from allennlp.data.instance import Instance
-from allennlp.data.iterators.data_iterator import DataIterator
-from allennlp.data.dataset import Batch
+from allennlp.data.dataloader import DataLoader
+from allennlp.data.batch import Batch
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@DataIterator.register("ie_batch")
-class BatchIterator(DataIterator):
+@DataLoader.register("ie_batch")
+class BatchIterator(DataLoader):
     """
     For multi-task IE, we want the training instances in a batch to be successive sentences from the
     same document. Otherwise the coreference labels don't make sense.
