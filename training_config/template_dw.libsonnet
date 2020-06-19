@@ -142,7 +142,7 @@ function(p) {
       type: "pretrained_transformer",
       model_name: (if p.use_bert_base then "bert-base-cased"
                          else if p.use_bert_large then "bert-large-cased"
-                         else "pretrained/scibert_scivocab_cased/vocab.txt")
+                         else "allenai/scibert_scivocab_cased")
     }
   },
 
