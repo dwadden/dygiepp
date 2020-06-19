@@ -128,10 +128,10 @@ class IEJsonReader(DatasetReader):
     def __init__(self,
                  max_span_width: int,
                  token_indexers: Dict[str, TokenIndexer] = None,
+                 cache_directory: Optional[str] = None,
                  context_width: int = 1,
                  debug: bool = False,
                  lazy: bool = False,
-                 cache_directory: Optional[str] = None,
                  predict_hack: bool = False) -> None:
         super().__init__(lazy)
         assert (context_width % 2 == 1) and (context_width > 0)
