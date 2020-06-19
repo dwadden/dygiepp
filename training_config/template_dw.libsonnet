@@ -140,11 +140,9 @@ function(p) {
     },
     [if use_bert then "bert"]: {
       type: "pretrained_transformer",
-      pretrained_model: (if p.use_bert_base then "bert-base-cased"
+      model_name: (if p.use_bert_base then "bert-base-cased"
                          else if p.use_bert_large then "bert-large-cased"
-                         else "pretrained/scibert_scivocab_cased/vocab.txt"),
-      do_lowercase: false,
-      use_starting_offsets: true
+                         else "pretrained/scibert_scivocab_cased/vocab.txt")
     }
   },
 
