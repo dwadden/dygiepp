@@ -69,7 +69,7 @@ class RelationExtractor(Model):
         self._A_network = FeedForward(input_dim=self._n_labels,
                                       num_layers=1,
                                       hidden_dims=span_emb_dim,
-                                      activations=lambda x: x,
+                                      activations=torch.nn.Sigmoid(),
                                       dropout=rel_prop_dropout_A)
         self._f_network = FeedForward(input_dim=2*span_emb_dim,
                                       num_layers=1,
