@@ -131,6 +131,7 @@ class IEJsonReader(DatasetReader):
                  context_width: int = 1,
                  debug: bool = False,
                  lazy: bool = False,
+                 cache_directory: Optional[str] = None,
                  predict_hack: bool = False) -> None:
         super().__init__(lazy)
         assert (context_width % 2 == 1) and (context_width > 0)
@@ -140,6 +141,11 @@ class IEJsonReader(DatasetReader):
         self._debug = debug
         self._n_debug_docs = 10
         self._predict_hack = predict_hack
+        if cache_directory:
+            self._cache_directory = pathlib.Path(cache_directory)
+            os.makedirs(self._cache_directory, exist_ok=True)
+        else:
+            self._cache_directory = None
 
     @overrides
     def _read(self, file_path: str):
