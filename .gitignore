@@ -1,8 +1,0 @@
-*__pycache__
-*.pyc
-data/*
-models/*
-pretrained/*
-predictions/*
-**/stanford*/*
-scratch*
