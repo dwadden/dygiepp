@@ -29,15 +29,17 @@ function(p) {
   local bert_large_dim = 1024,
   local scibert_dim = 768,
 
-  local module_initializer = [
-    [".*weight", {"type": "xavier_normal"}],
-    [".*weight_matrix", {"type": "xavier_normal"}]],
+   local module_initializer = {"regexes":
+    [[".*weight", {"type": "xavier_normal"}],
+    [".*weight_matrix", {"type": "xavier_normal"}]]
+  },
 
-  local dygie_initializer = [
-    ["_span_width_embedding.weight", {"type": "xavier_normal"}],
+  local dygie_initializer = {"regexes":
+    [["_span_width_embedding.weight", {"type": "xavier_normal"}],
     ["_context_layer._module.weight_ih.*", {"type": "xavier_normal"}],
-    ["_context_layer._module.weight_hh.*", {"type": "orthogonal"}]
-  ],
+    ["_context_layer._module.weight_hh.*", {"type": "orthogonal"}]]
+  },
+
 
 
   ////////////////////////////////////////////////////////////////////////////////
@@ -147,11 +149,6 @@ function(p) {
   },
 
   local text_field_embedder = {
-    [if use_bert then "allow_unmatched_keys"]: true,
-    [if use_bert then "embedder_to_indexer_map"]: {
-      bert: ["bert", "bert-offsets"],
-      token_characters: ["token_characters"]
-    },
     token_embedders: {
       [if p.use_glove then "tokens"]: {
         type: "embedding",
@@ -180,11 +177,10 @@ function(p) {
         dropout: 0.5
       },
       [if use_bert then "bert"]: {
-        type: "bert-pretrained",
-        pretrained_model: (if p.use_bert_base then "bert-base-cased"
+        type: "pretrained_transformer",
+        model_name: (if p.use_bert_base then "bert-base-cased"
                            else if p.use_bert_large then "bert-large-cased"
-                           else "pretrained/scibert_scivocab_cased/weights.tar.gz"),
-        requires_grad: p.finetune_bert
+                           else "allenai/scibert_scivocab_cased")
       }
     }
   },
@@ -242,8 +238,7 @@ function(p) {
     token_indexers: token_indexers,
     max_span_width: p.max_span_width,
     context_width: p.context_width,
-    debug: getattr(p, "debug", false),
-    cache_directory: "./data/scierc/processed_data/json/cached"
+    debug: getattr(p, "debug", false)
   },
   train_data_path: std.extVar("ie_train_data_path"),
   validation_data_path: std.extVar("ie_dev_data_path"),
@@ -333,12 +328,12 @@ function(p) {
       }
     }
   },
-  iterator: {
+  data_loader: {
     type: if co_train then "ie_multitask" else "ie_batch",
     batch_size: p.batch_size,
     [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
   },
-  validation_iterator: {
+  validation_data_loader: {
     type: "ie_document",
     batch_size: p.batch_size
   },
