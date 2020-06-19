@@ -333,7 +333,7 @@ function(p) {
     batch_sampler: {
         type: "bucket",
         batch_size: p.batch_size,
-        [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
+        shuffle: true
     }
   },
   validation_data_loader: {
