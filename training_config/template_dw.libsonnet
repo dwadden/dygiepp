@@ -149,7 +149,7 @@ function(p) {
   },
 
   local text_field_embedder = {
-    token_embedders: {
+      token_embedders: {
       [if p.use_glove then "tokens"]: {
         type: "embedding",
         pretrained_file: if p.debug then null else "https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.840B.300d.txt.gz",
@@ -329,13 +329,17 @@ function(p) {
     }
   },
   data_loader: {
-    type: if co_train then "ie_multitask" else "ie_batch",
-    batch_size: p.batch_size,
-    [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
+    batch_sampler: {
+        type: if co_train then "ie_multitask" else "ie_batch",
+        batch_size: p.batch_size,
+        [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
+    }
   },
   validation_data_loader: {
-    type: "ie_document",
-    batch_size: p.batch_size
+    batch_sampler: {
+        type: "ie_document",
+        batch_size: p.batch_size
+    }
   },
   trainer: {
     "checkpointer" : {
