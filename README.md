@@ -9,7 +9,8 @@ This repository is under construction and we're in the process of adding support
 - [Model training](#training-a-model)
 - [Model evaluation](#evaluating-a-model)
 - [Pretrained models](#pretrained-models)
-- [Making predictions](#making-predictions)
+- [Making predictions on existing datasets](#making-predictions-on-existing-datasets)
+- [Working with new datasets](#working-with-new-datasets)
 - [Contact](#contact)
 
 
@@ -224,8 +225,7 @@ Run `./scripts/pretrained/get_dygiepp_pretrained.sh` to download all the availab
   2020-05-25 17:05:14,044 - INFO - allennlp.commands.evaluate - arg_class_f1: 0.5130228887134964
   ```
 
-
-## Making predictions
+## Making predictions on existing datasets
 
 To make a prediction, you can use `allennlp predict`. For example, to make a prediction with the pretrained scierc model, you can do:
 
@@ -246,7 +246,7 @@ allennlp predict pretrained/scierc.tar.gz \
 
 See the [docs](https://allenai.github.io/allennlp-docs/api/commands/predict/) for more prediction options.
 
-## Relation extraction evaluation metric
+### Relation extraction evaluation metric
 
 Following [Li and Ji (2014)](https://www.semanticscholar.org/paper/Incremental-Joint-Extraction-of-Entity-Mentions-and-Li-Ji/ab3f1a4480c1ef8409d1685889600f7efb76af24), we consider a predicted relation to be correct if "its relation type is
 correct, and the head offsets of two entity mention arguments are both correct".
@@ -254,6 +254,30 @@ correct, and the head offsets of two entity mention arguments are both correct".
 In particular, we do *not* require the types of the entity mention arguments to be correct, as is done in some work (e.g. [Zhang et al. (2017)](https://www.semanticscholar.org/paper/End-to-End-Neural-Relation-Extraction-with-Global-Zhang-Zhang/ee13e1a3c1d5f5f319b0bf62f04974165f7b0a37)). We welcome a pull request that implements this alternative evaluation metric. Please open an issue if you're interested in this.
 
 
+## Working with new datasets
+
+Follow the instructions in as described in the `Formatting a new dataset` section of [DATA.md](DATA.md) to format your labeled or unlabled dataset.
+
+### Making predicitons on an unlabeled dataset
+
+To make predictions on a new, unlabeled dataset:
+
+1. Download the [pretrained model](#pretrained-models) that most closely matches your text domain.
+2. Make predictions the same way as with the [existing datasets](#making-predictions-on-existing-datasets):
+```
+allennlp predict pretrained/[name-of-pretrained-model].tar.gz \
+    [input-path] \
+    --predictor dygie \
+    --include-package dygie \
+    --use-dataset-reader \
+    --output-file [output-path] \
+    --cuda-device [cuda-device]
+```
+
+### Training a model on a labeled dataset
+
+Follow the process described in [Training a model](#training-a-model), but adjusting the input and output file paths as appropriate.
+
 # Contact
 
-Email `dwadden@cs.washington.edu` with questions, or create a GitHub issue.
+For questions or problems with the code, create a GitHub issue (preferred) or email `dwadden@cs.washington.edu`.
