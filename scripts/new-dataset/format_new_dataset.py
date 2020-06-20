@@ -31,7 +31,8 @@ def format_dataset(data_directory, output_file, use_scispacy):
 
 
 def get_args():
-    parser = argparse.ArgumentParser()
+    description = "Format an unlabled dataset, consisting of a directory of `.txt` files; one file per document."
+    parser = argparse.ArgumentParser(description=description)
     parser.add_argument("data_directory", type=str,
                         help="A directory with input `.txt files, one file per document.")
     parser.add_argument("output_file", type=str,
