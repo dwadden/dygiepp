@@ -256,9 +256,9 @@ In particular, we do *not* require the types of the entity mention arguments to 
 
 ## Working with new datasets
 
-Follow the instructions in as described in the `Formatting a new dataset` section of [DATA.md](DATA.md) to format your labeled or unlabled dataset.
+Follow the instructions in as described in [Formatting a new dataset](DATA.md#formatting-a-new-dataset).
 
-### Making predicitons on an unlabeled dataset
+### Making predicitons on a new dataset
 
 To make predictions on a new, unlabeled dataset:
 
@@ -274,7 +274,7 @@ allennlp predict pretrained/[name-of-pretrained-model].tar.gz \
     --cuda-device [cuda-device]
 ```
 
-### Training a model on a labeled dataset
+### Training a model on a new (labeled) dataset
 
 Follow the process described in [Training a model](#training-a-model), but adjusting the input and output file paths as appropriate.
 
