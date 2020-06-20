@@ -256,7 +256,7 @@ In particular, we do *not* require the types of the entity mention arguments to 
 
 ## Working with new datasets
 
-Follow the instructions in as described in [Formatting a new dataset](DATA.md#formatting-a-new-dataset).
+Follow the instructions as described in [Formatting a new dataset](DATA.md#formatting-a-new-dataset).
 
 ### Making predicitons on a new dataset
 
