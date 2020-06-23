@@ -16,17 +16,17 @@ local params = {
   target: "rel",
 
   // If debugging, don't load expensive embedding files.
-  debug: false,
+  debug: true,
 
   // Specifies the token-level features that will be created.
-  use_glove: false,
+  use_glove: true,
   use_char: false,
   use_elmo: false,
   use_attentive_span_extractor: false,
   use_bert_base: false,
   use_bert_large: false,
-  use_scibert: true,
-  finetune_bert: true,
+  use_scibert: false,
+  finetune_bert: false,
   rel_prop: 0,
   coref_prop: 0,
   context_width: 1,
@@ -70,13 +70,11 @@ local params = {
 
   // Model training
   batch_size: 8,
-  num_epochs: 250,
-  patience: 15,
+  num_epochs: 20,
+  patience: 10,
   optimizer: {
-    type: "adamw",
+    type: "huggingface_adamw",
     lr: 1e-3,
-    //warmup: 0.1,
-    //t_total: 10000,
     weight_decay: 0.0,
     parameter_groups: [
       [["_text_field_embedder"],
