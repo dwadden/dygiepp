@@ -19,14 +19,14 @@ local params = {
   debug: true,
 
   // Specifies the token-level features that will be created.
-  use_glove: true,
+  use_glove: false,
   use_char: false,
   use_elmo: false,
   use_attentive_span_extractor: false,
   use_bert_base: false,
   use_bert_large: false,
-  use_scibert: false,
-  finetune_bert: false,
+  use_scibert: true,
+  finetune_bert: true,
   rel_prop: 0,
   coref_prop: 0,
   context_width: 1,
@@ -73,7 +73,7 @@ local params = {
   num_epochs: 20,
   patience: 10,
   optimizer: {
-    type: "huggingface_adamw",
+    type: "adamw",
     lr: 1e-3,
     weight_decay: 0.0,
     parameter_groups: [

@@ -128,20 +128,60 @@ function(p) {
 
   // Model components
 
-  local token_indexers = {
-        tokens: {
-          type: "single_id",
-          lowercase_tokens: false
-          }
+ local token_indexers = {
+    [if p.use_glove then "tokens"]: {
+      type: "single_id",
+      lowercase_tokens: false
+    },
+    [if p.use_char then "token_characters"]: {
+      type: "characters",
+      min_padding_length: 5
+    },
+    [if p.use_elmo then "elmo"]: {
+      type: "elmo_characters"
+    },
+    [if use_bert then "bert"]: {
+      type: "pretrained_transformer_mismatched",
+      model_name: (if p.use_bert_base then "bert-base-cased"
+                         else if p.use_bert_large then "bert-large-cased"
+                         else "allenai/scibert_scivocab_cased")
+    }
   },
 
-  local text_field_embedder = {
-      token_embedders: {
-      tokens: {
+
+ local text_field_embedder = {
+    token_embedders: {
+      [if p.use_glove then "tokens"]: {
         type: "embedding",
         pretrained_file: if p.debug then null else "https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.840B.300d.txt.gz",
         embedding_dim: 300,
         trainable: false
+      },
+      [if p.use_char then "token_characters"]: {
+        type: "character_encoding",
+        embedding: {
+          num_embeddings: 262,
+          embedding_dim: 16
+        },
+        encoder: {
+          type: "cnn",
+          embedding_dim: 16,
+          num_filters: p.char_n_filters,
+          ngram_filter_sizes: [5]
+        }
+      },
+      [if p.use_elmo then "elmo"]: {
+        type: "elmo_token_embedder",
+        options_file: "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json",
+        weight_file: "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5",
+        do_layer_norm: false,
+        dropout: 0.5
+      },
+      [if use_bert then "bert"]: {
+        type: "pretrained_transformer_mismatched",
+        model_name: (if p.use_bert_base then "bert-base-cased"
+                           else if p.use_bert_large then "bert-large-cased"
+                           else "allenai/scibert_scivocab_cased")
       }
     }
   },
@@ -179,7 +219,8 @@ function(p) {
     token_indexers: token_indexers,
     max_span_width: p.max_span_width,
     context_width: p.context_width,
-    debug: getattr(p, "debug", true)
+    debug: getattr(p, "debug", true),
+   // cache_directory: "./data/scierc/processed_data/json/cached"
   },
   train_data_path: std.extVar("ie_train_data_path"),
   validation_data_path: std.extVar("ie_dev_data_path"),
