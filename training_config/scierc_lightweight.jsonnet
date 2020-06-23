@@ -16,7 +16,7 @@ local params = {
   target: "rel",
 
   // If debugging, don't load expensive embedding files.
-  debug: true,
+  debug: false,
 
   // Specifies the token-level features that will be created.
   use_glove: false,
@@ -70,8 +70,8 @@ local params = {
 
   // Model training
   batch_size: 8,
-  num_epochs: 20,
-  patience: 10,
+  num_epochs: 250,
+  patience: 100,
   optimizer: {
     type: "adamw",
     lr: 1e-3,

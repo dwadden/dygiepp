@@ -140,7 +140,7 @@ function(p) {
     [if p.use_elmo then "elmo"]: {
       type: "elmo_characters"
     },
-    [if use_bert then "bert"]: {
+    [if use_bert then "tokens"]: {
       type: "pretrained_transformer_mismatched",
       model_name: (if p.use_bert_base then "bert-base-cased"
                          else if p.use_bert_large then "bert-large-cased"
@@ -177,7 +177,7 @@ function(p) {
         do_layer_norm: false,
         dropout: 0.5
       },
-      [if use_bert then "bert"]: {
+      [if use_bert then "tokens"]: {
         type: "pretrained_transformer_mismatched",
         model_name: (if p.use_bert_base then "bert-base-cased"
                            else if p.use_bert_large then "bert-large-cased"
@@ -219,7 +219,7 @@ function(p) {
     token_indexers: token_indexers,
     max_span_width: p.max_span_width,
     context_width: p.context_width,
-    debug: getattr(p, "debug", true),
+    debug: getattr(p, "debug", false),
    // cache_directory: "./data/scierc/processed_data/json/cached"
   },
   train_data_path: std.extVar("ie_train_data_path"),
