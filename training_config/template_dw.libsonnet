@@ -140,7 +140,7 @@ function(p) {
     [if p.use_elmo then "elmo"]: {
       type: "elmo_characters"
     },
-    [if use_bert then "tokens"]: {
+    [if use_bert then "bert"]: {
       type: "pretrained_transformer_mismatched",
       model_name: (if p.use_bert_base then "bert-base-cased"
                          else if p.use_bert_large then "bert-large-cased"
@@ -177,7 +177,7 @@ function(p) {
         do_layer_norm: false,
         dropout: 0.5
       },
-      [if use_bert then "tokens"]: {
+      [if use_bert then "bert"]: {
         type: "pretrained_transformer_mismatched",
         model_name: (if p.use_bert_base then "bert-base-cased"
                            else if p.use_bert_large then "bert-large-cased"
@@ -220,7 +220,7 @@ function(p) {
     max_span_width: p.max_span_width,
     context_width: p.context_width,
     debug: getattr(p, "debug", false),
-   // cache_directory: "./data/scierc/processed_data/json/cached"
+    cache_directory: "./data/scierc/processed_data/json/cached"
   },
   train_data_path: std.extVar("ie_train_data_path"),
   validation_data_path: std.extVar("ie_dev_data_path"),
@@ -319,6 +319,7 @@ function(p) {
    type: if co_train then "ie_multitask" else "ie_batch",
    batch_size: p.batch_size
   },
+
   trainer: {
     checkpointer : {
         num_serialized_models_to_keep: 3
@@ -326,7 +327,7 @@ function(p) {
     num_epochs: p.num_epochs,
     grad_norm: 5.0,
     patience : p.patience,
-    cuda_device : -1,
+    cuda_device : std.parseInt(std.extVar("cuda_device")),
     validation_metric: validation_metrics[p.target],
     learning_rate_scheduler: p.learning_rate_scheduler,
     optimizer: p.optimizer,
