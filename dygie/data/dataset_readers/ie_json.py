@@ -130,12 +130,11 @@ class IEJsonReader(DatasetReader):
     def __init__(self,
                  max_span_width: int,
                  token_indexers: Dict[str, TokenIndexer] = None,
-                 cache_directory: Optional[str] = None,
                  context_width: int = 1,
                  debug: bool = False,
-                 lazy: bool = False,
-                 predict_hack: bool = False) -> None:
-        super().__init__(lazy)
+                 predict_hack: bool = False,
+                 **kwargs) -> None:
+        super().__init__(**kwargs)
         assert (context_width % 2 == 1) and (context_width > 0)
         self.k = int( (context_width - 1) / 2)
         self._max_span_width = max_span_width
@@ -143,11 +142,7 @@ class IEJsonReader(DatasetReader):
         self._debug = debug
         self._n_debug_docs = 10
         self._predict_hack = predict_hack
-        if cache_directory:
-            self._cache_directory = pathlib.Path(cache_directory)
-            os.makedirs(self._cache_directory, exist_ok=True)
-        else:
-            self._cache_directory = None
+    
 
     @overrides
     def _read(self, file_path: str):
@@ -218,6 +213,8 @@ class IEJsonReader(DatasetReader):
             if self._predict_hack:
                 yield(instances)
 
+            # And finally we try writing to the cache.
+           
 
     @overrides
     def text_to_instance(self,
