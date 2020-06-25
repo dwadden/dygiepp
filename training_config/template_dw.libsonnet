@@ -182,6 +182,7 @@ function(p) {
         model_name: (if p.use_bert_base then "bert-base-cased"
                            else if p.use_bert_large then "bert-large-cased"
                            else "allenai/scibert_scivocab_cased")
+
       }
     }
   },
@@ -313,7 +314,8 @@ function(p) {
   },
   data_loader: {
     type: if co_train then "ie_multitask" else "ie_batch",
-    batch_size: p.batch_size
+    batch_size: p.batch_size,
+    [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
   },
   validation_data_loader: {
    type: if co_train then "ie_multitask" else "ie_batch",
