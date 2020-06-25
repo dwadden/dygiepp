@@ -9,7 +9,7 @@ from overrides import overrides
 from allennlp.data import Vocabulary
 from allennlp.models.model import Model
 from allennlp.modules import FeedForward
-from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
+from allennlp.nn import Activation, util, InitializerApplicator, RegularizerApplicator
 from allennlp.modules import TimeDistributed
 
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
@@ -69,7 +69,7 @@ class RelationExtractor(Model):
         self._A_network = FeedForward(input_dim=self._n_labels,
                                       num_layers=1,
                                       hidden_dims=span_emb_dim,
-                                      activations=lambda x: x,
+                                      activations=Activation.by_name('linear')(), # used to be "linear": (lambda: _ActivationLambda(lambda x: x, "Linear"), None),
                                       dropout=rel_prop_dropout_A)
         self._f_network = FeedForward(input_dim=2*span_emb_dim,
                                       num_layers=1,
