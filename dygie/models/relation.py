@@ -39,7 +39,7 @@ class RelationExtractor(Model):
                  initializer: InitializerApplicator = InitializerApplicator(),
                  positive_label_weight: float = 1.0,
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
-        super(RelationExtractor, self).__init__(vocab, regularizer)
+        super().__init__(vocab, regularizer)
 
         # Need to hack this for cases where there's no relation data. It breaks Ulme's code.
         self._n_labels = max(vocab.get_vocab_size("relation_labels"), 1)
@@ -69,7 +69,7 @@ class RelationExtractor(Model):
         self._A_network = FeedForward(input_dim=self._n_labels,
                                       num_layers=1,
                                       hidden_dims=span_emb_dim,
-                                      activations=torch.nn.Sigmoid(),
+                                      activations=lambda x: x,
                                       dropout=rel_prop_dropout_A)
         self._f_network = FeedForward(input_dim=2*span_emb_dim,
                                       num_layers=1,
