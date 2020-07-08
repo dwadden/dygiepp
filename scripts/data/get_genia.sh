@@ -17,7 +17,7 @@ ner_dir=$raw_dir/GENIAcorpus3.02p
 
 download_raw() {
     # Download the data.
-    mkdir -p -p $raw_dir
+    mkdir -p $raw_dir
 
     # Download the entities.
     wget -nv http://www.nactem.ac.uk/GENIA/current/GENIA-corpus/Part-of-speech/GENIAcorpus3.02p.tgz \
