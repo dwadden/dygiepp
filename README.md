@@ -26,6 +26,17 @@ For data preprocessing a few additional data and string processing libraries are
 
 Finally, you'll need SciBERT for the scientific datasets. Run `python scripts/pretrained/get_scibert.py` to download and extract the SciBERT model to `./pretrained`.
 
+### Docker build
+A `Dockerfile` is provided with the Pytorch + CUDA + CUDNN base image for a full-stack install.
+It will create conda environments `dygiepp` for modeling & `ace-event-preprocess` for ACE05-Event preprocessing.
+
+By default the build downloads datasets and dependencies for all tasks. 
+This takes a long time, so you will want to comment out unneeded tasks in the Dockerfile.
+
+- Comment out unneeded task sections in Dockerfile.
+- Build container: `docker build --tag dygiepp:dev .`
+- Run the container interactively: `docker run --gpus all -it --rm --ipc=host --name dygiepp dygiep:dev`
+
 ## Training a model
 
 Warning about coreference resolution: The coreference code will break on sentences with only a single token. If you have these in your dataset, either get rid of them or deactivate the coreference resolution part of the model.
