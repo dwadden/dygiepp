@@ -216,7 +216,7 @@ function(p) {
   numpy_seed: getattr(p, "numpy_seed", 1337),
   pytorch_seed: getattr(p, "pytorch_seed", 133),
   dataset_reader: {
-    type: "ie_json",
+    type: "dygie",
     token_indexers: token_indexers,
     max_span_width: p.max_span_width,
     context_width: p.context_width,
