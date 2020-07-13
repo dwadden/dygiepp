@@ -2,10 +2,8 @@
 
 # Modeling
 
-torch==1.5.0
-allennlp==1.0.0
-allennlp_models==1.0.0
-tokenizers==0.8.0-dev2
+allennlp>=1.0
+allennlp_models>=1.0
 
 # Data munging
 
@@ -13,10 +11,3 @@ pandas==0.25.2
 beautifulsoup4==4.8.1
 lxml
 python-Levenshtein
-
-# SciSpacy for ChemProt preprocessing.
-
-spacy==2.1.9   # For compatibility.
-https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.1.0/en_core_web_sm-2.1.0.tar.gz
-scispacy==0.2.3
-https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.2.3/en_core_sci_sm-0.2.3.tar.gz

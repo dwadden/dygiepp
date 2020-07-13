@@ -1,0 +1,8 @@
+# SciSpacy for ChemProt preprocessing.
+
+spacy==2.1.9   # For compatibility.
+https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.1.0/en_core_web_sm-2.1.0.tar.gz
+scispacy==0.2.3
+https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.2.3/en_core_sci_sm-0.2.3.tar.gz
+
+pandas==0.25.2
