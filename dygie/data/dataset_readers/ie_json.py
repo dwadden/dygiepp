@@ -3,6 +3,8 @@ import collections
 from typing import Any, Dict, List, Optional, Tuple, DefaultDict, Set, Union
 import json
 import itertools
+import os
+import pathlib
 import pickle as pkl
 import warnings
 
@@ -15,8 +17,8 @@ from allennlp.data.fields import (Field, ListField, TextField, SpanField, Metada
 from allennlp.data.instance import Instance
 from allennlp.data.tokenizers import Token
 from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
-from allennlp.data.dataset_readers.dataset_utils import Ontonotes, enumerate_spans
-
+from allennlp.data.dataset_readers.dataset_utils import enumerate_spans
+from allennlp_models.common.ontonotes import Ontonotes
 
 from allennlp.data.fields.span_field import SpanField
 
@@ -130,9 +132,9 @@ class IEJsonReader(DatasetReader):
                  token_indexers: Dict[str, TokenIndexer] = None,
                  context_width: int = 1,
                  debug: bool = False,
-                 lazy: bool = False,
-                 predict_hack: bool = False) -> None:
-        super().__init__(lazy)
+                 predict_hack: bool = False,
+                 **kwargs) -> None:
+        super().__init__(**kwargs)
         assert (context_width % 2 == 1) and (context_width > 0)
         self.k = int( (context_width - 1) / 2)
         self._max_span_width = max_span_width
@@ -140,6 +142,7 @@ class IEJsonReader(DatasetReader):
         self._debug = debug
         self._n_debug_docs = 10
         self._predict_hack = predict_hack
+    
 
     @overrides
     def _read(self, file_path: str):
@@ -210,6 +213,8 @@ class IEJsonReader(DatasetReader):
             if self._predict_hack:
                 yield(instances)
 
+            # And finally we try writing to the cache.
+           
 
     @overrides
     def text_to_instance(self,

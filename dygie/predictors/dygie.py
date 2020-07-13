@@ -7,7 +7,7 @@ import json
 
 from allennlp.common.util import JsonDict
 from allennlp.nn import util
-from allennlp.data.dataset import Batch
+from allennlp.data import Batch
 from allennlp.data import DatasetReader
 from allennlp.models import Model
 from allennlp.predictors.predictor import Predictor

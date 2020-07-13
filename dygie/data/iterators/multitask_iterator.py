@@ -8,8 +8,8 @@ from overrides import overrides
 
 from allennlp.common.util import lazy_groups_of
 from allennlp.data.instance import Instance
-from allennlp.data.iterators.data_iterator import DataIterator
-from allennlp.data.dataset import Batch
+from allennlp.data.dataloader import DataLoader
+from allennlp.data.batch import Batch
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -20,8 +20,8 @@ def get_dataset_instances(instances, dataset):
 
 # The idea for this iterator is borrowed from
 # https://github.com/allenai/allennlp/blob/master/allennlp/tests/training/multi_task_trainer_test.py#L225
-@DataIterator.register("ie_multitask")
-class MultiTaskIterator(DataIterator):
+@DataLoader.register("ie_multitask")
+class MultiTaskIterator(DataLoader):
     """
     To use when we're co-training on Ontonotes and ACE.
     """

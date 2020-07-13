@@ -29,15 +29,17 @@ function(p) {
   local bert_large_dim = 1024,
   local scibert_dim = 768,
 
-  local module_initializer = [
-    [".*weight", {"type": "xavier_normal"}],
-    [".*weight_matrix", {"type": "xavier_normal"}]],
+   local module_initializer = {"regexes":
+    [[".*weight", {"type": "xavier_normal"}],
+    [".*weight_matrix", {"type": "xavier_normal"}]]
+  },
 
-  local dygie_initializer = [
-    ["_span_width_embedding.weight", {"type": "xavier_normal"}],
+  local dygie_initializer = {"regexes":
+    [["_span_width_embedding.weight", {"type": "xavier_normal"}],
     ["_context_layer._module.weight_ih.*", {"type": "xavier_normal"}],
-    ["_context_layer._module.weight_hh.*", {"type": "orthogonal"}]
-  ],
+    ["_context_layer._module.weight_hh.*", {"type": "orthogonal"}]]
+  },
+
 
 
   ////////////////////////////////////////////////////////////////////////////////
@@ -126,7 +128,7 @@ function(p) {
 
   // Model components
 
-  local token_indexers = {
+ local token_indexers = {
     [if p.use_glove then "tokens"]: {
       type: "single_id",
       lowercase_tokens: false
@@ -139,21 +141,15 @@ function(p) {
       type: "elmo_characters"
     },
     [if use_bert then "bert"]: {
-      type: "bert-pretrained",
-      pretrained_model: (if p.use_bert_base then "bert-base-cased"
+      type: "pretrained_transformer_mismatched",
+      model_name: (if p.use_bert_base then "bert-base-cased"
                          else if p.use_bert_large then "bert-large-cased"
-                         else "pretrained/scibert_scivocab_cased/vocab.txt"),
-      do_lowercase: false,
-      use_starting_offsets: true
+                         else "allenai/scibert_scivocab_cased")
     }
   },
 
-  local text_field_embedder = {
-    [if use_bert then "allow_unmatched_keys"]: true,
-    [if use_bert then "embedder_to_indexer_map"]: {
-      bert: ["bert", "bert-offsets"],
-      token_characters: ["token_characters"]
-    },
+
+ local text_field_embedder = {
     token_embedders: {
       [if p.use_glove then "tokens"]: {
         type: "embedding",
@@ -182,11 +178,11 @@ function(p) {
         dropout: 0.5
       },
       [if use_bert then "bert"]: {
-        type: "bert-pretrained",
-        pretrained_model: (if p.use_bert_base then "bert-base-cased"
+        type: "pretrained_transformer_mismatched",
+        model_name: (if p.use_bert_base then "bert-base-cased"
                            else if p.use_bert_large then "bert-large-cased"
-                           else "pretrained/scibert_scivocab_cased/weights.tar.gz"),
-        requires_grad: p.finetune_bert
+                           else "allenai/scibert_scivocab_cased")
+
       }
     }
   },
@@ -211,26 +207,6 @@ function(p) {
     }
   ),
 
-  // Not using these.
-  local iterator = if co_train then {
-    type: "ie_multitask",
-    batch_size: p.batch_size,
-    [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
-  } else {
-    type: "bucket",
-    sorting_keys: [["text", "num_tokens"]],
-    batch_size : p.batch_size,
-    [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
-  },
-
-  local validation_iterator = if co_train then {
-    type: "ie_document"
-  } else {
-    type: "bucket",
-    sorting_keys: [["text", "num_tokens"]],
-    batch_size : p.batch_size
-  },
-
   ////////////////////////////////////////////////////////////////////////////////
 
 
@@ -244,14 +220,16 @@ function(p) {
     token_indexers: token_indexers,
     max_span_width: p.max_span_width,
     context_width: p.context_width,
-    debug: getattr(p, "debug", false),
+    debug: getattr(p, "debug", false)
+    //cache_directory: "./data/scierc/processed_data/json/cached" doesnt work... need to look at
   },
   train_data_path: std.extVar("ie_train_data_path"),
   validation_data_path: std.extVar("ie_dev_data_path"),
   test_data_path: std.extVar("ie_test_data_path"),
   // If provided, use pre-defined vocabulary. Else compute on the fly.
   [if "vocab_path" in p then "vocabulary"]: {
-    directory_path: p.vocab_path
+    type: "from_files",
+    directory: p.vocab_path // config changed TODO
   },
   model: {
     type: "dygie",
@@ -334,21 +312,24 @@ function(p) {
       }
     }
   },
-  iterator: {
+  data_loader: {
     type: if co_train then "ie_multitask" else "ie_batch",
     batch_size: p.batch_size,
     [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
   },
-  validation_iterator: {
-    type: "ie_document",
-    batch_size: p.batch_size
+  validation_data_loader: {
+   type: if co_train then "ie_multitask" else "ie_batch",
+   batch_size: p.batch_size
   },
+
   trainer: {
-    num_serialized_models_to_keep: 3,
+    checkpointer : {
+        num_serialized_models_to_keep: 3
+    },
     num_epochs: p.num_epochs,
     grad_norm: 5.0,
     patience : p.patience,
-    cuda_device : [std.parseInt(x) for x in std.split(std.extVar("cuda_device"), ",")],
+    cuda_device : std.parseInt(std.extVar("cuda_device")),
     validation_metric: validation_metrics[p.target],
     learning_rate_scheduler: p.learning_rate_scheduler,
     optimizer: p.optimizer,

@@ -317,8 +317,8 @@ class DyGIE(Model):
         # Check to see if event predictions are globally compatible (argument labels are compatible
         # with NER tags and trigger tags).
         # if self._loss_weights["ner"] > 0 and self._loss_weights["events"] > 0:
-        #     decoded_ner = self._ner.decode(output_dict["ner"])
-        #     decoded_events = self._events.decode(output_dict["events"])
+        #     decoded_ner = self._ner.make_output_human_readable(output_dict["ner"])
+        #     decoded_events = self._events.make_output_human_readable(output_dict["events"])
         #     self._joint_metrics(decoded_ner, decoded_events)
 
         return output_dict
@@ -335,7 +335,7 @@ class DyGIE(Model):
         return new_span_embeddings
 
     @overrides
-    def decode(self, output_dict: Dict[str, torch.Tensor]):
+    def make_output_human_readable(self, output_dict: Dict[str, torch.Tensor]):
         """
         Converts the list of spans and predicted antecedent indices into clusters
         of spans for each element in the batch.
@@ -357,11 +357,11 @@ class DyGIE(Model):
         # TODO(dwadden) which things are already decoded?
         res = {}
         if self._loss_weights["coref"] > 0:
-            res["coref"] = self._coref.decode(output_dict["coref"])
+            res["coref"] = self._coref.make_output_human_readable(output_dict["coref"])
         if self._loss_weights["ner"] > 0:
-            res["ner"] = self._ner.decode(output_dict["ner"])
+            res["ner"] = self._ner.make_output_human_readable(output_dict["ner"])
         if self._loss_weights["relation"] > 0:
-            res["relation"] = self._relation.decode(output_dict["relation"])
+            res["relation"] = self._relation.make_output_human_readable(output_dict["relation"])
         if self._loss_weights["events"] > 0:
             res["events"] = output_dict["events"]
 

@@ -81,7 +81,7 @@ class NERTagger(Model):
         ner_scores = self._ner_scorer(span_embeddings)
         # Give large negative scores to masked-out elements.
         mask = span_mask.unsqueeze(-1)
-        ner_scores = util.replace_masked_values(ner_scores, mask, -1e20)
+        ner_scores = util.replace_masked_values(ner_scores, mask.bool(), -1e20)
         # The dummy_scores are the score for the null label.
         dummy_dims = [ner_scores.size(0), ner_scores.size(1), 1]
         dummy_scores = ner_scores.new_zeros(*dummy_dims)
@@ -109,7 +109,7 @@ class NERTagger(Model):
         return output_dict
 
     @overrides
-    def decode(self, output_dict: Dict[str, torch.Tensor]):
+    def make_output_human_readable(self, output_dict: Dict[str, torch.Tensor]):
         predicted_ner_batch = output_dict["predicted_ner"].detach().cpu()
         spans_batch = output_dict["spans"].detach().cpu()
         span_mask_batch = output_dict["span_mask"].detach().cpu().bool()

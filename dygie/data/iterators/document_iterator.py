@@ -5,14 +5,15 @@ import numpy as np
 from overrides import overrides
 
 from allennlp.data.instance import Instance
-from allennlp.data.iterators.data_iterator import DataIterator
-from allennlp.data.dataset import Batch
+from allennlp.data.dataloader import DataLoader
+from allennlp.data.batch import Batch
+
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@DataIterator.register("ie_document")
-class DocumentIterator(DataIterator):
+@DataLoader.register("ie_document")
+class DocumentIterator(DataLoader):
     """
     For multi-task IE, we want the training instances in a batch to be successive sentences from the
     same document. Otherwise the coreference labels don't make sense.
@@ -40,7 +41,7 @@ class DocumentIterator(DataIterator):
                 batch = []
                 yield Batch(full_batch)
 
-    @overrides
+    #@overrides
     def get_num_batches(self, instances: Iterable[Instance]) -> int:
         """
         Get the number of batches.

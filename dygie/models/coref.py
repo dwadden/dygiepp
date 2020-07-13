@@ -12,7 +12,8 @@ from allennlp.modules.token_embedders import Embedding
 from allennlp.modules import FeedForward
 from allennlp.modules import TimeDistributed
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
-from allennlp.training.metrics import MentionRecall, ConllCorefScores
+from allennlp_models.coref.metrics.conll_coref_scores import ConllCorefScores
+from allennlp_models.coref.metrics.mention_recall import MentionRecall
 
 from dygie.models import shared
 from dygie.models.entity_beam_pruner import Pruner
@@ -358,7 +359,7 @@ class CorefResolver(Model):
         return output_dict
 
     @overrides
-    def decode(self, output_dict: Dict[str, torch.Tensor]):
+    def make_output_human_readable(self, output_dict: Dict[str, torch.Tensor]):
         """
         Converts the list of spans and predicted antecedent indices into clusters
         of spans for each element in the batch.

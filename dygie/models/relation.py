@@ -9,7 +9,7 @@ from overrides import overrides
 from allennlp.data import Vocabulary
 from allennlp.models.model import Model
 from allennlp.modules import FeedForward
-from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
+from allennlp.nn import Activation, util, InitializerApplicator, RegularizerApplicator
 from allennlp.modules import TimeDistributed
 
 from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
@@ -39,7 +39,7 @@ class RelationExtractor(Model):
                  initializer: InitializerApplicator = InitializerApplicator(),
                  positive_label_weight: float = 1.0,
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
-        super(RelationExtractor, self).__init__(vocab, regularizer)
+        super().__init__(vocab, regularizer)
 
         # Need to hack this for cases where there's no relation data. It breaks Ulme's code.
         self._n_labels = max(vocab.get_vocab_size("relation_labels"), 1)
@@ -69,7 +69,7 @@ class RelationExtractor(Model):
         self._A_network = FeedForward(input_dim=self._n_labels,
                                       num_layers=1,
                                       hidden_dims=span_emb_dim,
-                                      activations=lambda x: x,
+                                      activations=Activation.by_name('linear')(), # used to be "linear": (lambda: _ActivationLambda(lambda x: x, "Linear"), None),
                                       dropout=rel_prop_dropout_A)
         self._f_network = FeedForward(input_dim=2*span_emb_dim,
                                       num_layers=1,
@@ -190,7 +190,7 @@ class RelationExtractor(Model):
             cross_entropy = self._get_cross_entropy_loss(relation_scores, gold_relations)
 
             # Compute F1.
-            predictions = self.decode(output_dict)["decoded_relations_dict"]
+            predictions = self.make_output_human_readable(output_dict)["decoded_relations_dict"]
             assert len(predictions) == len(metadata)  # Make sure length of predictions is right.
             self._candidate_recall(predictions, metadata)
             self._relation_metrics(predictions, metadata)
@@ -199,7 +199,7 @@ class RelationExtractor(Model):
         return output_dict
 
     @overrides
-    def decode(self, output_dict):
+    def make_output_human_readable(self, output_dict):
         """
         Take the output and convert it into a list of dicts. Each entry is a sentence. Each key is a
         pair of span indices for that sentence, and each value is the relation label on that span

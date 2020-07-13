@@ -2,9 +2,10 @@
 
 # Modeling
 
-torch==1.2.0
-allennlp==0.9.0
-
+torch==1.5.0
+allennlp==1.0.0
+allennlp_models==1.0.0
+tokenizers==0.8.0-dev2
 
 # Data munging
 
