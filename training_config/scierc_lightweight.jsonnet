@@ -71,7 +71,7 @@ local params = {
   // Model training
   batch_size: 8,
   num_epochs: 250,
-  patience: 100,
+  patience: 5,
   optimizer: {
     type: "adamw",
     lr: 1e-3,
@@ -83,12 +83,6 @@ local params = {
         "finetune": true},],
     ],
   },
-  learning_rate_scheduler:  {
-    type: "reduce_on_plateau",
-    factor: 0.5,
-    mode: "max",
-    patience: 4
-  }
 };
 
 ////////////////////

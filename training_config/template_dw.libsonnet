@@ -331,7 +331,6 @@ function(p) {
     patience : p.patience,
     cuda_device : std.parseInt(std.extVar("cuda_device")),
     validation_metric: validation_metrics[p.target],
-    learning_rate_scheduler: p.learning_rate_scheduler,
     optimizer: p.optimizer,
     [if "moving_average_decay" in p then "moving_average"]: {
       type: "exponential",
