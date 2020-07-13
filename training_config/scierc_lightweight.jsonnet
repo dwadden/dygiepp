@@ -71,18 +71,14 @@ local params = {
   // Model training
   batch_size: 8,
   num_epochs: 250,
-  patience: 15,
+  patience: 100,
   optimizer: {
-    type: "bert_adam",
+    type: "adamw",
     lr: 1e-3,
-    warmup: 0.1,
-    t_total: 10000,
     weight_decay: 0.0,
     parameter_groups: [
       [["_text_field_embedder"],
        {"lr": 5e-5,
-        "warmup": 0.2,
-        "t_total": 10000,
         "weight_decay": 0.01,
         "finetune": true},],
     ],

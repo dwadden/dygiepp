@@ -13,6 +13,6 @@ ie_train_data_path=$data_root/train.json \
     ie_test_data_path=$data_root/test.json \
     cuda_device=$cuda_device \
     allennlp train $config_file \
-    --cache-directory $data_root/cached \
     --serialization-dir ./models/$experiment_name \
-    --include-package dygie
+    --include-package dygie \
+    --force $True # so I can keep using the same directory in debugging config
