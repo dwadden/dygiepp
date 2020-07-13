@@ -15,4 +15,3 @@ ie_train_data_path=$data_root/train.json \
     allennlp train $config_file \
     --serialization-dir ./models/$experiment_name \
     --include-package dygie \
-    --force $True # so I can keep using the same directory in debugging config
