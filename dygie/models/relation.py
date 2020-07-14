@@ -1,6 +1,6 @@
 import logging
 import itertools
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 
 import torch
 import torch.nn.functional as F
@@ -28,54 +28,42 @@ class RelationExtractor(Model):
     # TODO(dwadden) add option to make `mention_feedforward` be the NER tagger.
     def __init__(self,
                  vocab: Vocabulary,
-                 mention_feedforward: FeedForward,
-                 relation_feedforward: FeedForward,
+                 make_feedforward: Callable,
+                 span_emb_dim: int,
                  feature_size: int,
                  spans_per_word: float,
-                 span_emb_dim: int,
-                 rel_prop: int = 0,
-                 rel_prop_dropout_A: float = 0.0,
-                 rel_prop_dropout_f: float = 0.0,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  positive_label_weight: float = 1.0,
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super().__init__(vocab, regularizer)
 
-        # Need to hack this for cases where there's no relation data. It breaks Ulme's code.
-        self._n_labels = max(vocab.get_vocab_size("relation_labels"), 1)
+        self._namespaces = [entry for entry in vocab.get_namespaces() if "ner_labels" in entry]
+        self._n_labels = {name: vocab.get_vocab_size(name) for name in self._namespaces}
 
-        # Span candidate scorer.
-        # TODO(dwadden) make sure I've got the input dim right on this one.
-        feedforward_scorer = torch.nn.Sequential(
-            TimeDistributed(mention_feedforward),
-            TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1)))
-        self._mention_pruner = Pruner(feedforward_scorer)
+        self._mention_pruners = torch.nn.ModuleDict()
+        self._relation_feedforwards = torch.nn.ModuleDict()
+        self._relation_scorers = torch.nn.ModuleDict()
+        self._relation_metrics = {}
 
-        # Relation scorer.
-        self._relation_feedforward = relation_feedforward
-        self._relation_scorer = torch.nn.Linear(relation_feedforward.get_output_dim(), self._n_labels)
+        for namespace in self._namespaces:
+            mention_feedforward = make_feedforward(input_dim=span_emb_dim)
+            feedforward_scorer = torch.nn.Sequential(
+                TimeDistributed(mention_feedforward),
+                TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1)))
+            self._mention_pruners[namespace] = Pruner(feedforward_scorer)
+
+            relation_scorer_dim = 3 * span_emb_dim
+            relation_feedforward = make_feedforward(input_dim=relation_scorer_dim)
+            self._relation_feedforwards[namespace] = relation_feedforward
+            relation_scorer = torch.nn.Linear(
+                relation_feedforward.get_output_dim(), self._n_labels[namespace])
+            self._relation_scorers[namespace] = relation_scorer
+
+            self._relation_metrics[namespace] = RelationMetrics()
 
         self._spans_per_word = spans_per_word
 
-        # TODO(dwadden) Add code to compute relation F1.
-        self._candidate_recall = CandidateRecall()
-        self._relation_metrics = RelationMetrics()
-
-        class_weights = torch.cat([torch.tensor([1.0]), positive_label_weight * torch.ones(self._n_labels)])
-        self._loss = torch.nn.CrossEntropyLoss(reduction="sum", ignore_index=-1, weight=class_weights)
-        self.rel_prop = rel_prop
-
-        # Relation Propagation
-        self._A_network = FeedForward(input_dim=self._n_labels,
-                                      num_layers=1,
-                                      hidden_dims=span_emb_dim,
-                                      activations=Activation.by_name('linear')(), # used to be "linear": (lambda: _ActivationLambda(lambda x: x, "Linear"), None),
-                                      dropout=rel_prop_dropout_A)
-        self._f_network = FeedForward(input_dim=2*span_emb_dim,
-                                      num_layers=1,
-                                      hidden_dims=span_emb_dim,
-                                      activations=torch.nn.Sigmoid(),
-                                      dropout=rel_prop_dropout_f)
+        self._loss = torch.nn.CrossEntropyLoss(reduction="sum", ignore_index=-1)
 
         initializer(self)
 

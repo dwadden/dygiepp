@@ -241,7 +241,6 @@ function(p) {
       coref: {
         spans_per_word: p.coref_spans_per_word,
         max_antecedents: p.coref_max_antecedents,
-        span_emb_dim: span_emb_dim,
         coref_prop: p.coref_prop,
         initializer: module_initializer
       },
@@ -250,13 +249,6 @@ function(p) {
       },
       relation: {
         spans_per_word: p.relation_spans_per_word,
-        positive_label_weight: p.relation_positive_label_weight,
-        mention_feedforward: make_feedforward(span_emb_dim),
-        relation_feedforward: make_feedforward(relation_scorer_dim),
-        rel_prop_dropout_A: p.rel_prop_dropout_A,
-        rel_prop_dropout_f: p.rel_prop_dropout_f,
-        rel_prop: p.rel_prop,
-        span_emb_dim: span_emb_dim,
         initializer: module_initializer
       },
       events: {

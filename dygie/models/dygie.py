@@ -98,6 +98,8 @@ class DyGIE(Model):
                                                 feature_size=feature_size,
                                                 params=modules.pop("coref"))
         self._relation = RelationExtractor.from_params(vocab=vocab,
+                                                       make_feedforward=make_feedforward,
+                                                       span_emb_dim=span_emb_dim,
                                                        feature_size=feature_size,
                                                        params=modules.pop("relation"))
         self._events = EventExtractor.from_params(vocab=vocab,
