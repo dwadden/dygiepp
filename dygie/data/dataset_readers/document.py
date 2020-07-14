@@ -28,9 +28,26 @@ class Document:
         self.sentences = [Sentence(entry, sentence_start, sentence_ix, self)
                           for sentence_ix, (entry, sentence_start)
                           in enumerate(zip(entries, sentence_starts))]
+        # Store cofereference annotations.
         if "clusters" in js:
             self.clusters = [Cluster(entry, i, self)
                              for i, entry in enumerate(js["clusters"])]
+        else:
+            self.clusters = None
+        self._update_sentences_with_clusters()
+
+    def _update_sentences_with_clusters(self):
+        "Add cluster dictionary to each sentence, if there are coreference clusters."
+        for sent in self.sentences:
+            sent.cluster_dict = {} if self.clusters else None
+
+        if self.clusters is None:
+            return
+
+        for clust in self.clusters:
+            for member in clust.members:
+                sent = member.sentence
+                sent.cluster_dict[member.span.span_sent] = member.cluster_id
 
     def __repr__(self):
         return "\n".join([str(i) + ": " + " ".join(sent.text) for i, sent in enumerate(self.sentences)])
@@ -69,6 +86,7 @@ class Sentence:
         self.sentence_ix = sentence_ix
         self.doc = doc
 
+        # Store events.
         if "ner" in entry:
             self.ner = [NER(this_ner, self.text, sentence_start)
                         for this_ner in entry["ner"]]
@@ -77,6 +95,7 @@ class Sentence:
             self.ner = None
             self.ner_dict = None
 
+        # Store relations.
         if "relations" in entry:
             self.relations = [Relation(this_relation, self.text, sentence_start) for
                               this_relation in entry["relations"]]
@@ -89,14 +108,11 @@ class Sentence:
             self.relations = None
             self.relation_dict = None
 
+        # Store events.
         if "events" in entry:
             self.events = Events(entry["events"], self.text, sentence_start)
-            if self.events:
-                import ipdb; ipdb.set_trace()
-
         else:
             self.events = None
-
 
     def __repr__(self):
         the_text = " ".join(self.text)

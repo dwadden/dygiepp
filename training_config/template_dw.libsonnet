@@ -219,8 +219,6 @@ function(p) {
     type: "dygie",
     token_indexers: token_indexers,
     max_span_width: p.max_span_width,
-    context_width: p.context_width,
-    debug: getattr(p, "debug", false)
     //cache_directory: "./data/scierc/processed_data/json/cached" doesnt work... need to look at
   },
   train_data_path: std.extVar("ie_train_data_path"),
