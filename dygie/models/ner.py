@@ -9,6 +9,7 @@ from allennlp.models.model import Model
 from allennlp.modules import FeedForward
 from allennlp.modules import TimeDistributed
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
+
 from dygie.training.ner_metrics import NERMetrics
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -35,12 +36,13 @@ class NERTagger(Model):
 
     def __init__(self,
                  vocab: Vocabulary,
-                 input_dim: int,
-                 feedforward_params: Dict[str, Union[int, float]],
+                 dygie: Model,
+                 span_emb_dim: int,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(NERTagger, self).__init__(vocab, regularizer)
 
+        self._dygie = dygie
         self._namespaces = [entry for entry in vocab.get_namespaces() if "ner_labels" in entry]
 
         # Number of classes determine the output dimension of the final layer
@@ -59,11 +61,7 @@ class NERTagger(Model):
         self._ner_metrics = {}
 
         for namespace in self._namespaces:
-            mention_feedforward = FeedForward(input_dim=input_dim,
-                                              num_layers=feedforward_params["num_layers"],
-                                              hidden_dims=feedforward_params["hidden_dims"],
-                                              activations=torch.nn.ReLU(),
-                                              dropout=feedforward_params["dropout"])
+            mention_feedforward = self._dygie.make_feedforward(input_dim=span_emb_dim)
             self._ner_scorers[namespace] = torch.nn.Sequential(
                 TimeDistributed(mention_feedforward),
                 TimeDistributed(torch.nn.Linear(

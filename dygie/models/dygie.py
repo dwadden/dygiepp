@@ -66,6 +66,8 @@ class DyGIE(Model):
 
         self._loss_weights = loss_weights
 
+        self._feedforward_params = feedforward_params
+
         # Make endpoint span extractor.
         self._endpoint_span_extractor = EndpointSpanExtractor(text_field_embedder.get_output_dim(),
                                                               combination="x,y",
@@ -74,12 +76,16 @@ class DyGIE(Model):
                                                               bucket_widths=False)
 
         modules = Params(modules)
+        span_emb_dim = self._endpoint_span_extractor.get_output_dim()
+
         self._ner = NERTagger.from_params(vocab=vocab,
-                                          input_dim=self._endpoint_span_extractor.get_output_dim(),
-                                          feedforward_params=feedforward_params,
+                                          dygie=self,
+                                          span_emb_dim=span_emb_dim,
                                           feature_size=feature_size,
                                           params=modules.pop("ner"))
         self._coref = CorefResolver.from_params(vocab=vocab,
+                                                dygie=self,
+                                                span_emb_dim=span_emb_dim,
                                                 feature_size=feature_size,
                                                 params=modules.pop("coref"))
         self._relation = RelationExtractor.from_params(vocab=vocab,
@@ -326,3 +332,11 @@ class DyGIE(Model):
                 new_k = "_" + k
                 res[new_k] = v
         return res
+
+    def make_feedforward(self, input_dim):
+        feedforward = FeedForward(input_dim=input_dim,
+                                  num_layers=self._feedforward_params["num_layers"],
+                                  hidden_dims=self._feedforward_params["hidden_dims"],
+                                  activations=torch.nn.ReLU(),
+                                  dropout=self._feedforward_params["dropout"])
+        return feedforward

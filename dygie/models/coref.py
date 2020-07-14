@@ -1,6 +1,6 @@
 import logging
 import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn.functional as F
@@ -49,24 +49,30 @@ class CorefResolver(Model):
     """
     def __init__(self,
                  vocab: Vocabulary,
-                 mention_feedforward: FeedForward,
-                 antecedent_feedforward: FeedForward,
+                 dygie: Model,
+                 span_emb_dim: int,
                  feature_size: int,
                  spans_per_word: float,
-                 span_emb_dim: int,
                  max_antecedents: int,
                  coref_prop: int = 0,
                  coref_prop_dropout_f: float = 0.0,
-                 initializer: InitializerApplicator = InitializerApplicator(), # TODO(dwadden add this).
+                 initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(CorefResolver, self).__init__(vocab, regularizer)
 
+        self._dygie = dygie
+
+        antecedent_input_dim = 3 * span_emb_dim + feature_size
+        antecedent_feedforward = self._dygie.make_feedforward(input_dim=antecedent_input_dim)
         self._antecedent_feedforward = TimeDistributed(antecedent_feedforward)
+
+        mention_feedforward = self._dygie.make_feedforward(input_dim=span_emb_dim)
         feedforward_scorer = torch.nn.Sequential(
             TimeDistributed(mention_feedforward),
             TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1)))
         self._mention_pruner = Pruner(feedforward_scorer)
-        self._antecedent_scorer = TimeDistributed(torch.nn.Linear(antecedent_feedforward.get_output_dim(), 1))
+        self._antecedent_scorer = TimeDistributed(torch.nn.Linear(
+            antecedent_feedforward.get_output_dim(), 1))
 
         # 10 possible distance buckets.
         self._num_distance_buckets = 10
@@ -85,11 +91,6 @@ class CorefResolver(Model):
                                       activations=torch.nn.Sigmoid(),
                                       dropout=coref_prop_dropout_f)
 
-        #self._f_network2 = FeedForward(input_dim=2*span_emb_dim,
-        #                              num_layers=1,
-        #                              hidden_dims=1,
-        #                              activations=torch.nn.Sigmoid(),
-        #                              dropout=coref_prop_dropout_f)
         self.antecedent_softmax = torch.nn.Softmax(dim=-1)
         initializer(self)
 
