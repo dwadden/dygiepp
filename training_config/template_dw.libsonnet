@@ -251,10 +251,6 @@ function(p) {
       events: {
         trigger_spans_per_word: p.trigger_spans_per_word,
         argument_spans_per_word: p.argument_spans_per_word,
-        trigger_feedforward: make_feedforward(trigger_scorer_dim), // Factor of 2 because of self attention.
-        trigger_candidate_feedforward: make_feedforward(trigger_emb_dim),
-        mention_feedforward: make_feedforward(span_emb_dim),
-        argument_feedforward: make_feedforward(argument_scorer_dim),
         initializer: module_initializer,
         loss_weights: p.loss_weights_events,
       }

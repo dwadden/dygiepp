@@ -54,7 +54,7 @@ class DyGIE(Model):
                  feature_size: int,
                  max_span_width: int,
                  feedforward_params: Dict[str, Union[int, float]],
-                 loss_weights: Dict[str, int],
+                 loss_weights: Dict[str, float],
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
                  display_metrics: List[str] = None) -> None:
@@ -63,8 +63,6 @@ class DyGIE(Model):
         self._text_field_embedder = text_field_embedder
 
         self._loss_weights = loss_weights
-
-        self._feedforward_params = feedforward_params
 
         # Make endpoint span extractor.
         self._endpoint_span_extractor = EndpointSpanExtractor(
@@ -75,6 +73,7 @@ class DyGIE(Model):
             bucket_widths=False)
 
         modules = Params(modules)
+        token_emb_dim = self._text_field_embedder.get_output_dim()
         span_emb_dim = self._endpoint_span_extractor.get_output_dim()
 
         def make_feedforward(input_dim):
@@ -101,6 +100,9 @@ class DyGIE(Model):
                                                        feature_size=feature_size,
                                                        params=modules.pop("relation"))
         self._events = EventExtractor.from_params(vocab=vocab,
+                                                  make_feedforward=make_feedforward,
+                                                  token_emb_dim=token_emb_dim,
+                                                  span_emb_dim=span_emb_dim,
                                                   feature_size=feature_size,
                                                   params=modules.pop("events"))
 

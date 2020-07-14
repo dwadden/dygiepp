@@ -1,21 +1,18 @@
 import logging
 import itertools
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 
 import torch
-from torch.nn import functional as F
 from overrides import overrides
 
 from allennlp.data import Vocabulary
 from allennlp.models.model import Model
-from allennlp.modules import FeedForward, Seq2SeqEncoder
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from allennlp.modules import TimeDistributed
 from allennlp.modules.token_embedders import Embedding
 
 from dygie.training.event_metrics import EventMetrics, ArgumentStats
 from dygie.models.shared import fields_to_batches
-from dygie.models.one_hot import make_embedder
 from dygie.models.entity_beam_pruner import make_pruner
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -31,42 +28,64 @@ class EventExtractor(Model):
 
     def __init__(self,
                  vocab: Vocabulary,
-                 trigger_feedforward: FeedForward,
-                 trigger_candidate_feedforward: FeedForward,
-                 mention_feedforward: FeedForward,
-                 argument_feedforward: FeedForward,
+                 make_feedforward: Callable,
+                 token_emb_dim: int,   # Triggers are represented via token embeddings.
+                 span_emb_dim: int,    # Arguments are represented via span embeddings.
                  feature_size: int,
                  trigger_spans_per_word: float,
                  argument_spans_per_word: float,
-                 loss_weights,
+                 loss_weights: Dict[str, float],
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(EventExtractor, self).__init__(vocab, regularizer)
 
-        self._n_trigger_labels = vocab.get_vocab_size("trigger_labels")
-        self._n_argument_labels = vocab.get_vocab_size("argument_labels")
+        self._trigger_namespaces = [entry for entry in vocab.get_namespaces()
+                                    if "trigger_labels" in entry]
+        self._argument_namespaces = [entry for entry in vocab.get_namespaces()
+                                     if "argument_labels" in entry]
+
+        self._n_trigger_labels = {name: vocab.get_vocab_size(name)
+                                  for name in self._trigger_namespaces}
+        self._n_argument_labels = {name: vocab.get_vocab_size(name)
+                                   for name in self._argument_namespaces}
+
+        # Make sure the null trigger label is always 0.
+        for namespace in self._trigger_namespaces:
+            null_label = vocab.get_token_index("", namespace)
+            assert null_label == 0  # If not, the dummy class won't correspond to the null label.
+
+        # Create trigger scorers and pruners.
+        self._trigger_scorers = torch.nn.ModuleDict()
+        self._trigger_pruners = torch.nn.ModuleDict()
+        for trigger_namespace in self._trigger_namespaces:
+            # The trigger pruner.
+            trigger_candidate_feedforward = make_feedforward(input_dim=token_emb_dim)
+            self._trigger_pruners[trigger_namespace] = make_pruner(trigger_candidate_feedforward)
+            # The trigger scorer.
+            trigger_feedforward = make_feedforward(input_dim=token_emb_dim)
+            self._trigger_scorers[namespace] = torch.nn.Sequential(
+                TimeDistributed(trigger_feedforward),
+                TimeDistributed(torch.nn.Linear(trigger_feedforward.get_output_dim(),
+                                                self._n_trigger_labels[trigger_namespace] - 1)))
+
+        # Creater argument scorers and pruners.
+        self._mention_pruners = torch.nn.ModuleDict()
+        self._argument_feedforwards = torch.nn.ModuleDict()
+        self._argument_scorers = torch.nn.ModuleDict()
+        for argument_namespace in self._argument_namespaces:
+            # The argument pruner.
+            mention_feedforward = make_feedforward(input_dim=span_emb_dim)
+            self._mention_pruners[argument_namespace] = make_pruner(mention_feedforward)
+            # The argument scorer. The `+ 2` is there because I include indicator features for
+            # whether the trigger is before or inside the arg span.
+            argument_feedforward_dim = token_emb_dim + span_emb_dim + feature_size + 2
+            argument_feedforward = make_feedforward(input_dim=argument_feedforward_dim)
+            self._argument_feedforwards[argument_namespace] = argument_feedforward
+            self._argument_scorers[argument_namespace] = torch.nn.Linear(
+                argument_feedforward.get_output_dim(), self._n_argument_labels[argument_namespace])
 
         # Weight on trigger labeling and argument labeling.
         self._loss_weights = loss_weights
-
-        # Trigger candidate scorer.
-        null_label = vocab.get_token_index("", "trigger_labels")
-        assert null_label == 0  # If not, the dummy class won't correspond to the null label.
-
-        self._trigger_scorer = torch.nn.Sequential(
-            TimeDistributed(trigger_feedforward),
-            TimeDistributed(torch.nn.Linear(trigger_feedforward.get_output_dim(),
-                                            self._n_trigger_labels - 1)))
-
-        # Make pruners. If `entity_beam` is true, use NER and trigger scorers to construct the beam
-        # and only keep candidates that the model predicts are actual entities or triggers.
-        self._mention_pruner = make_pruner(mention_feedforward)
-        self._trigger_pruner = make_pruner(trigger_candidate_feedforward)
-
-        self._context_window = 0
-        self._argument_feedforward = argument_feedforward
-        self._argument_scorer = torch.nn.Linear(
-            argument_feedforward.get_output_dim(), self._n_argument_labels)
 
         # Distance embeddings.
         self._num_distance_buckets = 10  # Just use 10 which is the default.
