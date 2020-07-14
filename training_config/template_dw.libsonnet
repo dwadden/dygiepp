@@ -76,8 +76,7 @@ function(p) {
     then token_embedding_dim
     else 2 * p.lstm_hidden_size),
   local endpoint_span_emb_dim = 2 * context_layer_output_size + p.feature_size,
-  local attended_span_emb_dim = if p.use_attentive_span_extractor then token_embedding_dim else 0,
-  local span_emb_dim = endpoint_span_emb_dim + attended_span_emb_dim,
+  local span_emb_dim = endpoint_span_emb_dim,
   local pair_emb_dim = 3 * span_emb_dim,
   local relation_scorer_dim = pair_emb_dim,
   local coref_scorer_dim = pair_emb_dim + p.feature_size,
@@ -111,9 +110,6 @@ function(p) {
     (if shared_attention_context then trigger_emb_dim else 0) +
     class_projection_dim),
 
-  // Co-training
-  local co_train = if "co_train" in p then p.co_train else false,
-
   ////////////////////////////////////////////////////////////////////////////////
 
   // Function definitions
@@ -125,7 +121,6 @@ function(p) {
     activations: "relu",
     dropout: p.feedforward_dropout
   },
-
   // Model components
 
  local token_indexers = {
@@ -219,7 +214,7 @@ function(p) {
     type: "dygie",
     token_indexers: token_indexers,
     max_span_width: p.max_span_width,
-    //cache_directory: "./data/scierc/processed_data/json/cached" doesnt work... need to look at
+    cache_directory: "cache"
   },
   train_data_path: std.extVar("ie_train_data_path"),
   validation_data_path: std.extVar("ie_dev_data_path"),
@@ -237,8 +232,11 @@ function(p) {
     feature_size: p.feature_size,
     max_span_width: p.max_span_width,
     display_metrics: display_metrics[p.target],
-    context_layer: context_layer,
-    co_train: co_train,
+    feedforward_params: {
+      num_layers: p.feedforward_layers,
+      hidden_dims: p.feedforward_dim,
+      dropout: p.feedforward_dropout
+    },
     modules: {
       coref: {
         spans_per_word: p.coref_spans_per_word,
@@ -250,7 +248,6 @@ function(p) {
         initializer: module_initializer
       },
       ner: {
-        mention_feedforward: make_feedforward(span_emb_dim),
         initializer: module_initializer
       },
       relation: {
@@ -308,12 +305,12 @@ function(p) {
     }
   },
   data_loader: {
-    type: if co_train then "ie_multitask" else "ie_batch",
+    type: "ie_batch",
     batch_size: p.batch_size,
     [if "instances_per_epoch" in p then "instances_per_epoch"]: p.instances_per_epoch
   },
   validation_data_loader: {
-   type: if co_train then "ie_multitask" else "ie_batch",
+   type: "ie_batch",
    batch_size: p.batch_size
   },
 

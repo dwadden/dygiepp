@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 from overrides import overrides
@@ -35,29 +35,42 @@ class NERTagger(Model):
 
     def __init__(self,
                  vocab: Vocabulary,
-                 mention_feedforward: FeedForward,
-                 feature_size: int,
+                 input_dim: int,
+                 feedforward_params: Dict[str, Union[int, float]],
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(NERTagger, self).__init__(vocab, regularizer)
 
-        # Number of classes determine the output dimension of the final layer
-        self._n_labels = vocab.get_vocab_size('ner_labels')
+        self._namespaces = [entry for entry in vocab.get_namespaces() if "ner_labels" in entry]
 
-        # TODO(dwadden) think of a better way to enforce this.
+        # Number of classes determine the output dimension of the final layer
+        self._n_labels = {name: vocab.get_vocab_size(name) for name in self._namespaces}
+
         # Null label is needed to keep track of when calculating the metrics
-        null_label = vocab.get_token_index("", "ner_labels")
-        assert null_label == 0  # If not, the dummy class won't correspond to the null label.
+        for namespace in self._namespaces:
+            null_label = vocab.get_token_index("", namespace)
+            assert null_label == 0  # If not, the dummy class won't correspond to the null label.
 
         # The output dim is 1 less than the number of labels because we don't score the null label;
         # we just give it a score of 0 by default.
-        self._ner_scorer = torch.nn.Sequential(
-            TimeDistributed(mention_feedforward),
-            TimeDistributed(torch.nn.Linear(
-                mention_feedforward.get_output_dim(),
-                self._n_labels - 1)))
 
-        self._ner_metrics = NERMetrics(self._n_labels, null_label)
+        # Create a separate scorer and metric for each dataset we're dealing with.
+        self._ner_scorers = {}
+        self._ner_metrics = {}
+
+        for namespace in self._namespaces:
+            mention_feedforward = FeedForward(input_dim=input_dim,
+                                              num_layers=feedforward_params["num_layers"],
+                                              hidden_dims=feedforward_params["hidden_dims"],
+                                              activations=torch.nn.ReLU(),
+                                              dropout=feedforward_params["dropout"])
+            self._ner_scorers[namespace] = torch.nn.Sequential(
+                TimeDistributed(mention_feedforward),
+                TimeDistributed(torch.nn.Linear(
+                    mention_feedforward.get_output_dim(),
+                    self._n_labels[namespace] - 1)))
+
+            self._ner_metrics[namespace] = NERMetrics(self._n_labels[namespace], null_label)
 
         self._loss = torch.nn.CrossEntropyLoss(reduction="sum")
 
@@ -71,7 +84,6 @@ class NERTagger(Model):
                 sentence_lengths: torch.Tensor,
                 ner_labels: torch.IntTensor = None,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
-
         """
         TODO(dwadden) Write documentation.
         """

@@ -1,6 +1,6 @@
 from os import path
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 import copy
 
 import torch
@@ -55,6 +55,7 @@ class DyGIE(Model):
                  modules,  # TODO(dwadden) Add type.
                  feature_size: int,
                  max_span_width: int,
+                 feedforward_params: Dict[str, Union[int, float]],
                  loss_weights: Dict[str, int],
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
@@ -65,14 +66,22 @@ class DyGIE(Model):
 
         self._loss_weights = loss_weights
 
-        # Need to add this line so things don't break. TODO(dwadden) sort out what's happening.
+        # Make endpoint span extractor.
+        self._endpoint_span_extractor = EndpointSpanExtractor(text_field_embedder.get_output_dim(),
+                                                              combination="x,y",
+                                                              num_width_embeddings=max_span_width,
+                                                              span_width_embedding_dim=feature_size,
+                                                              bucket_widths=False)
+
         modules = Params(modules)
+        self._ner = NERTagger.from_params(vocab=vocab,
+                                          input_dim=self._endpoint_span_extractor.get_output_dim(),
+                                          feedforward_params=feedforward_params,
+                                          feature_size=feature_size,
+                                          params=modules.pop("ner"))
         self._coref = CorefResolver.from_params(vocab=vocab,
                                                 feature_size=feature_size,
                                                 params=modules.pop("coref"))
-        self._ner = NERTagger.from_params(vocab=vocab,
-                                          feature_size=feature_size,
-                                          params=modules.pop("ner"))
         self._relation = RelationExtractor.from_params(vocab=vocab,
                                                        feature_size=feature_size,
                                                        params=modules.pop("relation"))
@@ -80,12 +89,6 @@ class DyGIE(Model):
                                                   feature_size=feature_size,
                                                   params=modules.pop("events"))
 
-        # Make endpoint span extractor.
-        self._endpoint_span_extractor = EndpointSpanExtractor(text_field_embedder.get_output_dim(),
-                                                              combination="x,y",
-                                                              num_width_embeddings=max_span_width,
-                                                              span_width_embedding_dim=feature_size,
-                                                              bucket_widths=False)
         self._max_span_width = max_span_width
         self._display_metrics = display_metrics
 
