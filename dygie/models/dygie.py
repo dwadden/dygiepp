@@ -1,7 +1,5 @@
-from os import path
 import logging
 from typing import Dict, List, Optional, Union
-import copy
 
 import torch
 import torch.nn.functional as F
@@ -10,8 +8,8 @@ from overrides import overrides
 from allennlp.data import Vocabulary
 from allennlp.common.params import Params
 from allennlp.models.model import Model
-from allennlp.modules import Seq2SeqEncoder, TextFieldEmbedder, FeedForward
-from allennlp.modules.span_extractors import SelfAttentiveSpanExtractor, EndpointSpanExtractor
+from allennlp.modules import TextFieldEmbedder, FeedForward
+from allennlp.modules.span_extractors import EndpointSpanExtractor
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 
 # Import submodules.
@@ -19,7 +17,6 @@ from dygie.models.coref import CorefResolver
 from dygie.models.ner import NERTagger
 from dygie.models.relation import RelationExtractor
 from dygie.models.events import EventExtractor
-from dygie.training.joint_metrics import JointMetrics
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -49,6 +46,7 @@ class DyGIE(Model):
     display_metrics: ``List[str]``. A list of the metrics that should be printed out during model
         training.
     """
+
     def __init__(self,
                  vocab: Vocabulary,
                  text_field_embedder: TextFieldEmbedder,
@@ -124,7 +122,8 @@ class DyGIE(Model):
         """
         TODO(dwadden) change this.
         """
-        import ipdb; ipdb.set_trace()
+        import ipdb
+        ipdb.set_trace()
 
         # In AllenNLP, AdjacencyFields are passed in as floats. This fixes it.
         relation_labels = relation_labels.long()
@@ -133,7 +132,6 @@ class DyGIE(Model):
         # Encode using BERT
         text_embeddings = self._text_field_embedder(text)
         # TODO(dwadden) Make sure BERT does the indexing right (it should).
-
 
         # Shape: (batch_size, max_sentence_length)
         text_mask = util.get_text_field_mask(text).float()
@@ -152,7 +150,8 @@ class DyGIE(Model):
         text_mask = text_mask[:, :max_sentence_length].contiguous()
 
         # Shape: (batch_size, max_sentence_length, encoding_dim)
-        contextualized_embeddings = self._lstm_dropout(self._context_layer(text_embeddings, text_mask))
+        contextualized_embeddings = self._lstm_dropout(
+            self._context_layer(text_embeddings, text_mask))
         assert spans.max() < contextualized_embeddings.shape[1]
 
         # Shape: (batch_size, num_spans)
@@ -199,13 +198,14 @@ class DyGIE(Model):
         if self._coref.coref_prop > 0:
             # TODO(Ulme) Implement Coref Propagation
             output_coref = self._coref.coref_propagation(output_coref)
-            span_embeddings = self._coref.update_spans(output_coref, span_embeddings, coref_indices)
+            span_embeddings = self._coref.update_spans(
+                output_coref, span_embeddings, coref_indices)
 
         if self._relation.rel_prop > 0:
             output_relation = self._relation.relation_propagation(output_relation)
             span_embeddings = self.update_span_embeddings(span_embeddings, span_mask,
-                output_relation["top_span_embeddings"], output_relation["top_span_mask"],
-                output_relation["top_span_indices"])
+                                                          output_relation["top_span_embeddings"], output_relation["top_span_mask"],
+                                                          output_relation["top_span_indices"])
 
         # Make predictions and compute losses for each module
         if self._loss_weights['ner'] > 0:
@@ -216,7 +216,8 @@ class DyGIE(Model):
             output_coref = self._coref.predict_labels(output_coref, metadata)
 
         if self._loss_weights['relation'] > 0:
-            output_relation = self._relation.predict_labels(relation_labels, output_relation, metadata)
+            output_relation = self._relation.predict_labels(
+                relation_labels, output_relation, metadata)
 
         if self._loss_weights['events'] > 0:
             # Make the trigger embeddings the same size as the argument embeddings to make
@@ -225,7 +226,8 @@ class DyGIE(Model):
                 trigger_embeddings = contextualized_embeddings.repeat(1, 1, 2)
                 trigger_widths = torch.zeros([trigger_embeddings.size(0), trigger_embeddings.size(1)],
                                              device=trigger_embeddings.device, dtype=torch.long)
-                trigger_width_embs = self._endpoint_span_extractor._span_width_embedding(trigger_widths)
+                trigger_width_embs = self._endpoint_span_extractor._span_width_embedding(
+                    trigger_widths)
                 trigger_width_embs = trigger_width_embs.detach()
                 trigger_embeddings = torch.cat([trigger_embeddings, trigger_width_embs], dim=-1)
             else:
@@ -270,7 +272,8 @@ class DyGIE(Model):
             for top_span_nr, span_nr in enumerate(top_span_indices[sample_nr]):
                 if top_span_mask[sample_nr, top_span_nr] == 0 or span_mask[sample_nr, span_nr] == 0:
                     break
-                new_span_embeddings[sample_nr, span_nr] = top_span_embeddings[sample_nr, top_span_nr]
+                new_span_embeddings[sample_nr,
+                                    span_nr] = top_span_embeddings[sample_nr, top_span_nr]
         return new_span_embeddings
 
     @overrides
