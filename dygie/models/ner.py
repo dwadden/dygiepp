@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Callable
 
 import torch
 from overrides import overrides
@@ -36,13 +36,12 @@ class NERTagger(Model):
 
     def __init__(self,
                  vocab: Vocabulary,
-                 dygie: Model,
+                 make_feedforward: Callable,
                  span_emb_dim: int,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(NERTagger, self).__init__(vocab, regularizer)
 
-        self._dygie = dygie
         self._namespaces = [entry for entry in vocab.get_namespaces() if "ner_labels" in entry]
 
         # Number of classes determine the output dimension of the final layer
@@ -57,11 +56,11 @@ class NERTagger(Model):
         # we just give it a score of 0 by default.
 
         # Create a separate scorer and metric for each dataset we're dealing with.
-        self._ner_scorers = {}
+        self._ner_scorers = torch.nn.ModuleDict()
         self._ner_metrics = {}
 
         for namespace in self._namespaces:
-            mention_feedforward = self._dygie.make_feedforward(input_dim=span_emb_dim)
+            mention_feedforward = make_feedforward(input_dim=span_emb_dim)
             self._ner_scorers[namespace] = torch.nn.Sequential(
                 TimeDistributed(mention_feedforward),
                 TimeDistributed(torch.nn.Linear(

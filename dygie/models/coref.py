@@ -1,6 +1,6 @@
 import logging
 import math
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, Callable
 
 import torch
 import torch.nn.functional as F
@@ -49,7 +49,7 @@ class CorefResolver(Model):
     """
     def __init__(self,
                  vocab: Vocabulary,
-                 dygie: Model,
+                 make_feedforward: Callable,
                  span_emb_dim: int,
                  feature_size: int,
                  spans_per_word: float,
@@ -60,13 +60,11 @@ class CorefResolver(Model):
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(CorefResolver, self).__init__(vocab, regularizer)
 
-        self._dygie = dygie
-
         antecedent_input_dim = 3 * span_emb_dim + feature_size
-        antecedent_feedforward = self._dygie.make_feedforward(input_dim=antecedent_input_dim)
+        antecedent_feedforward = make_feedforward(input_dim=antecedent_input_dim)
         self._antecedent_feedforward = TimeDistributed(antecedent_feedforward)
 
-        mention_feedforward = self._dygie.make_feedforward(input_dim=span_emb_dim)
+        mention_feedforward = make_feedforward(input_dim=span_emb_dim)
         feedforward_scorer = torch.nn.Sequential(
             TimeDistributed(mention_feedforward),
             TimeDistributed(torch.nn.Linear(mention_feedforward.get_output_dim(), 1)))

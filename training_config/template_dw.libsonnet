@@ -241,8 +241,6 @@ function(p) {
       coref: {
         spans_per_word: p.coref_spans_per_word,
         max_antecedents: p.coref_max_antecedents,
-        mention_feedforward: make_feedforward(span_emb_dim),
-        antecedent_feedforward: make_feedforward(coref_scorer_dim),
         span_emb_dim: span_emb_dim,
         coref_prop: p.coref_prop,
         initializer: module_initializer

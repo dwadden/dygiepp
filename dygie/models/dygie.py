@@ -69,22 +69,31 @@ class DyGIE(Model):
         self._feedforward_params = feedforward_params
 
         # Make endpoint span extractor.
-        self._endpoint_span_extractor = EndpointSpanExtractor(text_field_embedder.get_output_dim(),
-                                                              combination="x,y",
-                                                              num_width_embeddings=max_span_width,
-                                                              span_width_embedding_dim=feature_size,
-                                                              bucket_widths=False)
+        self._endpoint_span_extractor = EndpointSpanExtractor(
+            text_field_embedder.get_output_dim(),
+            combination="x,y",
+            num_width_embeddings=max_span_width,
+            span_width_embedding_dim=feature_size,
+            bucket_widths=False)
 
         modules = Params(modules)
         span_emb_dim = self._endpoint_span_extractor.get_output_dim()
 
+        def make_feedforward(input_dim):
+            feedforward = FeedForward(input_dim=input_dim,
+                                      num_layers=feedforward_params["num_layers"],
+                                      hidden_dims=feedforward_params["hidden_dims"],
+                                      activations=torch.nn.ReLU(),
+                                      dropout=feedforward_params["dropout"])
+            return feedforward
+
         self._ner = NERTagger.from_params(vocab=vocab,
-                                          dygie=self,
+                                          make_feedforward=make_feedforward,
                                           span_emb_dim=span_emb_dim,
                                           feature_size=feature_size,
                                           params=modules.pop("ner"))
         self._coref = CorefResolver.from_params(vocab=vocab,
-                                                dygie=self,
+                                                make_feedforward=make_feedforward,
                                                 span_emb_dim=span_emb_dim,
                                                 feature_size=feature_size,
                                                 params=modules.pop("coref"))
@@ -332,11 +341,3 @@ class DyGIE(Model):
                 new_k = "_" + k
                 res[new_k] = v
         return res
-
-    def make_feedforward(self, input_dim):
-        feedforward = FeedForward(input_dim=input_dim,
-                                  num_layers=self._feedforward_params["num_layers"],
-                                  hidden_dims=self._feedforward_params["hidden_dims"],
-                                  activations=torch.nn.ReLU(),
-                                  dropout=self._feedforward_params["dropout"])
-        return feedforward
