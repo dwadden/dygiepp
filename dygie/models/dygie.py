@@ -42,8 +42,6 @@ class DyGIE(Model):
         A nested dictionary specifying parameters to be passed on to initialize submodules.
     max_span_width: ``int``
         The maximum width of candidate spans.
-    lexical_dropout: ``int``
-        The probability of dropping out dimensions of the embedded text.
     initializer : ``InitializerApplicator``, optional (default=``InitializerApplicator()``)
         Used to initialize the model parameters.
     regularizer : ``RegularizerApplicator``, optional (default=``None``)
@@ -54,25 +52,18 @@ class DyGIE(Model):
     def __init__(self,
                  vocab: Vocabulary,
                  text_field_embedder: TextFieldEmbedder,
-                 context_layer: Seq2SeqEncoder,
                  modules,  # TODO(dwadden) Add type.
                  feature_size: int,
                  max_span_width: int,
                  loss_weights: Dict[str, int],
-                 lexical_dropout: float = 0.2,
-                 lstm_dropout: float = 0.4,
-                 use_attentive_span_extractor: bool = False,
-                 co_train: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
                  display_metrics: List[str] = None) -> None:
         super(DyGIE, self).__init__(vocab, regularizer)
 
         self._text_field_embedder = text_field_embedder
-        self._context_layer = context_layer
 
         self._loss_weights = loss_weights
-        self._permanent_loss_weights = copy.deepcopy(self._loss_weights)
 
         # Need to add this line so things don't break. TODO(dwadden) sort out what's happening.
         modules = Params(modules)
@@ -90,36 +81,13 @@ class DyGIE(Model):
                                                   params=modules.pop("events"))
 
         # Make endpoint span extractor.
-
-        self._endpoint_span_extractor = EndpointSpanExtractor(context_layer.get_output_dim(),
+        self._endpoint_span_extractor = EndpointSpanExtractor(text_field_embedder.get_output_dim(),
                                                               combination="x,y",
                                                               num_width_embeddings=max_span_width,
                                                               span_width_embedding_dim=feature_size,
                                                               bucket_widths=False)
-        if use_attentive_span_extractor:
-            self._attentive_span_extractor = SelfAttentiveSpanExtractor(
-                input_dim=text_field_embedder.get_output_dim())
-        else:
-            self._attentive_span_extractor = None
-
         self._max_span_width = max_span_width
-
         self._display_metrics = display_metrics
-
-        if lexical_dropout > 0:
-            self._lexical_dropout = torch.nn.Dropout(p=lexical_dropout)
-        else:
-            self._lexical_dropout = lambda x: x
-
-        # Do co-training if we're training on ACE and ontonotes.
-        self._co_train = co_train
-
-        # Big gotcha: PyTorch doesn't add dropout to the LSTM's output layer. We need to do this
-        # manually.
-        if lstm_dropout > 0:
-            self._lstm_dropout = torch.nn.Dropout(p=lstm_dropout)
-        else:
-            self._lstm_dropout = lambda x: x
 
         initializer(self)
 
@@ -127,59 +95,25 @@ class DyGIE(Model):
     def forward(self,
                 text,
                 spans,
-                ner_labels,
-                coref_labels,
-                relation_labels,
-                trigger_labels,
-                argument_labels,
-                metadata):
+                metadata,
+                ner_labels=None,
+                coref_labels=None,
+                relation_labels=None,
+                trigger_labels=None,
+                argument_labels=None):
         """
         TODO(dwadden) change this.
         """
-        # For co-training on Ontonotes, need to change the loss weights depending on the data coming
-        # in. This is a hack but it will do for now.
-        if self._co_train:
-            if self.training:
-                dataset = [entry["dataset"] for entry in metadata]
-                assert len(set(dataset)) == 1
-                dataset = dataset[0]
-                assert dataset in ["ace", "ontonotes"]
-                if dataset == "ontonotes":
-                    self._loss_weights = dict(coref=1, ner=0, relation=0, events=0)
-                else:
-                    self._loss_weights = self._permanent_loss_weights
-            # This assumes that there won't be any co-training data in the dev and test sets, and that
-            # coref propagation will still happen even when the coref weight is set to 0.
-            else:
-                self._loss_weights = self._permanent_loss_weights
+        import ipdb; ipdb.set_trace()
 
         # In AllenNLP, AdjacencyFields are passed in as floats. This fixes it.
         relation_labels = relation_labels.long()
         argument_labels = argument_labels.long()
 
-        # If we're doing Bert, get the sentence class token as part of the text embedding. This will
-        # break if we use Bert together with other embeddings, but that won't happen much.
-        if "bert-offsets" in text:
-            # NOTE(dwadden) This operation mutates the text. We clone it so that the input isn't
-            # mutated; otherwise, successive `forward` calls on the same data variable would give
-            # different results because the data got mutated silently.
-            new_text = {}
-            for k, v in text.items():
-                new_text[k] = v.clone()
-            text = new_text
-            offsets = text["bert-offsets"]
-            sent_ix = torch.zeros(offsets.size(0), device=offsets.device, dtype=torch.long).unsqueeze(1)
-            padded_offsets = torch.cat([sent_ix, offsets], dim=1)
-            text["bert-offsets"] = padded_offsets
-            padded_embeddings = self._text_field_embedder(text)
-            cls_embeddings = padded_embeddings[:, 0, :]
-            text_embeddings = padded_embeddings[:, 1:, :]
-        else:
-            text_embeddings = self._text_field_embedder(text)
-            cls_embeddings = torch.zeros([text_embeddings.size(0), text_embeddings.size(2)],
-                                         device=text_embeddings.device)
+        # Encode using BERT
+        text_embeddings = self._text_field_embedder(text)
+        # TODO(dwadden) Make sure BERT does the indexing right (it should).
 
-        text_embeddings = self._lexical_dropout(text_embeddings)
 
         # Shape: (batch_size, max_sentence_length)
         text_mask = util.get_text_field_mask(text).float()
@@ -193,17 +127,6 @@ class DyGIE(Model):
 
         max_sentence_length = sentence_lengths.max().item()
 
-        # TODO(Ulme) Speed this up by tensorizing
-        new_text_embeddings = torch.zeros([text_embeddings.shape[0], max_sentence_length, text_embeddings.shape[2]], device=text_embeddings.device)
-        for i in range(len(new_text_embeddings)):
-            new_text_embeddings[i][0:metadata[i]["end_ix"] - metadata[i]["start_ix"]] = text_embeddings[i][metadata[i]["start_ix"]:metadata[i]["end_ix"]]
-
-        #max_sent_len = max(sentence_lengths)
-        #the_list = [list(k+metadata[i]["start_ix"] if k < max_sent_len else 0 for k in range(text_embeddings.shape[1])) for i in range(len(metadata))]
-        #import ipdb; ipdb.set_trace()
-        #text_embeddings = torch.gather(text_embeddings, 1, torch.tensor(the_list, device=text_embeddings.device).unsqueeze(2).repeat(1, 1, text_embeddings.shape[2]))
-        text_embeddings = new_text_embeddings
-
         # Only keep the text embeddings that correspond to actual tokens.
         # text_embeddings = text_embeddings[:, :max_sentence_length, :].contiguous()
         text_mask = text_mask[:, :max_sentence_length].contiguous()
@@ -211,10 +134,6 @@ class DyGIE(Model):
         # Shape: (batch_size, max_sentence_length, encoding_dim)
         contextualized_embeddings = self._lstm_dropout(self._context_layer(text_embeddings, text_mask))
         assert spans.max() < contextualized_embeddings.shape[1]
-
-        if self._attentive_span_extractor is not None:
-            # Shape: (batch_size, num_spans, emebedding_size)
-            attended_span_embeddings = self._attentive_span_extractor(text_embeddings, spans)
 
         # Shape: (batch_size, num_spans)
         span_mask = (spans[:, :, 0] >= 0).float()
