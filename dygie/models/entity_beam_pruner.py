@@ -11,7 +11,7 @@ from allennlp.nn import util
 from allennlp.modules import TimeDistributed
 
 
-def make_pruner(scorer, entity_beam, gold_beam):
+def make_pruner(scorer, entity_beam=False, gold_beam=False):
     """
     Create a pruner that either takes outputs of other scorers (i.e. entity beam), or uses its own
     scorer (the `default_scorer`).

@@ -255,17 +255,8 @@ function(p) {
         trigger_candidate_feedforward: make_feedforward(trigger_emb_dim),
         mention_feedforward: make_feedforward(span_emb_dim),
         argument_feedforward: make_feedforward(argument_scorer_dim),
-        event_args_label_emb: event_args_label_emb,
-        label_embedding_method: label_embedding_method,
         initializer: module_initializer,
         loss_weights: p.loss_weights_events,
-        cls_projection: {
-          input_dim: token_embedding_dim,
-          num_layers: 1,
-          hidden_dims: class_projection_dim,
-          activations: "relu",
-          dropout: p.feedforward_dropout
-        },
       }
     }
   },

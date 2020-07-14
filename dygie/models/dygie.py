@@ -201,12 +201,6 @@ class DyGIE(Model):
             span_embeddings = self._coref.update_spans(
                 output_coref, span_embeddings, coref_indices)
 
-        if self._relation.rel_prop > 0:
-            output_relation = self._relation.relation_propagation(output_relation)
-            span_embeddings = self.update_span_embeddings(span_embeddings, span_mask,
-                                                          output_relation["top_span_embeddings"], output_relation["top_span_mask"],
-                                                          output_relation["top_span_indices"])
-
         # Make predictions and compute losses for each module
         if self._loss_weights['ner'] > 0:
             output_ner = self._ner(
@@ -222,19 +216,10 @@ class DyGIE(Model):
         if self._loss_weights['events'] > 0:
             # Make the trigger embeddings the same size as the argument embeddings to make
             # propagation easier.
-            if self._events._span_prop._n_span_prop > 0:
-                trigger_embeddings = contextualized_embeddings.repeat(1, 1, 2)
-                trigger_widths = torch.zeros([trigger_embeddings.size(0), trigger_embeddings.size(1)],
-                                             device=trigger_embeddings.device, dtype=torch.long)
-                trigger_width_embs = self._endpoint_span_extractor._span_width_embedding(
-                    trigger_widths)
-                trigger_width_embs = trigger_width_embs.detach()
-                trigger_embeddings = torch.cat([trigger_embeddings, trigger_width_embs], dim=-1)
-            else:
-                trigger_embeddings = contextualized_embeddings
+            trigger_embeddings = contextualized_embeddings
 
             output_events = self._events(
-                text_mask, trigger_embeddings, spans, span_mask, span_embeddings, cls_embeddings,
+                text_mask, trigger_embeddings, spans, span_mask, span_embeddings,
                 sentence_lengths, output_ner, trigger_labels, argument_labels,
                 ner_labels, metadata)
 
