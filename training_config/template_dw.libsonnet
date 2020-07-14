@@ -62,7 +62,6 @@ function(p) {
   // If predicting labels, can either do "hard" prediction or "softmax". Default is hard.
   local event_args_label_predictor = getattr(p, "event_args_label_predictor", "hard"),
   local events_context_window = getattr(p, "events_context_window", 0),
-  local shared_attention_context = getattr(p, "shared_attention_context", false),
   local trigger_attention_context = getattr(p, "trigger_attention_context", false),
 
   local token_embedding_dim = ((if p.use_glove then glove_dim else 0) +
@@ -106,9 +105,7 @@ function(p) {
     (if event_args_use_trigger_labels then trigger_label_dim else 0) +
     (if events_context_window > 0 then 4 * events_context_window * context_layer_output_size else 0)),
   // Add token embedding dim because of the cls token.
-  local argument_scorer_dim = (argument_pair_dim +
-    (if shared_attention_context then trigger_emb_dim else 0) +
-    class_projection_dim),
+  local argument_scorer_dim = (argument_pair_dim + class_projection_dim),
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -254,27 +251,14 @@ function(p) {
       events: {
         trigger_spans_per_word: p.trigger_spans_per_word,
         argument_spans_per_word: p.argument_spans_per_word,
-        positive_label_weight: p.events_positive_label_weight,
         trigger_feedforward: make_feedforward(trigger_scorer_dim), // Factor of 2 because of self attention.
         trigger_candidate_feedforward: make_feedforward(trigger_emb_dim),
         mention_feedforward: make_feedforward(span_emb_dim),
         argument_feedforward: make_feedforward(argument_scorer_dim),
-        event_args_use_trigger_labels: event_args_use_trigger_labels,
-        event_args_use_ner_labels: event_args_use_ner_labels,
-        event_args_label_predictor: event_args_label_predictor,
         event_args_label_emb: event_args_label_emb,
         label_embedding_method: label_embedding_method,
-        event_args_gold_candidates: getattr(p, "event_args_gold_candidates", false),
         initializer: module_initializer,
         loss_weights: p.loss_weights_events,
-        entity_beam: getattr(p, "events_entity_beam", false),
-        context_window: events_context_window,
-        shared_attention_context: shared_attention_context,
-        span_prop: {
-          emb_dim: span_emb_dim,
-          n_span_prop: event_n_span_prop
-        },
-        softmax_correction: getattr(p, "softmax_correction", false),
         cls_projection: {
           input_dim: token_embedding_dim,
           num_layers: 1,
@@ -282,15 +266,6 @@ function(p) {
           activations: "relu",
           dropout: p.feedforward_dropout
         },
-        context_attention: {
-          matrix_1_dim: argument_pair_dim,
-          matrix_2_dim: trigger_emb_dim,
-        },
-        trigger_attention_context: trigger_attention_context,
-        trigger_attention: {
-          type: "pass_through",
-          input_dim: trigger_emb_dim,
-      },
       }
     }
   },

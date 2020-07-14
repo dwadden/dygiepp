@@ -1,5 +1,4 @@
 import logging
-from os import path
 import itertools
 from typing import Any, Dict, List, Optional
 
@@ -13,22 +12,15 @@ from allennlp.modules import FeedForward, Seq2SeqEncoder
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from allennlp.modules import TimeDistributed
 from allennlp.modules.token_embedders import Embedding
-from allennlp.modules.matrix_attention.bilinear_matrix_attention import BilinearMatrixAttention
 
-from dygie.training.relation_metrics import RelationMetrics, CandidateRecall
 from dygie.training.event_metrics import EventMetrics, ArgumentStats
 from dygie.models.shared import fields_to_batches
 from dygie.models.one_hot import make_embedder
 from dygie.models.entity_beam_pruner import make_pruner
-from dygie.models.span_prop import SpanProp
-
-
-# TODO(dwadden) rename NERMetrics
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-# TODO(dwadden) add tensor dimension comments.
 # TODO(dwadden) Different sentences should have different number of relation candidates depending on
 # length.
 class EventExtractor(Model):
@@ -36,33 +28,22 @@ class EventExtractor(Model):
     Event extraction for DyGIE.
     """
     # TODO(dwadden) add option to make `mention_feedforward` be the NER tagger.
+
     def __init__(self,
                  vocab: Vocabulary,
                  trigger_feedforward: FeedForward,
                  trigger_candidate_feedforward: FeedForward,
                  mention_feedforward: FeedForward,  # Used if entity beam is off.
                  argument_feedforward: FeedForward,
-                 context_attention: BilinearMatrixAttention,
                  trigger_attention: Seq2SeqEncoder,
-                 span_prop: SpanProp,
                  cls_projection: FeedForward,
                  feature_size: int,
                  trigger_spans_per_word: float,
                  argument_spans_per_word: float,
                  loss_weights,
-                 trigger_attention_context: bool,
-                 event_args_use_trigger_labels: bool,
-                 event_args_use_ner_labels: bool,
                  event_args_label_emb: int,
-                 shared_attention_context: bool,
                  label_embedding_method: str,
-                 event_args_label_predictor: str,
-                 event_args_gold_candidates: bool = False,  # If True, use gold argument candidates.
-                 context_window: int = 0,
-                 softmax_correction: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator(),
-                 positive_label_weight: float = 1.0,
-                 entity_beam: bool = False,
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(EventExtractor, self).__init__(vocab, regularizer)
 
@@ -92,28 +73,19 @@ class EventExtractor(Model):
             TimeDistributed(torch.nn.Linear(trigger_feedforward.get_output_dim(),
                                             self._n_trigger_labels - 1)))
 
-        self._trigger_attention_context = trigger_attention_context
-        if self._trigger_attention_context:
-            self._trigger_attention = trigger_attention
-
         # Make pruners. If `entity_beam` is true, use NER and trigger scorers to construct the beam
         # and only keep candidates that the model predicts are actual entities or triggers.
         self._mention_pruner = make_pruner(mention_feedforward, entity_beam=entity_beam,
-                                           gold_beam=event_args_gold_candidates)
+                                           gold_beam=False)
         self._trigger_pruner = make_pruner(trigger_candidate_feedforward, entity_beam=entity_beam,
                                            gold_beam=False)
 
-        # Argument scorer.
-        self._event_args_use_trigger_labels = event_args_use_trigger_labels  # If True, use trigger labels.
-        self._event_args_use_ner_labels = event_args_use_ner_labels  # If True, use ner labels to predict args.
-        assert event_args_label_predictor in ["hard", "softmax", "gold"]  # Method for predicting labels at test time.
-        self._event_args_label_predictor = event_args_label_predictor
-        self._event_args_gold_candidates = event_args_gold_candidates
         # If set to True, then construct a context vector from a bilinear attention over the trigger
         # / argument pair embeddings and the text.
-        self._context_window = context_window                # If greater than 0, concatenate context as features.
+        self._context_window = 0
         self._argument_feedforward = argument_feedforward
-        self._argument_scorer = torch.nn.Linear(argument_feedforward.get_output_dim(), self._n_argument_labels)
+        self._argument_scorer = torch.nn.Linear(
+            argument_feedforward.get_output_dim(), self._n_argument_labels)
 
         # Distance embeddings.
         self._num_distance_buckets = 10  # Just use 10 which is the default.
@@ -128,19 +100,7 @@ class EventExtractor(Model):
         self._trigger_spans_per_word = trigger_spans_per_word
         self._argument_spans_per_word = argument_spans_per_word
 
-        # Context attention for event argument scorer.
-        self._shared_attention_context = shared_attention_context
-        if self._shared_attention_context:
-            self._shared_attention_context_module = context_attention
-
-        # Span propagation object.
-        # TODO(dwadden) initialize with `from_params` instead if this ends up working.
-        self._span_prop = span_prop
-        self._span_prop._trig_arg_embedder = self._compute_trig_arg_embeddings
-        self._span_prop._argument_scorer = self._compute_argument_scores
-
         # Softmax correction parameters.
-        self._softmax_correction = softmax_correction
         self._softmax_log_temp = torch.nn.Parameter(
             torch.zeros([1, 1, 1, self._n_argument_labels]))
         self._softmax_log_multiplier = torch.nn.Parameter(
@@ -184,7 +144,8 @@ class EventExtractor(Model):
         predicted_ner = output_ner["predicted_ner"]
 
         # Compute trigger scores.
-        trigger_scores = self._compute_trigger_scores(trigger_embeddings, cls_projected, trigger_mask)
+        trigger_scores = self._compute_trigger_scores(
+            trigger_embeddings, cls_projected, trigger_mask)
         _, predicted_triggers = trigger_scores.max(-1)
 
         # Get trigger candidates for event argument labeling.
@@ -209,7 +170,7 @@ class EventExtractor(Model):
                                           30 * torch.ones_like(num_arg_spans_to_keep))
 
         # If we're using gold event arguments, include the gold labels.
-        gold_labels = ner_labels if self._event_args_gold_candidates else None
+        gold_labels = None
         (top_arg_embeddings, top_arg_mask,
          top_arg_indices, top_arg_scores, num_arg_spans_kept) = self._mention_pruner(
              span_embeddings, span_mask, num_arg_spans_to_keep, ner_scores, gold_labels)
@@ -222,20 +183,14 @@ class EventExtractor(Model):
         # classifier.
         # At train time, use the gold labels. At test time, use the labels predicted by the model,
         # or gold if specified.
-        if self.training or self._event_args_label_predictor == "gold":
+        if self.training:
             top_trig_labels = trigger_labels.gather(1, top_trig_indices)
             top_ner_labels = ner_labels.gather(1, top_arg_indices)
         else:
-            # Hard predictions.
-            if self._event_args_label_predictor == "hard":
-                top_trig_labels = predicted_triggers.gather(1, top_trig_indices)
-                top_ner_labels = predicted_ner.gather(1, top_arg_indices)
-            # Softmax predictions.
-            else:
-                softmax_triggers = trigger_scores.softmax(dim=-1)
-                top_trig_labels = util.batched_index_select(softmax_triggers, top_trig_indices)
-                softmax_ner = ner_scores.softmax(dim=-1)
-                top_ner_labels = util.batched_index_select(softmax_ner, top_arg_indices)
+            softmax_triggers = trigger_scores.softmax(dim=-1)
+            top_trig_labels = util.batched_index_select(softmax_triggers, top_trig_indices)
+            softmax_ner = ner_scores.softmax(dim=-1)
+            top_ner_labels = util.batched_index_select(softmax_ner, top_arg_indices)
 
         # Make a dict of all arguments that are needed to make trigger / argument pair embeddings.
         trig_arg_emb_dict = dict(cls_projected=cls_projected,
@@ -245,21 +200,6 @@ class EventExtractor(Model):
                                  top_arg_spans=top_arg_spans,
                                  text_emb=trigger_embeddings,
                                  text_mask=trigger_mask)
-
-        # Run span graph propagation, if asked for
-        if self._span_prop._n_span_prop > 0:
-            top_trig_embeddings, top_arg_embeddings = self._span_prop(
-                top_trig_embeddings, top_arg_embeddings, top_trig_mask, top_arg_mask,
-                top_trig_scores, top_arg_scores, trig_arg_emb_dict)
-
-            top_trig_indices_repeat = (top_trig_indices.unsqueeze(-1).
-                                       repeat(1, 1, top_trig_embeddings.size(-1)))
-            updated_trig_embeddings = trigger_embeddings.scatter(
-                1, top_trig_indices_repeat, top_trig_embeddings)
-
-            # Recompute the trigger scores.
-            trigger_scores = self._compute_trigger_scores(updated_trig_embeddings, cls_projected, trigger_mask)
-            _, predicted_triggers = trigger_scores.max(-1)
 
         trig_arg_embeddings = self._compute_trig_arg_embeddings(
             top_trig_embeddings, top_arg_embeddings, **trig_arg_emb_dict)
@@ -339,7 +279,8 @@ class EventExtractor(Model):
         for i in range(output["sentence_lengths"]):
             trig_label = output["predicted_triggers"][i].item()
             if trig_label > 0:
-                trigger_dict[i] = self.vocab.get_token_from_index(trig_label, namespace="trigger_labels")
+                trigger_dict[i] = self.vocab.get_token_from_index(
+                    trig_label, namespace="trigger_labels")
 
         return trigger_dict
 
@@ -354,7 +295,8 @@ class EventExtractor(Model):
             # Only include the argument if its putative trigger is predicted as a real trigger.
             if arg_label >= 0 and trig_ix in decoded_trig:
                 arg_score = output["argument_scores"][i, j, arg_label + 1].item()
-                label_name = self.vocab.get_token_from_index(arg_label, namespace="argument_labels")
+                label_name = self.vocab.get_token_from_index(
+                    arg_label, namespace="argument_labels")
                 argument_dict[(trig_ix, arg_span)] = label_name
                 # Keep around a version with the predicted labels and their scores, for debugging
                 # purposes.
@@ -389,9 +331,7 @@ class EventExtractor(Model):
         """
         cls_repeat = cls_projected.unsqueeze(dim=1).repeat(1, trigger_embeddings.size(1), 1)
         trigger_embeddings = torch.cat([trigger_embeddings, cls_repeat], dim=-1)
-        if self._trigger_attention_context:
-            context = self._trigger_attention(trigger_embeddings, trigger_mask)
-            trigger_embeddings = torch.cat([trigger_embeddings, context], dim=2)
+
         trigger_scores = self._trigger_scorer(trigger_embeddings)
         # Give large negative scores to masked-out elements.
         mask = trigger_mask.unsqueeze(-1)
@@ -415,39 +355,7 @@ class EventExtractor(Model):
         trig_emb_extras = []
         arg_emb_extras = []
 
-        if self._context_window > 0:
-            # Include words in a window around trigger and argument.
-            # For triggers, the span start and end indices are the same.
-            trigger_context = self._get_context(top_trig_indices, top_trig_indices, text_emb)
-            argument_context = self._get_context(
-                top_arg_spans[:, :, 0], top_arg_spans[:, :, 1], text_emb)
-            trig_emb_extras.append(trigger_context)
-            arg_emb_extras.append(argument_context)
-
         # TODO(dwadden) refactor this. Way too many conditionals.
-        if self._event_args_use_trigger_labels:
-            if self._event_args_label_predictor == "softmax" and not self.training:
-                if self._label_embedding_method == "one_hot":
-                    # If we're using one-hot encoding, just return the scores for each class.
-                    top_trig_embs = top_trig_labels
-                else:
-                    # Otherwise take the average of the embeddings, weighted by softmax scores.
-                    top_trig_embs = torch.matmul(top_trig_labels, self._trigger_label_emb.weight)
-                trig_emb_extras.append(top_trig_embs)
-            else:
-                trig_emb_extras.append(self._trigger_label_emb(top_trig_labels))
-        if self._event_args_use_ner_labels:
-            if self._event_args_label_predictor == "softmax" and not self.training:
-                # Same deal as for trigger labels.
-                if self._label_embedding_method == "one_hot":
-                    top_ner_embs = top_ner_labels
-                else:
-                    top_ner_embs = torch.matmul(top_ner_labels, self._ner_label_emb.weight)
-                arg_emb_extras.append(top_ner_embs)
-            else:
-                # Otherwise, just return the embeddings.
-                arg_emb_extras.append(self._ner_label_emb(top_ner_labels))
-
         num_trigs = top_trig_embeddings.size(1)
         num_args = top_arg_embeddings.size(1)
 
@@ -475,10 +383,6 @@ class EventExtractor(Model):
             arg_extras_tiled = arg_extras_expanded.repeat(1, num_trigs, 1, 1)
             pair_embeddings = torch.cat([pair_embeddings, arg_extras_tiled], dim=3)
 
-        if self._shared_attention_context:
-            attended_context = self._get_shared_attention_context(pair_embeddings, text_emb, text_mask)
-            pair_embeddings = torch.cat([pair_embeddings, attended_context], dim=3)
-
         return pair_embeddings
 
     def _compute_distance_embeddings(self, top_trig_indices, top_arg_spans):
@@ -499,16 +403,6 @@ class EventExtractor(Model):
         res = torch.cat([dist_emb, trigger_before_feature, trigger_inside_feature], dim=-1)
 
         return res
-
-    def _get_shared_attention_context(self, pair_embeddings, text_emb, text_mask):
-        batch_size, n_triggers, n_args, emb_dim = pair_embeddings.size()
-        pair_emb_flat = pair_embeddings.view([batch_size, -1, emb_dim])
-        attn_unnorm = self._shared_attention_context_module(pair_emb_flat, text_emb)
-        attn_weights = util.masked_softmax(attn_unnorm, text_mask)
-        context = util.weighted_sum(text_emb, attn_weights)
-        context = context.view(batch_size, n_triggers, n_args, -1)
-
-        return context
 
     def _get_context(self, span_starts, span_ends, text_emb):
         """
@@ -563,14 +457,6 @@ class EventExtractor(Model):
         argument_scores += (top_trig_scores.unsqueeze(-1) +
                             top_arg_scores.transpose(1, 2).unsqueeze(-1))
 
-        # Softmax correction to compare arguments.
-        if self._softmax_correction:
-            the_temp = torch.exp(self._softmax_log_temp)
-            the_multiplier = torch.exp(self._softmax_log_multiplier)
-            softmax_scores = util.masked_softmax(argument_scores / the_temp, mask=top_arg_mask, dim=2)
-            argument_scores = argument_scores + the_multiplier * softmax_scores
-
-        shape = [argument_scores.size(0), argument_scores.size(1), argument_scores.size(2), 1]
         dummy_scores = argument_scores.new_zeros(*shape)
 
         if prepend_zeros:
