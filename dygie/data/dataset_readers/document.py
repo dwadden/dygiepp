@@ -295,6 +295,10 @@ class Events:
 
 class Cluster:
     def __init__(self, cluster, cluster_id, document):
+        # Make sure the cluster ID is an int.
+        if not isinstance(cluster_id, int):
+            raise TypeError("Coreference cluster ID's must be ints.")
+
         members = []
         for entry in cluster:
             sentence_ix = get_sentence_of_span(entry, document.sentence_starts, document.n_tokens)
