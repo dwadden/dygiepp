@@ -8,7 +8,7 @@ from overrides import overrides
 from allennlp.common.file_utils import cached_path
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from allennlp.data.fields import (ListField, TextField, SpanField, MetadataField,
-                                  SequenceLabelField, AdjacencyField)
+                                  SequenceLabelField, AdjacencyField, LabelField)
 from allennlp.data.instance import Instance
 from allennlp.data.tokenizers import Token
 from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
@@ -75,7 +75,7 @@ class DyGIEReader(DatasetReader):
 
         trigger_labels = []
         for i in range(n_tokens):
-            trigger_label = sent.trigger_dict.get(i, "")
+            trigger_label = sent.events.trigger_dict.get(i, "")
             trigger_labels.append(trigger_label)
 
         n_spans = len(spans)
@@ -86,7 +86,7 @@ class DyGIEReader(DatasetReader):
 
         for i, j in candidate_indices:
             token_span_pair = (i, span_tuples[j])
-            argument_label = sent.argument_dict.get(token_span_pair, "")
+            argument_label = sent.events.argument_dict.get(token_span_pair, "")
             if argument_label:
                 argument_indices.append((i, j))
                 arguments.append(argument_label)
@@ -125,18 +125,26 @@ class DyGIEReader(DatasetReader):
         span_field = ListField(spans)
 
         # Convert data to fields.
+        # NOTE: The `ner_labels` and `coref_labels` would ideally have type
+        # `ListField[SequenceLabelField]`, where the sequence labels are over the `SpanField` of
+        # `spans`. But calling `as_tensor_dict()` fails on this specific data type. Matt G
+        # recognized that this is an AllenNLP API issue and suggested that represent these as
+        # `ListField[ListField[LabelField]]` instead.
         dataset = sent.doc.dataset
         fields = {}
         fields["text"] = text_field
         fields["spans"] = span_field
         if sent.ner is not None:
             ner_labels = self._process_ner(spans, sent)
-            fields["ner_labels"] = SequenceLabelField(
-                ner_labels, span_field, label_namespace=f"{dataset}:ner_labels")
+            fields["ner_labels"] = ListField(
+                [LabelField(entry, label_namespace=f"{dataset}:ner_labels")
+                 for entry in ner_labels])
         if sent.cluster_dict is not None:
+            # Skip indexing for coref labels, which are ints.
             coref_labels = self._process_coref(spans, sent)
-            fields["coref_labels"] = SequenceLabelField(
-                coref_labels, span_field, label_namespace="coref_labels")
+            fields["coref_labels"] = ListField(
+                [LabelField(entry, label_namespace="coref_labels", skip_indexing=True)
+                 for entry in coref_labels])
         if sent.relations is not None:
             relation_labels, relation_indices = self._process_relations(spans, sent)
             fields["relation_labels"] = AdjacencyField(
