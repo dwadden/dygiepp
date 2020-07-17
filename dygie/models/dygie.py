@@ -60,11 +60,31 @@ class DyGIE(Model):
                  display_metrics: List[str] = None) -> None:
         super(DyGIE, self).__init__(vocab, regularizer)
 
+        ####################
+
+        # Set parameters.
         self._text_field_embedder = text_field_embedder
-
         self._loss_weights = loss_weights
+        self._max_span_width = max_span_width
+        self._display_metrics = display_metrics
+        token_emb_dim = self._text_field_embedder.get_output_dim()
+        span_emb_dim = self._endpoint_span_extractor.get_output_dim()
 
-        # Make endpoint span extractor.
+        ####################
+
+        # Create submodules.
+
+        modules = Params(modules)
+
+        # Helper function to create feedforward networks.
+        def make_feedforward(input_dim):
+            return FeedForward(input_dim=input_dim,
+                               num_layers=feedforward_params["num_layers"],
+                               hidden_dims=feedforward_params["hidden_dims"],
+                               activations=torch.nn.ReLU(),
+                               dropout=feedforward_params["dropout"])
+
+        # Submodules
         self._endpoint_span_extractor = EndpointSpanExtractor(
             text_field_embedder.get_output_dim(),
             combination="x,y",
@@ -72,33 +92,24 @@ class DyGIE(Model):
             span_width_embedding_dim=feature_size,
             bucket_widths=False)
 
-        modules = Params(modules)
-        token_emb_dim = self._text_field_embedder.get_output_dim()
-        span_emb_dim = self._endpoint_span_extractor.get_output_dim()
-
-        def make_feedforward(input_dim):
-            feedforward = FeedForward(input_dim=input_dim,
-                                      num_layers=feedforward_params["num_layers"],
-                                      hidden_dims=feedforward_params["hidden_dims"],
-                                      activations=torch.nn.ReLU(),
-                                      dropout=feedforward_params["dropout"])
-            return feedforward
-
         self._ner = NERTagger.from_params(vocab=vocab,
                                           make_feedforward=make_feedforward,
                                           span_emb_dim=span_emb_dim,
                                           feature_size=feature_size,
                                           params=modules.pop("ner"))
+
         self._coref = CorefResolver.from_params(vocab=vocab,
                                                 make_feedforward=make_feedforward,
                                                 span_emb_dim=span_emb_dim,
                                                 feature_size=feature_size,
                                                 params=modules.pop("coref"))
+
         self._relation = RelationExtractor.from_params(vocab=vocab,
                                                        make_feedforward=make_feedforward,
                                                        span_emb_dim=span_emb_dim,
                                                        feature_size=feature_size,
                                                        params=modules.pop("relation"))
+
         self._events = EventExtractor.from_params(vocab=vocab,
                                                   make_feedforward=make_feedforward,
                                                   token_emb_dim=token_emb_dim,
@@ -106,9 +117,9 @@ class DyGIE(Model):
                                                   feature_size=feature_size,
                                                   params=modules.pop("events"))
 
-        self._max_span_width = max_span_width
-        self._display_metrics = display_metrics
+        ####################
 
+        # Initialize.
         initializer(self)
 
     @overrides
@@ -124,16 +135,16 @@ class DyGIE(Model):
         """
         TODO(dwadden) change this.
         """
-        import ipdb
-        ipdb.set_trace()
+        import ipdb; ipdb.set_trace()
 
         # In AllenNLP, AdjacencyFields are passed in as floats. This fixes it.
-        relation_labels = relation_labels.long()
-        argument_labels = argument_labels.long()
+        if relation_labels is not None:
+            relation_labels = relation_labels.long()
+        if argument_labels is not None:
+            argument_labels = argument_labels.long()
 
         # Encode using BERT
         text_embeddings = self._text_field_embedder(text)
-        # TODO(dwadden) Make sure BERT does the indexing right (it should).
 
         # Shape: (batch_size, max_sentence_length)
         text_mask = util.get_text_field_mask(text).float()
@@ -158,27 +169,16 @@ class DyGIE(Model):
 
         # Shape: (batch_size, num_spans)
         span_mask = (spans[:, :, 0] >= 0).float()
-        # SpanFields return -1 when they are used as padding. As we do
-        # some comparisons based on span widths when we attend over the
-        # span representations that we generate from these indices, we
-        # need them to be <= 0. This is only relevant in edge cases where
-        # the number of spans we consider after the pruning stage is >= the
-        # total number of spans, because in this case, it is possible we might
-        # consider a masked span.
+        # SpanFields return -1 when they are used as padding. As we do some comparisons based on
+        # span widths when we attend over the span representations that we generate from these
+        # indices, we need them to be <= 0. This is only relevant in edge cases where the number of
+        # spans we consider after the pruning stage is >= the total number of spans, because in this
+        # case, it is possible we might consider a masked span.
         # Shape: (batch_size, num_spans, 2)
         spans = F.relu(spans.float()).long()
 
         # Shape: (batch_size, num_spans, 2 * encoding_dim + feature_size)
-        endpoint_span_embeddings = self._endpoint_span_extractor(contextualized_embeddings, spans)
-
-        if self._attentive_span_extractor is not None:
-            # Shape: (batch_size, num_spans, emebedding_size + 2 * encoding_dim + feature_size)
-            span_embeddings = torch.cat([endpoint_span_embeddings, attended_span_embeddings], -1)
-        else:
-            span_embeddings = endpoint_span_embeddings
-
-        # TODO(Ulme) try normalizing span embeddeings
-        #span_embeddings = span_embeddings.abs().sum(dim=-1).unsqueeze(-1)
+        span_embeddings = self._endpoint_span_extractor(contextualized_embeddings, spans)
 
         # Make calls out to the modules to get results.
         output_coref = {'loss': 0}
@@ -242,16 +242,10 @@ class DyGIE(Model):
                            events=output_events)
         output_dict['loss'] = loss
 
-        # Check to see if event predictions are globally compatible (argument labels are compatible
-        # with NER tags and trigger tags).
-        # if self._loss_weights["ner"] > 0 and self._loss_weights["events"] > 0:
-        #     decoded_ner = self._ner.make_output_human_readable(output_dict["ner"])
-        #     decoded_events = self._events.make_output_human_readable(output_dict["events"])
-        #     self._joint_metrics(decoded_ner, decoded_events)
-
         return output_dict
 
-    def update_span_embeddings(self, span_embeddings, span_mask, top_span_embeddings, top_span_mask, top_span_indices):
+    def update_span_embeddings(self, span_embeddings, span_mask, top_span_embeddings,
+                               top_span_mask, top_span_indices):
         # TODO(Ulme) Speed this up by tensorizing
 
         new_span_embeddings = span_embeddings.clone()
@@ -305,11 +299,6 @@ class DyGIE(Model):
         metrics_ner = self._ner.get_metrics(reset=reset)
         metrics_relation = self._relation.get_metrics(reset=reset)
         metrics_events = self._events.get_metrics(reset=reset)
-        # if self._loss_weights["ner"] > 0 and self._loss_weights["events"] > 0:
-        #     metrics_joint = self._joint_metrics.get_metric(reset=reset)
-        # else:
-        #     metrics_joint = {}
-        metrics_joint = {}
 
         # Make sure that there aren't any conflicting names.
         metric_names = (list(metrics_coref.keys()) + list(metrics_ner.keys()) +
@@ -318,8 +307,7 @@ class DyGIE(Model):
         all_metrics = dict(list(metrics_coref.items()) +
                            list(metrics_ner.items()) +
                            list(metrics_relation.items()) +
-                           list(metrics_events.items()) +
-                           list(metrics_joint.items()))
+                           list(metrics_events.items()))
 
         # If no list of desired metrics given, display them all.
         if self._display_metrics is None:
