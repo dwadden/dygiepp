@@ -35,7 +35,6 @@ class EventExtractor(Model):
                  trigger_spans_per_word: float,
                  argument_spans_per_word: float,
                  loss_weights: Dict[str, float],
-                 initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(EventExtractor, self).__init__(vocab, regularizer)
 
@@ -101,8 +100,6 @@ class EventExtractor(Model):
         # Trigger and argument loss.
         self._trigger_loss = torch.nn.CrossEntropyLoss(reduction="sum")
         self._argument_loss = torch.nn.CrossEntropyLoss(reduction="sum", ignore_index=-1)
-
-        initializer(self)
 
     @overrides
     def forward(self,  # type: ignore

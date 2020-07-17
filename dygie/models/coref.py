@@ -42,8 +42,6 @@ class CorefResolver(Model):
         For each mention which survives the pruning stage, we consider this many antecedents.
     lexical_dropout: ``int``
         The probability of dropping out dimensions of the embedded text.
-    initializer : ``InitializerApplicator``, optional (default=``InitializerApplicator()``)
-        Used to initialize the model parameters.
     regularizer : ``RegularizerApplicator``, optional (default=``None``)
         If provided, will be used to calculate the regularization penalty during training.
     """
@@ -56,7 +54,6 @@ class CorefResolver(Model):
                  max_antecedents: int,
                  coref_prop: int = 0,
                  coref_prop_dropout_f: float = 0.0,
-                 initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(CorefResolver, self).__init__(vocab, regularizer)
 
@@ -90,7 +87,6 @@ class CorefResolver(Model):
                                       dropout=coref_prop_dropout_f)
 
         self.antecedent_softmax = torch.nn.Softmax(dim=-1)
-        initializer(self)
 
     def update_spans(self, output_dict, span_embeddings_batched, indices):
         new_span_embeddings_batched = span_embeddings_batched.clone()

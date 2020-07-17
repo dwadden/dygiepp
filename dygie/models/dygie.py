@@ -41,6 +41,8 @@ class DyGIE(Model):
         The maximum width of candidate spans.
     initializer : ``InitializerApplicator``, optional (default=``InitializerApplicator()``)
         Used to initialize the model parameters.
+    module_initializer : ``InitializerApplicator``, optional (default=``InitializerApplicator()``)
+        Used to initialize the individual modules.
     regularizer : ``RegularizerApplicator``, optional (default=``None``)
         If provided, will be used to calculate the regularization penalty during training.
     display_metrics: ``List[str]``. A list of the metrics that should be printed out during model
@@ -56,9 +58,20 @@ class DyGIE(Model):
                  feedforward_params: Dict[str, Union[int, float]],
                  loss_weights: Dict[str, float],
                  initializer: InitializerApplicator = InitializerApplicator(),
+                 module_initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None,
                  display_metrics: List[str] = None) -> None:
         super(DyGIE, self).__init__(vocab, regularizer)
+
+        ####################
+
+        # Create span extractor.
+        self._endpoint_span_extractor = EndpointSpanExtractor(
+            text_field_embedder.get_output_dim(),
+            combination="x,y",
+            num_width_embeddings=max_span_width,
+            span_width_embedding_dim=feature_size,
+            bucket_widths=False)
 
         ####################
 
@@ -85,12 +98,6 @@ class DyGIE(Model):
                                dropout=feedforward_params["dropout"])
 
         # Submodules
-        self._endpoint_span_extractor = EndpointSpanExtractor(
-            text_field_embedder.get_output_dim(),
-            combination="x,y",
-            num_width_embeddings=max_span_width,
-            span_width_embedding_dim=feature_size,
-            bucket_widths=False)
 
         self._ner = NERTagger.from_params(vocab=vocab,
                                           make_feedforward=make_feedforward,
@@ -119,7 +126,10 @@ class DyGIE(Model):
 
         ####################
 
-        # Initialize.
+        # Initialize text embedder and all submodules
+        for module in [self._ner, self._coref, self._relation, self._events]:
+            module_initializer(module)
+
         initializer(self)
 
     @overrides

@@ -32,7 +32,6 @@ class RelationExtractor(Model):
                  span_emb_dim: int,
                  feature_size: int,
                  spans_per_word: float,
-                 initializer: InitializerApplicator = InitializerApplicator(),
                  positive_label_weight: float = 1.0,
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super().__init__(vocab, regularizer)
@@ -65,7 +64,6 @@ class RelationExtractor(Model):
 
         self._loss = torch.nn.CrossEntropyLoss(reduction="sum", ignore_index=-1)
 
-        initializer(self)
 
     @overrides
     def forward(self,  # type: ignore

@@ -27,8 +27,6 @@ class NERTagger(Model):
         The embedding size for all the embedded features, such as distances or span widths.
     lexical_dropout: ``int``
         The probability of dropping out dimensions of the embedded text.
-    initializer : ``InitializerApplicator``, optional (default=``InitializerApplicator()``)
-        Used to initialize the model parameters.
     regularizer : ``RegularizerApplicator``, optional (default=``None``)
         If provided, will be used to calculate the regularization penalty during training.
     """
@@ -37,7 +35,6 @@ class NERTagger(Model):
                  vocab: Vocabulary,
                  make_feedforward: Callable,
                  span_emb_dim: int,
-                 initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(NERTagger, self).__init__(vocab, regularizer)
 
@@ -69,8 +66,6 @@ class NERTagger(Model):
             self._ner_metrics[namespace] = NERMetrics(self._n_labels[namespace], null_label)
 
         self._loss = torch.nn.CrossEntropyLoss(reduction="sum")
-
-        initializer(self)
 
     @overrides
     def forward(self,  # type: ignore
