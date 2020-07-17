@@ -5,12 +5,12 @@ The configuration process for DyGIE relies on the `jsonnet`-based configuration 
 DyGIE adds one layer of complexity on top of this. It factors the configuration into:
 
 - Components that are common to all DyGIE models. These are defined in [template.libsonnet](../training_config/template.libsonnet).
-- Components that are specific to single model trained on a particular dataset. These are contained in the `jsonnet` files in the [training config](training_config) repo. They use the jsonnet inheritance mechanism to extend the base class defined in `template.libsonnet`.  For more on jsonnet inheritance, see the [jsonnet tutorial](https://jsonnet.org/learning/tutorial.html)
+- Components that are specific to single model trained on a particular dataset. These are contained in the `jsonnet` files in the [training config](../training_config) directory. They use the jsonnet inheritance mechanism to extend the base class defined in `template.libsonnet`.  For more on jsonnet inheritance, see the [jsonnet tutorial](https://jsonnet.org/learning/tutorial.html)
 
 
 ## Required settings
 
-The [template.libsonnet](training_config/template.libsonnet) file leaves three variables unset. These must be set by the inheriting object. For an example of how this works, see [scierc_lightweight.jsonnet](training_config/scierc_lightweight.jsonnet).
+The [template.libsonnet](../training_config/template.libsonnet) file leaves three variables unset. These must be set by the inheriting object. For an example of how this works, see [scierc_lightweight.jsonnet](../training_config/scierc_lightweight.jsonnet).
 
 - `data_paths`: A dict with paths to the train, validation, and test sets.
 - `loss_weights`: Since DyGIE has a multitask objective, the individual losses are combined based on user-determined loss weights.
