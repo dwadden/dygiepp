@@ -66,7 +66,6 @@ class DyGIEReader(DatasetReader):
             # If either span is beyond the max span width, skip it.
             if self._too_long(span1) or self._too_long(span2):
                 continue
-
             ix1 = span_tuples.index(span1)
             ix2 = span_tuples.index(span2)
             relation_indices.append((ix1, ix2))
@@ -74,27 +73,23 @@ class DyGIEReader(DatasetReader):
 
         return relations, relation_indices
 
-    @staticmethod
-    def _process_events(spans, sent):
+    def _process_events(self, spans, sent):
         n_tokens = len(sent.text)
 
-        trigger_labels = []
-        for i in range(n_tokens):
-            trigger_label = sent.events.trigger_dict.get(i, "")
-            trigger_labels.append(trigger_label)
+        trigger_labels = [""] * n_tokens
+        for tok_ix, trig_label in sent.events.trigger_dict.items():
+            trigger_labels[tok_ix] = trig_label
 
-        n_spans = len(spans)
         arguments = []
         argument_indices = []
-        candidate_indices = [(i, j) for i in range(n_tokens) for j in range(n_spans)]
         span_tuples = [(span.span_start, span.span_end) for span in spans]
 
-        for i, j in candidate_indices:
-            token_span_pair = (i, span_tuples[j])
-            argument_label = sent.events.argument_dict.get(token_span_pair, "")
-            if argument_label:
-                argument_indices.append((i, j))
-                arguments.append(argument_label)
+        for (trig_ix, arg_span), arg_label in sent.events.argument_dict.items():
+            if self._too_long(arg_span):
+                continue
+            arg_span_ix = span_tuples.index(arg_span)
+            argument_indices.append((trig_ix, arg_span_ix))
+            arguments.append(arg_label)
 
         return trigger_labels, arguments, argument_indices
 
