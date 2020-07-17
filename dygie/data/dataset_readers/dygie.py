@@ -55,6 +55,27 @@ class DyGIEReader(DatasetReader):
     def _too_long(self, span):
         return span[1] - span[0] + 1 > self._max_span_width
 
+    def _process_ner(self, span_tuples, sent):
+        ner_labels = [""] * len(span_tuples)
+
+        for span, label in sent.ner_dict.items():
+            if self._too_long(span):
+                continue
+            ix = span_tuples.index(span)
+            ner_labels[ix] = label
+
+        return ner_labels
+
+    def _process_coref(self, span_tuples, sent):
+        coref_labels = [-1] * len(span_tuples)
+
+        for span, label in sent.cluster_dict.items():
+            if self._too_long(span):
+                continue
+            ix = span_tuples.index(span)
+            coref_labels[ix] = label
+        return coref_labels
+
     def _process_relations(self, span_tuples, sent):
         relations = []
         relation_indices = []
@@ -90,27 +111,6 @@ class DyGIEReader(DatasetReader):
             arguments.append(arg_label)
 
         return trigger_labels, arguments, argument_indices
-
-    def _process_ner(self, span_tuples, sent):
-        ner_labels = [""] * len(span_tuples)
-
-        for span, label in sent.ner_dict.items():
-            if self._too_long(span):
-                continue
-            ix = span_tuples.index(span)
-            ner_labels[ix] = label
-
-        return ner_labels
-
-    def _process_coref(self, span_tuples, sent):
-        coref_labels = [-1] * len(span_tuples)
-
-        for span, label in sent.cluster_dict.items():
-            if self._too_long(span):
-                continue
-            ix = span_tuples.index(span)
-            coref_labels[ix] = label
-        return coref_labels
 
     def _process_sentence(self, sent: Sentence):
         # Get the sentence text and define the `text_field`.
