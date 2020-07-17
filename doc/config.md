@@ -4,7 +4,7 @@ The configuration process for DyGIE relies on the `jsonnet`-based configuration 
 
 DyGIE adds one (regrettable but unavoidable) layer of complexity on top of this. It factors the configuration into:
 
-- Components that are common to all DyGIE models. These are defined in [template.libsonnet](../training_config/template.libsonnet).
+- Components that are common to all DyGIE models. These are defined in [template.libsonnet](training_config/template.libsonnet).
 - Components that are specific to single model trained on a particular dataset. These are contained in the `jsonnet` files in the [training config](training_config) repo. They use the jsonnet inheritance mechanism to extend the base class defined in `template.libsonnet`.  For more on jsonnet inheritance, see the [jsonnet tutorial](https://jsonnet.org/learning/tutorial.html)
 
 
