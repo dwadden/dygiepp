@@ -20,15 +20,15 @@ This code was developed using Python 3.7. To create a new Conda environment usin
 
 The necessary dependencies can be installed with `pip install -r requirements.txt`.
 
-The only dependencies for the modeling code are [AllenNLP](https://allennlp.org/) 0.9.0 and [PyTorch](https://pytorch.org/) 1.2.0. It may run with newer versions, but this is not guarenteed. For PyTorch GPU support, follow the instructions on the [PyTorch](https://pytorch.org/).
+This library relies on [AllenNLP](https://allennlp.org) and uses AllenNLP shell [commands](https://docs.allennlp.org/master/#package-overview) to kick off training, evaluation, and testing.
 
-For data preprocessing a few additional data and string processing libraries are required including, [Pandas](https://pandas.pydata.org) [Beautiful Soup 4](https://www.crummy.com/software/BeautifulSoup/bs4/doc/), and [scispacy](scispacy).
-
-Finally, you'll need SciBERT for the scientific datasets. Run `python scripts/pretrained/get_scibert.py` to download and extract the SciBERT model to `./pretrained`.
 
 ## Training a model
 
-Warning about coreference resolution: The coreference code will break on sentences with only a single token. If you have these in your dataset, either get rid of them or deactivate the coreference resolution part of the model.
+*Warning about coreference resolution*: The coreference code will break on sentences with only a single token. If you have these in your dataset, either get rid of them or deactivate the coreference resolution part of the model.
+
+We rely on [Allennlp train](https://docs.allennlp.org/master/api/commands/train/) to handle model training. The `train` command takes a configuration file as an argument, and initializes a model based on the configuration, and serializes the traing model. More details on the configuration process for DyGIE can be found in [doc/config.md](doc/config.md).
+
 
 ### SciERC
 
