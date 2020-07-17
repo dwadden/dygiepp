@@ -52,9 +52,8 @@ class DyGIEReader(DatasetReader):
             instance = self.text_to_instance(doc_text)
             yield instance
 
-    @staticmethod
-    def _span_width(span):
-        return span[1] - span[0] + 1
+    def _too_long(self, span):
+        return span[1] - span[0] + 1 > self._max_span_width
 
     def _process_relations(self, spans, sent):
         relations = []
@@ -65,7 +64,7 @@ class DyGIEReader(DatasetReader):
         # values.
         for (span1, span2), label in sent.relation_dict.items():
             # If either span is beyond the max span width, skip it.
-            if max(self._span_width(span1), self._span_width(span2)) > self._max_span_width:
+            if self._too_long(span1) or self._too_long(span2):
                 continue
 
             ix1 = span_tuples.index(span1)
@@ -99,24 +98,27 @@ class DyGIEReader(DatasetReader):
 
         return trigger_labels, arguments, argument_indices
 
-    @staticmethod
-    def _process_ner(spans, sent):
-        ner_labels = []
-        for span in spans:
-            span_ix = (span.span_start, span.span_end)
-            ner_label = sent.ner_dict.get(span_ix, "")
-            ner_labels.append(ner_label)
+    def _process_ner(self, spans, sent):
+        span_tuples = [(span.span_start, span.span_end) for span in spans]
+        ner_labels = [""] * len(spans)
+
+        for span, label in sent.ner_dict.items():
+            if self._too_long(span):
+                continue
+            ix = span_tuples.index(span)
+            ner_labels[ix] = label
 
         return ner_labels
 
-    @staticmethod
-    def _process_coref(spans, sent):
-        coref_labels = []
-        for span in spans:
-            span_ix = (span.span_start, span.span_end)
-            coref_label = sent.cluster_dict.get(span_ix, -1)
-            coref_labels.append(coref_label)
+    def _process_coref(self, spans, sent):
+        span_tuples = [(span.span_start, span.span_end) for span in spans]
+        coref_labels = [-1] * len(spans)
 
+        for span, label in sent.cluster_dict.items():
+            if self._too_long(span):
+                continue
+            ix = span_tuples.index(span)
+            coref_labels[ix] = label
         return coref_labels
 
     def _process_sentence(self, sent: Sentence):
