@@ -70,7 +70,7 @@ Then, follow these steps:
 
 #### Creating the dataset
 
-For more information on ACE relation and event preprocessing, see [DATA.md](DATA.md) and [this issue](https://github.com/dwadden/dygiepp/issues/11).
+For more information on ACE relation and event preprocessing, see [doc/data.md](doc/data.md) and [this issue](https://github.com/dwadden/dygiepp/issues/11).
 
 We use preprocessing code adapted from the [DyGIE repo](https://github.com/luanyi/DyGIE), which is in turn adapted from the [LSTM-ER repo](https://github.com/tticoin/LSTM-ER). The following software is required:
 - Java, to run CoreNLP.
@@ -114,7 +114,7 @@ Now, run the script
 ```
 python ./scripts/data/ace-event/parse_ace_event.py [output-name] [optional-flags]
 ```
-You can see the available flags by calling `parse_ace_event.py -h`. For detailed descriptions, see [DATA.md](DATA.md). The results will go in `./data/ace-event/processed-data/[output-name]`. We require an output name because you may want to preprocess the ACE data multiple times using different flags. For default preprocessing settings, you could do:
+You can see the available flags by calling `parse_ace_event.py -h`. For detailed descriptions, see [data.md](doc/data.md). The results will go in `./data/ace-event/processed-data/[output-name]`. We require an output name because you may want to preprocess the ACE data multiple times using different flags. For default preprocessing settings, you could do:
 ```
 python ./scripts/data/ace-event/parse_ace_event.py default-settings
 ```
@@ -265,7 +265,7 @@ In particular, we do *not* require the types of the entity mention arguments to 
 
 ## Working with new datasets
 
-Follow the instructions as described in [Formatting a new dataset](DATA.md#formatting-a-new-dataset).
+Follow the instructions as described in [Formatting a new dataset](doc/data.md#formatting-a-new-dataset).
 
 ### Making predicitons on a new dataset
 
