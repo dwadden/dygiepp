@@ -53,19 +53,25 @@ class DyGIEReader(DatasetReader):
             yield instance
 
     @staticmethod
-    def _process_relations(spans, sent):
-        n_spans = len(spans)
-        span_tuples = [(span.span_start, span.span_end) for span in spans]
-        candidate_indices = [(i, j) for i in range(n_spans) for j in range(n_spans)]
+    def _span_width(span):
+        return span[1] - span[0] + 1
 
+    def _process_relations(self, spans, sent):
         relations = []
         relation_indices = []
-        for i, j in candidate_indices:
-            span_pair = (span_tuples[i], span_tuples[j])
-            relation_label = sent.relation_dict.get(span_pair, "")
-            if relation_label:
-                relation_indices.append((i, j))
-                relations.append(relation_label)
+
+        span_tuples = [(span.span_start, span.span_end) for span in spans]
+        # Loop over the gold spans. Look up their indices in the list of span tuples and store
+        # values.
+        for (span1, span2), label in sent.relation_dict.items():
+            # If either span is beyond the max span width, skip it.
+            if max(self._span_width(span1), self._span_width(span2)) > self._max_span_width:
+                continue
+
+            ix1 = span_tuples.index(span1)
+            ix2 = span_tuples.index(span2)
+            relation_indices.append((ix1, ix2))
+            relations.append(label)
 
         return relations, relation_indices
 
