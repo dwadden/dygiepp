@@ -55,11 +55,10 @@ class DyGIEReader(DatasetReader):
     def _too_long(self, span):
         return span[1] - span[0] + 1 > self._max_span_width
 
-    def _process_relations(self, spans, sent):
+    def _process_relations(self, span_tuples, sent):
         relations = []
         relation_indices = []
 
-        span_tuples = [(span.span_start, span.span_end) for span in spans]
         # Loop over the gold spans. Look up their indices in the list of span tuples and store
         # values.
         for (span1, span2), label in sent.relation_dict.items():
@@ -73,7 +72,7 @@ class DyGIEReader(DatasetReader):
 
         return relations, relation_indices
 
-    def _process_events(self, spans, sent):
+    def _process_events(self, span_tuples, sent):
         n_tokens = len(sent.text)
 
         trigger_labels = [""] * n_tokens
@@ -82,7 +81,6 @@ class DyGIEReader(DatasetReader):
 
         arguments = []
         argument_indices = []
-        span_tuples = [(span.span_start, span.span_end) for span in spans]
 
         for (trig_ix, arg_span), arg_label in sent.events.argument_dict.items():
             if self._too_long(arg_span):
@@ -93,9 +91,8 @@ class DyGIEReader(DatasetReader):
 
         return trigger_labels, arguments, argument_indices
 
-    def _process_ner(self, spans, sent):
-        span_tuples = [(span.span_start, span.span_end) for span in spans]
-        ner_labels = [""] * len(spans)
+    def _process_ner(self, span_tuples, sent):
+        ner_labels = [""] * len(span_tuples)
 
         for span, label in sent.ner_dict.items():
             if self._too_long(span):
@@ -105,9 +102,8 @@ class DyGIEReader(DatasetReader):
 
         return ner_labels
 
-    def _process_coref(self, spans, sent):
-        span_tuples = [(span.span_start, span.span_end) for span in spans]
-        coref_labels = [-1] * len(spans)
+    def _process_coref(self, span_tuples, sent):
+        coref_labels = [-1] * len(span_tuples)
 
         for span, label in sent.cluster_dict.items():
             if self._too_long(span):
@@ -126,6 +122,7 @@ class DyGIEReader(DatasetReader):
         for start, end in enumerate_spans(sentence_text, max_span_width=self._max_span_width):
             spans.append(SpanField(start, end, text_field))
         span_field = ListField(spans)
+        span_tuples = [(span.span_start, span.span_end) for span in spans]
 
         # Convert data to fields.
         # NOTE: The `ner_labels` and `coref_labels` would ideally have type
@@ -138,23 +135,23 @@ class DyGIEReader(DatasetReader):
         fields["text"] = text_field
         fields["spans"] = span_field
         if sent.ner is not None:
-            ner_labels = self._process_ner(spans, sent)
+            ner_labels = self._process_ner(span_tuples, sent)
             fields["ner_labels"] = ListField(
                 [LabelField(entry, label_namespace=f"{dataset}:ner_labels")
                  for entry in ner_labels])
         if sent.cluster_dict is not None:
             # Skip indexing for coref labels, which are ints.
-            coref_labels = self._process_coref(spans, sent)
+            coref_labels = self._process_coref(span_tuples, sent)
             fields["coref_labels"] = ListField(
                 [LabelField(entry, label_namespace="coref_labels", skip_indexing=True)
                  for entry in coref_labels])
         if sent.relations is not None:
-            relation_labels, relation_indices = self._process_relations(spans, sent)
+            relation_labels, relation_indices = self._process_relations(span_tuples, sent)
             fields["relation_labels"] = AdjacencyField(
                 indices=relation_indices, sequence_field=span_field, labels=relation_labels,
                 label_namespace=f"{dataset}:relation_labels")
         if sent.events is not None:
-            trigger_labels, argument_labels, argument_indices = self._process_events(spans, sent)
+            trigger_labels, argument_labels, argument_indices = self._process_events(span_tuples, sent)
             fields["trigger_labels"] = SequenceLabelField(
                 trigger_labels, text_field, label_namespace=f"{dataset}:trigger_labels")
             fields["argument_labels"] = AdjacencyFieldAssym(
