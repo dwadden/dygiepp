@@ -39,6 +39,8 @@ class DyGIE(Model):
         A nested dictionary specifying parameters to be passed on to initialize submodules.
     max_span_width: ``int``
         The maximum width of candidate spans.
+    target_task: ``str``:
+        The task used to make early stopping decisions.
     initializer : ``InitializerApplicator``, optional (default=``InitializerApplicator()``)
         Used to initialize the model parameters.
     module_initializer : ``InitializerApplicator``, optional (default=``InitializerApplicator()``)
@@ -55,6 +57,7 @@ class DyGIE(Model):
                  modules,  # TODO(dwadden) Add type.
                  feature_size: int,
                  max_span_width: int,
+                 target_task: str,
                  feedforward_params: Dict[str, Union[int, float]],
                  loss_weights: Dict[str, float],
                  initializer: InitializerApplicator = InitializerApplicator(),
@@ -79,7 +82,7 @@ class DyGIE(Model):
         self._text_field_embedder = text_field_embedder
         self._loss_weights = loss_weights
         self._max_span_width = max_span_width
-        self._display_metrics = display_metrics
+        self._display_metrics = self._get_display_metrics(target_task)
         token_emb_dim = self._text_field_embedder.get_output_dim()
         span_emb_dim = self._endpoint_span_extractor.get_output_dim()
 
@@ -131,6 +134,21 @@ class DyGIE(Model):
             module_initializer(module)
 
         initializer(self)
+
+    @staticmethod
+    def _get_display_metrics(target_task):
+        """
+        The `target` is the name of the task used to make early stopping decisions. Show metrics
+        related to this task.
+        """
+        lookup = {
+            "ner": ["ner_precision", "ner_recall", "ner_f1"],
+            "rel": ["rel_precision", "rel_recall", "rel_f1", "rel_span_recall"],
+            "coref": ["coref_precision", "coref_recall", "coref_f1", "coref_mention_recall"],
+            "events": ["trig_class_f1", "arg_class_f1"]}
+        if target_task not in lookup:
+            raise ValueError(f"Invalied value {target_task} has been given as the target task.")
+        return lookup[target_task]
 
     @overrides
     def forward(self,

@@ -14,4 +14,5 @@ template.DyGIE {
     coref: 0.0,
     events: 0.0
   },
+  target_task: "rel"
 }
