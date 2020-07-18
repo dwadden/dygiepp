@@ -8,7 +8,7 @@ from overrides import overrides
 from allennlp.data import Vocabulary
 from allennlp.common.params import Params
 from allennlp.models.model import Model
-from allennlp.modules import TextFieldEmbedder, FeedForward
+from allennlp.modules import TextFieldEmbedder, FeedForward, TimeDistributed
 from allennlp.modules.span_extractors import EndpointSpanExtractor
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 
@@ -53,7 +53,7 @@ class DyGIE(Model):
 
     def __init__(self,
                  vocab: Vocabulary,
-                 text_field_embedder: TextFieldEmbedder,
+                 embedder: TextFieldEmbedder,
                  modules,  # TODO(dwadden) Add type.
                  feature_size: int,
                  max_span_width: int,
@@ -70,7 +70,7 @@ class DyGIE(Model):
 
         # Create span extractor.
         self._endpoint_span_extractor = EndpointSpanExtractor(
-            text_field_embedder.get_output_dim(),
+            embedder.get_output_dim(),
             combination="x,y",
             num_width_embeddings=max_span_width,
             span_width_embedding_dim=feature_size,
@@ -79,11 +79,15 @@ class DyGIE(Model):
         ####################
 
         # Set parameters.
-        self._text_field_embedder = text_field_embedder
+        # TODO(dwadden) the BERT embedder needs to be TimeDistributed in order to deal with
+        # minibatches properly. This is a kind of hacky way to do it.
+        embedder.token_embedder_bert = TimeDistributed(
+            embedder.token_embedder_bert)
+        self._embedder = embedder
         self._loss_weights = loss_weights
         self._max_span_width = max_span_width
         self._display_metrics = self._get_display_metrics(target_task)
-        token_emb_dim = self._text_field_embedder.get_output_dim()
+        token_emb_dim = self._embedder.get_output_dim()
         span_emb_dim = self._endpoint_span_extractor.get_output_dim()
 
         ####################
@@ -163,8 +167,6 @@ class DyGIE(Model):
         """
         TODO(dwadden) change this.
         """
-        import ipdb; ipdb.set_trace()
-
         # In AllenNLP, AdjacencyFields are passed in as floats. This fixes it.
         if relation_labels is not None:
             relation_labels = relation_labels.long()
@@ -172,28 +174,11 @@ class DyGIE(Model):
             argument_labels = argument_labels.long()
 
         # Encode using BERT
-        text_embeddings = self._text_field_embedder(text)
+        text_embeddings = self._embedder(text)
 
         # Shape: (batch_size, max_sentence_length)
         text_mask = util.get_text_field_mask(text).float()
-        sentence_group_lengths = text_mask.sum(dim=1).long()
-
-        sentence_lengths = 0*text_mask.sum(dim=1).long()
-        for i in range(len(metadata)):
-            sentence_lengths[i] = metadata[i]["end_ix"] - metadata[i]["start_ix"]
-            for k in range(sentence_lengths[i], sentence_group_lengths[i]):
-                text_mask[i][k] = 0
-
-        max_sentence_length = sentence_lengths.max().item()
-
-        # Only keep the text embeddings that correspond to actual tokens.
-        # text_embeddings = text_embeddings[:, :max_sentence_length, :].contiguous()
-        text_mask = text_mask[:, :max_sentence_length].contiguous()
-
-        # Shape: (batch_size, max_sentence_length, encoding_dim)
-        contextualized_embeddings = self._lstm_dropout(
-            self._context_layer(text_embeddings, text_mask))
-        assert spans.max() < contextualized_embeddings.shape[1]
+        sentence_lengths = text_mask.sum(dim=1).long()
 
         # Shape: (batch_size, num_spans)
         span_mask = (spans[:, :, 0] >= 0).float()
@@ -206,7 +191,7 @@ class DyGIE(Model):
         spans = F.relu(spans.float()).long()
 
         # Shape: (batch_size, num_spans, 2 * encoding_dim + feature_size)
-        span_embeddings = self._endpoint_span_extractor(contextualized_embeddings, spans)
+        span_embeddings = self._endpoint_span_extractor(text_embeddings, spans)
 
         # Make calls out to the modules to get results.
         output_coref = {'loss': 0}

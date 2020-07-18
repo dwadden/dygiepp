@@ -7,7 +7,7 @@
       'ner': '+ner_f1',
       'rel': '+rel_f1',
       'coref': '+coref_f1',
-      'events': 'arg_class_f1'
+      'events': '+arg_class_f1'
     },
 
     ////////////////////
@@ -53,7 +53,7 @@
     // If provided, use pre-defined vocabulary. Else compute on the fly.
     model: {
       type: 'dygie',
-      text_field_embedder: {
+      embedder: {
         token_embedders: {
           bert: {
             type: 'pretrained_transformer_mismatched',
