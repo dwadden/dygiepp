@@ -80,9 +80,6 @@ class RelationExtractor(Model):
         output_dict = self.compute_representations(
             spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
-        if self.rel_prop > 0:
-            output_dict = self.relation_propagation(output_dict)
-
         if self._loss_weights['relation'] > 0:
             output_dict = self.predict_labels(relation_labels, output_dict, metadata)
 

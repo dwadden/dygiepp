@@ -81,7 +81,11 @@ class NERTagger(Model):
 
         # Shape: (Batch size, Number of Spans, Span Embedding Size)
         # span_embeddings
-        ner_scores = self._ner_scorer(span_embeddings)
+
+        namespace = f"{metadata.dataset}:ner_labels"
+        scorer = self._ner_scorers[namespace]
+
+        ner_scores = scorer(span_embeddings)
         # Give large negative scores to masked-out elements.
         mask = span_mask.unsqueeze(-1)
         ner_scores = util.replace_masked_values(ner_scores, mask.bool(), -1e20)
@@ -98,8 +102,9 @@ class NERTagger(Model):
                        "predicted_ner": predicted_ner}
 
         if ner_labels is not None:
-            self._ner_metrics(predicted_ner, ner_labels, span_mask)
-            ner_scores_flat = ner_scores.view(-1, self._n_labels)
+            metrics = self._ner_metrics[namespace]
+            metrics(predicted_ner, ner_labels, span_mask)
+            ner_scores_flat = ner_scores.view(-1, self._n_labels[namespace])
             ner_labels_flat = ner_labels.view(-1)
             mask_flat = span_mask.view(-1).bool()
 
@@ -107,7 +112,7 @@ class NERTagger(Model):
             output_dict["loss"] = loss
 
         if metadata is not None:
-            output_dict["document"] = [x["sentence"] for x in metadata]
+            output_dict["document"] = [x.text for x in metadata]
 
         return output_dict
 

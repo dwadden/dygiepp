@@ -154,6 +154,11 @@ class DyGIE(Model):
             raise ValueError(f"Invalied value {target_task} has been given as the target task.")
         return lookup[target_task]
 
+    @staticmethod
+    def _debatch(x):
+        return x if x is None else x.squeeze(0)
+
+
     @overrides
     def forward(self,
                 text,
@@ -173,8 +178,23 @@ class DyGIE(Model):
         if argument_labels is not None:
             argument_labels = argument_labels.long()
 
-        # Encode using BERT
+
+        # TODO(dwadden) Multi-document minibatching isn't supported yet. For now, get rid of the
+        # extra dimension in the input tensors. Will return to this once the model runs.
+        if len(metadata) > 1:
+            raise NotImplementedError("Multi-document minibatching not yet supported.")
+
+        metadata = metadata[0]
+        spans = self._debatch(spans)
+        ner_labels = self._debatch(ner_labels)
+        coref_labels = self._debatch(coref_labels)
+        relation_labels = self._debatch(relation_labels)
+        trigger_labels = self._debatch(trigger_labels)
+        argument_labels = self._debatch(argument_labels)
+
+        # Encode using BERT, then debatch.
         text_embeddings = self._embedder(text)
+        text_embeddings = self._debatch(text_embeddings)
 
         # Shape: (batch_size, max_sentence_length)
         text_mask = util.get_text_field_mask(text).float()
@@ -204,14 +224,8 @@ class DyGIE(Model):
             output_coref, coref_indices = self._coref.compute_representations(
                 spans, span_mask, span_embeddings, sentence_lengths, coref_labels, metadata)
 
-        # Prune and compute span representations for relation module
-        if self._loss_weights["relation"] > 0 or self._relation.rel_prop > 0:
-            output_relation = self._relation.compute_representations(
-                spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
-
         # Propagation of global information to enhance the span embeddings
         if self._coref.coref_prop > 0:
-            # TODO(Ulme) Implement Coref Propagation
             output_coref = self._coref.coref_propagation(output_coref)
             span_embeddings = self._coref.update_spans(
                 output_coref, span_embeddings, coref_indices)
@@ -220,6 +234,8 @@ class DyGIE(Model):
         if self._loss_weights['ner'] > 0:
             output_ner = self._ner(
                 spans, span_mask, span_embeddings, sentence_lengths, ner_labels, metadata)
+
+        import ipdb; ipdb.set_trace()
 
         if self._loss_weights['coref'] > 0:
             output_coref = self._coref.predict_labels(output_coref, metadata)
