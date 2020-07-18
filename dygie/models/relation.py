@@ -36,7 +36,7 @@ class RelationExtractor(Model):
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super().__init__(vocab, regularizer)
 
-        self._namespaces = [entry for entry in vocab.get_namespaces() if "ner_labels" in entry]
+        self._namespaces = [entry for entry in vocab.get_namespaces() if "relation_labels" in entry]
         self._n_labels = {name: vocab.get_vocab_size(name) for name in self._namespaces}
 
         self._mention_pruners = torch.nn.ModuleDict()
@@ -61,6 +61,7 @@ class RelationExtractor(Model):
             self._relation_metrics[namespace] = RelationMetrics()
 
         self._spans_per_word = spans_per_word
+        self._active_namespace = None
 
         self._loss = torch.nn.CrossEntropyLoss(reduction="sum", ignore_index=-1)
 
@@ -76,12 +77,12 @@ class RelationExtractor(Model):
         """
         TODO(dwadden) Write documentation.
         """
+        self._active_namespace = f"{metadata.dataset}:relation_labels"
 
         output_dict = self.compute_representations(
             spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
-        if self._loss_weights['relation'] > 0:
-            output_dict = self.predict_labels(relation_labels, output_dict, metadata)
+        output_dict = self.predict_labels(relation_labels, output_dict, metadata)
 
         return output_dict
 
@@ -95,7 +96,8 @@ class RelationExtractor(Model):
 
         (top_span_embeddings, top_span_mention_scores,
          num_spans_to_keep, top_span_mask,
-         top_span_indices, top_spans) = self._prune_spans(spans, span_mask, span_embeddings, sentence_lengths)
+         top_span_indices, top_spans) = self._prune_spans(
+             spans, span_mask, span_embeddings, sentence_lengths)
 
         relation_scores = self.get_relation_scores(top_span_embeddings,
                                                    top_span_mention_scores)
@@ -118,8 +120,9 @@ class RelationExtractor(Model):
         # Keep different number of spans for each minibatch entry.
         num_spans_to_keep = torch.ceil(sentence_lengths.float() * self._spans_per_word).long()
 
+        pruner = self._mention_pruners[self._active_namespace]
         (top_span_embeddings, top_span_mask,
-         top_span_indices, top_span_mention_scores, num_spans_kept) = self._mention_pruner(
+         top_span_indices, top_span_mention_scores, num_spans_kept) = pruner(
              span_embeddings, span_mask, num_spans_to_keep)
 
         top_span_mask = top_span_mask.unsqueeze(-1)
@@ -130,34 +133,6 @@ class RelationExtractor(Model):
                                               flat_top_span_indices)
 
         return top_span_embeddings, top_span_mention_scores, num_spans_to_keep, top_span_mask, top_span_indices, top_spans
-
-    def relation_propagation(self, output_dict):
-        relation_scores = output_dict["relation_scores"]
-        top_span_embeddings = output_dict["top_span_embeddings"]
-        var = output_dict["top_span_mask"]
-        top_span_mask_tensor = (var.repeat(
-            1, 1, var.shape[1]) * var.view(var.shape[0], 1, var.shape[1]).repeat(1, var.shape[1], 1)).float()
-        span_num = relation_scores.shape[1]
-        normalization_factor = var.view(var.shape[0], span_num).sum(dim=1).float()
-        for t in range(self.rel_prop):
-            # TODO(Ulme) There is currently an implicit assumption that the null label is in the 0-th index.
-            # Come up with how to deal with this
-            relation_scores = F.relu(relation_scores[:, :, :, 1:], inplace=False)
-            relation_embeddings = self._A_network(relation_scores)
-            relation_embeddings = (relation_embeddings.transpose(3, 2).transpose(2, 1).transpose(
-                1, 0) * top_span_mask_tensor).transpose(0, 1).transpose(1, 2).transpose(2, 3)
-            entity_embs = torch.sum(relation_embeddings.transpose(
-                2, 1).transpose(1, 0) * top_span_embeddings, dim=0)
-            entity_embs = (entity_embs.transpose(0, 2) / normalization_factor).transpose(0, 2)
-            f_network_input = torch.cat([top_span_embeddings, entity_embs], dim=-1)
-            f_weights = self._f_network(f_network_input)
-            top_span_embeddings = f_weights * top_span_embeddings + (1.0 - f_weights) * entity_embs
-            relation_scores = self.get_relation_scores(
-                top_span_embeddings, self._mention_pruner._scorer(top_span_embeddings))
-
-        output_dict["relation_scores"] = relation_scores
-        output_dict["top_span_embeddings"] = top_span_embeddings
-        return output_dict
 
     def predict_labels(self, relation_labels, output_dict, metadata):
         relation_scores = output_dict["relation_scores"]
@@ -179,8 +154,10 @@ class RelationExtractor(Model):
             # Compute F1.
             predictions = self.make_output_human_readable(output_dict)["decoded_relations_dict"]
             assert len(predictions) == len(metadata)  # Make sure length of predictions is right.
-            self._candidate_recall(predictions, metadata)
-            self._relation_metrics(predictions, metadata)
+            relation_metrics = self._relation_metrics[self._active_namespace]
+
+            # TODO(dwadden) I'm here.
+            relation_metrics(predictions, metadata)
 
             output_dict["loss"] = cross_entropy
         return output_dict
@@ -233,7 +210,7 @@ class RelationExtractor(Model):
             span_2 = top_spans[j]
             label = predicted_relations[i, j].item()
             if label >= 0:
-                label_name = self.vocab.get_token_from_index(label, namespace="relation_labels")
+                label_name = self.vocab.get_token_from_index(label, namespace=self._active_namespace)
                 res_dict[(span_1, span_2)] = label_name
                 list_entry = (span_1[0], span_1[1], span_2[0], span_2[1], label_name)
                 res_list.append(list_entry)
@@ -266,14 +243,18 @@ class RelationExtractor(Model):
                                              top_span_mention_scores)
 
     def _compute_relation_scores(self, pairwise_embeddings, top_span_mention_scores):
+        relation_feedforward = self._relation_feedforwards[self._active_namespace]
+        relation_scorer = self._relation_scorers[self._active_namespace]
+
         batch_size = pairwise_embeddings.size(0)
         max_num_spans = pairwise_embeddings.size(1)
-        feature_dim = self._relation_feedforward.input_dim
+        feature_dim = relation_feedforward.input_dim
 
         embeddings_flat = pairwise_embeddings.view(-1, feature_dim)
 
-        relation_projected_flat = self._relation_feedforward(embeddings_flat)
-        relation_scores_flat = self._relation_scorer(relation_projected_flat)
+
+        relation_projected_flat = relation_feedforward(embeddings_flat)
+        relation_scores_flat = relation_scorer(relation_projected_flat)
 
         relation_scores = relation_scores_flat.view(batch_size, max_num_spans, max_num_spans, -1)
 
@@ -314,7 +295,8 @@ class RelationExtractor(Model):
         relations between masked out spans.
         """
         # Need to add one for the null class.
-        scores_flat = relation_scores.view(-1, self._n_labels + 1)
+        n_labels = self._n_labels[self._active_namespace] + 1
+        scores_flat = relation_scores.view(-1, n_labels)
         # Need to add 1 so that the null label is 0, to line up with indices into prediction matrix.
         labels_flat = relation_labels.view(-1)
         # Compute cross-entropy loss.

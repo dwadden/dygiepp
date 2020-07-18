@@ -156,6 +156,7 @@ class DyGIE(Model):
 
     @staticmethod
     def _debatch(x):
+        # TODO(dwadden) Get rid of this when I find a better way to do it.
         return x if x is None else x.squeeze(0)
 
 
@@ -197,7 +198,7 @@ class DyGIE(Model):
         text_embeddings = self._debatch(text_embeddings)
 
         # Shape: (batch_size, max_sentence_length)
-        text_mask = util.get_text_field_mask(text).float()
+        text_mask = self._debatch(util.get_text_field_mask(text).float())
         sentence_lengths = text_mask.sum(dim=1).long()
 
         # Shape: (batch_size, num_spans)
@@ -235,14 +236,14 @@ class DyGIE(Model):
             output_ner = self._ner(
                 spans, span_mask, span_embeddings, sentence_lengths, ner_labels, metadata)
 
-        import ipdb; ipdb.set_trace()
-
         if self._loss_weights['coref'] > 0:
             output_coref = self._coref.predict_labels(output_coref, metadata)
 
         if self._loss_weights['relation'] > 0:
-            output_relation = self._relation.predict_labels(
-                relation_labels, output_relation, metadata)
+            output_relation = self._relation(
+                spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
+
+        import ipdb; ipdb.set_trace()
 
         if self._loss_weights['events'] > 0:
             # Make the trigger embeddings the same size as the argument embeddings to make
