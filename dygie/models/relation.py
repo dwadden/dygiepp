@@ -65,7 +65,6 @@ class RelationExtractor(Model):
 
         self._loss = torch.nn.CrossEntropyLoss(reduction="sum", ignore_index=-1)
 
-
     @overrides
     def forward(self,  # type: ignore
                 spans: torch.IntTensor,
@@ -252,7 +251,6 @@ class RelationExtractor(Model):
 
         embeddings_flat = pairwise_embeddings.view(-1, feature_dim)
 
-
         relation_projected_flat = relation_feedforward(embeddings_flat)
         relation_scores_flat = relation_scorer(relation_projected_flat)
 
@@ -280,7 +278,8 @@ class RelationExtractor(Model):
         # TODO(dwadden) Test and possibly optimize.
         relations = []
 
-        for sliced, ixs, top_span_mask in zip(relation_labels, top_span_indices, top_span_masks.bool()):
+        zipped = zip(relation_labels, top_span_indices, top_span_masks.bool())
+        for sliced, ixs, top_span_mask in zipped:
             entry = sliced[ixs][:, ixs].unsqueeze(0)
             mask_entry = top_span_mask & top_span_mask.transpose(0, 1).unsqueeze(0)
             entry[mask_entry] += 1

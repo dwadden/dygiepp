@@ -12,10 +12,11 @@ class RelationMetrics(Metric):
     def __init__(self):
         self.reset()
 
+    # TODO(dwadden) Should refactor this to not require decoding.
     @overrides
     def __call__(self, predicted_relation_list, metadata_list):
         for predicted_relations, metadata in zip(predicted_relation_list, metadata_list):
-            gold_relations = metadata["relation_dict"]
+            gold_relations = metadata.relation_dict
             self._total_gold += len(gold_relations)
             self._total_predicted += len(predicted_relations)
             for (span_1, span_2), label in predicted_relations.items():
