@@ -3,6 +3,8 @@
 *.pyc
 data/*
 models/*
+models-old/*
+cache/*
 pretrained/*
 predictions/*
 **/stanford*/*
