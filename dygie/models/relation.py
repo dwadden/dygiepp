@@ -186,14 +186,26 @@ class RelationExtractor(Model):
         output_dict["decoded_relations"] = res_list
         return output_dict
 
+    # TODO(dwadden) This code is repeated elsewhere. Refactor.
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        precision, recall, f1 = self._relation_metrics.get_metric(reset)
-        candidate_recall = self._candidate_recall.get_metric(reset)
-        return {"rel_precision": precision,
-                "rel_recall": recall,
-                "rel_f1": f1,
-                "rel_span_recall": candidate_recall}
+        "Loop over the metrics for all namespaces, and return as dict."
+        res = {}
+        for namespace, metrics in self._relation_metrics.items():
+            precision, recall, f1 = metrics.get_metric(reset)
+            prefix = namespace.replace("_labels", "")
+            to_update = {f"{prefix}_precision": precision,
+                         f"{prefix}_recall": recall,
+                         f"{prefix}_f1": f1}
+            res.update(to_update)
+
+        res_avg = {}
+        for name in ["precision", "recall", "f1"]:
+            values = [res[key] for key in res if name in key]
+            res_avg[f"<mean>:relation_{name}"] = sum(values) / len(values)
+            res.update(res_avg)
+
+        return res
 
     def _decode_sentence(self, top_spans, predicted_relations, num_spans_to_keep):
         # TODO(dwadden) speed this up?

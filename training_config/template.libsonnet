@@ -4,10 +4,10 @@
 
     // Mapping from target task to the metric used to assess performance on that task.
     local validation_metrics = {
-      'ner': '+ner_f1',
-      'rel': '+rel_f1',
-      'coref': '+coref_f1',
-      'events': '+arg_class_f1'
+      'ner': '+<mean>:ner_f1',
+      'rel': '+<mean>:relation_f1',
+      'coref': '+<mean>:coref_f1',
+      'events': '+<mean>:arg_class_f1'
     },
 
     ////////////////////

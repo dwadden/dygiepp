@@ -141,9 +141,23 @@ class NERTagger(Model):
         output_dict["decoded_ner_dict"] = res_dict
         return output_dict
 
+    # TODO(dwadden) This code is repeated elsewhere. Refactor.
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        ner_precision, ner_recall, ner_f1 = self._ner_metrics.get_metric(reset)
-        return {"ner_precision": ner_precision,
-                "ner_recall": ner_recall,
-                "ner_f1": ner_f1}
+        "Loop over the metrics for all namespaces, and return as dict."
+        res = {}
+        for namespace, metrics in self._ner_metrics.items():
+            precision, recall, f1 = metrics.get_metric(reset)
+            prefix = namespace.replace("_labels", "")
+            to_update = {f"{prefix}_precision": precision,
+                         f"{prefix}_recall": recall,
+                         f"{prefix}_f1": f1}
+            res.update(to_update)
+
+        res_avg = {}
+        for name in ["precision", "recall", "f1"]:
+            values = [res[key] for key in res if name in key]
+            res_avg[f"<mean>:ner_{name}"] = sum(values) / len(values)
+            res.update(res_avg)
+
+        return res

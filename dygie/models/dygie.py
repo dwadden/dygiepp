@@ -142,10 +142,14 @@ class DyGIE(Model):
         related to this task.
         """
         lookup = {
-            "ner": ["ner_precision", "ner_recall", "ner_f1"],
-            "rel": ["rel_precision", "rel_recall", "rel_f1", "rel_span_recall"],
-            "coref": ["coref_precision", "coref_recall", "coref_f1", "coref_mention_recall"],
-            "events": ["trig_class_f1", "arg_class_f1"]}
+            "ner": [f"<mean>:{name}" for name in
+                    ["ner_precision", "ner_recall", "ner_f1"]],
+            "rel": [f"<mean>:{name}" for name in
+                    ["relation_precision", "relation_recall", "relation_f1"]],
+            "coref": [f"<mean>:{name}" for name in
+                      ["coref_precision", "coref_recall", "coref_f1", "coref_mention_recall"]],
+            "events": [f"<mean>:{name}" for name in
+                       ["trig_class_f1", "arg_class_f1"]]}
         if target_task not in lookup:
             raise ValueError(f"Invalied value {target_task} has been given as the target task.")
         return lookup[target_task]
@@ -240,15 +244,10 @@ class DyGIE(Model):
             output_relation = self._relation(
                 spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
 
-        import ipdb; ipdb.set_trace()
-
         if self._loss_weights['events'] > 0:
-            # Make the trigger embeddings the same size as the argument embeddings to make
-            # propagation easier.
-            trigger_embeddings = contextualized_embeddings
-
+            # The `text_embeddings` serve as representations for event triggers.
             output_events = self._events(
-                text_mask, trigger_embeddings, spans, span_mask, span_embeddings,
+                text_mask, text_embeddings, spans, span_mask, span_embeddings,
                 sentence_lengths, output_ner, trigger_labels, argument_labels,
                 ner_labels, metadata)
 
