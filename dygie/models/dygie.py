@@ -142,13 +142,13 @@ class DyGIE(Model):
         related to this task.
         """
         lookup = {
-            "ner": [f"<mean>:{name}" for name in
+            "ner": [f"MEAN__{name}" for name in
                     ["ner_precision", "ner_recall", "ner_f1"]],
-            "rel": [f"<mean>:{name}" for name in
+            "rel": [f"MEAN__{name}" for name in
                     ["relation_precision", "relation_recall", "relation_f1"]],
-            "coref": [f"<mean>:{name}" for name in
+            "coref": [f"MEAN__{name}" for name in
                       ["coref_precision", "coref_recall", "coref_f1", "coref_mention_recall"]],
-            "events": [f"<mean>:{name}" for name in
+            "events": [f"MEAN__{name}" for name in
                        ["trig_class_f1", "arg_class_f1"]]}
         if target_task not in lookup:
             raise ValueError(f"Invalied value {target_task} has been given as the target task.")

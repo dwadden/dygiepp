@@ -82,7 +82,7 @@ class NERTagger(Model):
         # Shape: (Batch size, Number of Spans, Span Embedding Size)
         # span_embeddings
 
-        namespace = f"{metadata.dataset}:ner_labels"
+        namespace = f"{metadata.dataset}__ner_labels"
         scorer = self._ner_scorers[namespace]
 
         ner_scores = scorer(span_embeddings)
@@ -157,7 +157,7 @@ class NERTagger(Model):
         res_avg = {}
         for name in ["precision", "recall", "f1"]:
             values = [res[key] for key in res if name in key]
-            res_avg[f"<mean>:ner_{name}"] = sum(values) / len(values)
+            res_avg[f"MEAN__ner_{name}"] = sum(values) / len(values)
             res.update(res_avg)
 
         return res

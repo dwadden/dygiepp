@@ -137,7 +137,7 @@ class DyGIEReader(DatasetReader):
         if sent.ner is not None:
             ner_labels = self._process_ner(span_tuples, sent)
             fields["ner_labels"] = ListField(
-                [LabelField(entry, label_namespace=f"{dataset}:ner_labels")
+                [LabelField(entry, label_namespace=f"{dataset}__ner_labels")
                  for entry in ner_labels])
         if sent.cluster_dict is not None:
             # Skip indexing for coref labels, which are ints.
@@ -149,14 +149,14 @@ class DyGIEReader(DatasetReader):
             relation_labels, relation_indices = self._process_relations(span_tuples, sent)
             fields["relation_labels"] = AdjacencyField(
                 indices=relation_indices, sequence_field=span_field, labels=relation_labels,
-                label_namespace=f"{dataset}:relation_labels")
+                label_namespace=f"{dataset}__relation_labels")
         if sent.events is not None:
             trigger_labels, argument_labels, argument_indices = self._process_events(span_tuples, sent)
             fields["trigger_labels"] = SequenceLabelField(
-                trigger_labels, text_field, label_namespace=f"{dataset}:trigger_labels")
+                trigger_labels, text_field, label_namespace=f"{dataset}__trigger_labels")
             fields["argument_labels"] = AdjacencyFieldAssym(
                 indices=argument_indices, row_field=text_field, col_field=span_field,
-                labels=argument_labels, label_namespace=f"{dataset}:argument_labels")
+                labels=argument_labels, label_namespace=f"{dataset}__argument_labels")
 
         return fields
 

@@ -76,7 +76,7 @@ class RelationExtractor(Model):
         """
         TODO(dwadden) Write documentation.
         """
-        self._active_namespace = f"{metadata.dataset}:relation_labels"
+        self._active_namespace = f"{metadata.dataset}__relation_labels"
 
         output_dict = self.compute_representations(
             spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
@@ -202,7 +202,7 @@ class RelationExtractor(Model):
         res_avg = {}
         for name in ["precision", "recall", "f1"]:
             values = [res[key] for key in res if name in key]
-            res_avg[f"<mean>:relation_{name}"] = sum(values) / len(values)
+            res_avg[f"MEAN__relation_{name}"] = sum(values) / len(values)
             res.update(res_avg)
 
         return res
