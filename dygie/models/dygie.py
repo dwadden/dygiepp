@@ -79,10 +79,6 @@ class DyGIE(Model):
         ####################
 
         # Set parameters.
-        # TODO(dwadden) the BERT embedder needs to be TimeDistributed in order to deal with
-        # minibatches properly. This is a kind of hacky way to do it.
-        embedder.token_embedder_bert = TimeDistributed(
-            embedder.token_embedder_bert)
         self._embedder = embedder
         self._loss_weights = loss_weights
         self._max_span_width = max_span_width
@@ -194,7 +190,8 @@ class DyGIE(Model):
         argument_labels = self._debatch(argument_labels)
 
         # Encode using BERT, then debatch.
-        text_embeddings = self._embedder(text)
+        # Since the data are batched, we use `num_wrapping_dims=1` to unwrap the document dimension.
+        text_embeddings = self._embedder(text, num_wrapping_dims=1)
         text_embeddings = self._debatch(text_embeddings)
 
         # Shape: (batch_size, max_sentence_length)
