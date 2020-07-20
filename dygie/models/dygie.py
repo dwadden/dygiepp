@@ -144,7 +144,7 @@ class DyGIE(Model):
         lookup = {
             "ner": [f"MEAN__{name}" for name in
                     ["ner_precision", "ner_recall", "ner_f1"]],
-            "rel": [f"MEAN__{name}" for name in
+            "relation": [f"MEAN__{name}" for name in
                     ["relation_precision", "relation_recall", "relation_f1"]],
             "coref": [f"MEAN__{name}" for name in
                       ["coref_precision", "coref_recall", "coref_f1", "coref_mention_recall"]],
@@ -186,31 +186,31 @@ class DyGIE(Model):
             raise NotImplementedError("Multi-document minibatching not yet supported.")
 
         metadata = metadata[0]
-        spans = self._debatch(spans)
-        ner_labels = self._debatch(ner_labels)
-        coref_labels = self._debatch(coref_labels)
-        relation_labels = self._debatch(relation_labels)
-        trigger_labels = self._debatch(trigger_labels)
-        argument_labels = self._debatch(argument_labels)
+        spans = self._debatch(spans)  # (n_sents, max_n_spans, 2)
+        ner_labels = self._debatch(ner_labels)  # (n_sents, max_n_spans)
+        coref_labels = self._debatch(coref_labels)  #  (n_sents, max_n_spans)
+        relation_labels = self._debatch(relation_labels)  # (n_sents, max_n_spans, max_n_spans)
+        trigger_labels = self._debatch(trigger_labels)  # TODO(dwadden)
+        argument_labels = self._debatch(argument_labels)  # TODO(dwadden)
 
         # Encode using BERT, then debatch.
         # Since the data are batched, we use `num_wrapping_dims=1` to unwrap the document dimension.
+        # (1, n_sents, max_sententence_length, embedding_dim)
         text_embeddings = self._embedder(text, num_wrapping_dims=1)
+        # (n_sents, max_n_wordpieces, embedding_dim)
         text_embeddings = self._debatch(text_embeddings)
 
-        # Shape: (batch_size, max_sentence_length)
-        text_mask = self._debatch(util.get_text_field_mask(text).float())
-        sentence_lengths = text_mask.sum(dim=1).long()
+        # (n_sents, max_sentence_length)
+        text_mask = self._debatch(util.get_text_field_mask(text, num_wrapping_dims=1).float())
+        sentence_lengths = text_mask.sum(dim=1).long()  # (n_sents)
 
-        # Shape: (batch_size, num_spans)
-        span_mask = (spans[:, :, 0] >= 0).float()
+        span_mask = (spans[:, :, 0] >= 0).float()  # (n_sents, max_n_spans)
         # SpanFields return -1 when they are used as padding. As we do some comparisons based on
         # span widths when we attend over the span representations that we generate from these
         # indices, we need them to be <= 0. This is only relevant in edge cases where the number of
         # spans we consider after the pruning stage is >= the total number of spans, because in this
         # case, it is possible we might consider a masked span.
-        # Shape: (batch_size, num_spans, 2)
-        spans = F.relu(spans.float()).long()
+        spans = F.relu(spans.float()).long()  # (n_sents, max_n_spans, 2)
 
         # Shape: (batch_size, num_spans, 2 * encoding_dim + feature_size)
         span_embeddings = self._endpoint_span_extractor(text_embeddings, spans)

@@ -21,7 +21,7 @@
     loss_weights :: error 'Must override `loss_weights`',
 
     // Make early stopping decisions based on performance for this task.
-    // Options are: `['ner', 'rel', 'coref': 'events']`
+    // Options are: `['ner', 'relation', 'coref': 'events']`
     target_task :: error 'Must override `target_task`',
 
     // DEFAULT VALUES. May be set by child class..

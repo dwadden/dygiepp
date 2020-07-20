@@ -10,9 +10,9 @@ template.DyGIE {
   },
   loss_weights: {
     ner: 1.0,
-    relation: 1.0,
+    relation: 0.0,
     coref: 0.0,
     events: 0.0
   },
-  target_task: "rel"
+  target_task: "ner"
 }
