@@ -21,7 +21,7 @@ class TestDygieReader(AllenNlpTestCase):
         # scierc
         # Sentence lengths: [20, 23, 36, 14, 14, 30, 31, 15].
         # Cumulative sentence lengths: [20, 43, 79, 93, 107, 137, 168, 183].
-        self.reader = DyGIEReader(max_span_width=6)
+        self.reader = DyGIEReader(max_span_width=5)
         self.dataset = self.reader.read(str("/Users/kennychen/dygiepp/dygie/tests/fixtures/scierc_article.json"))
         #self.ds = self.reader._read(str("/Users/kennychen/dygiepp/dygie/tests/fixtures/scierc_article.json"))
 
@@ -70,12 +70,14 @@ class TestDygieReader(AllenNlpTestCase):
                     assert label == -1
 
     def test_relation_correct_scierc(self):
-           instance = self.instances_scierc[5]
+           instance = self.dataset.instances[0]
            relation_field = instance["relation_labels"]
-           span_list = relation_field.sequence_field.field_list
+           # relation_field.field_list[5] == relation_field[5]
+           # listfield of spanfields
+           span_list = relation_field[5].sequence_field
            # There should be one relation in this sentence,
-           indices = relation_field.indices
-           labels = relation_field.labels
+           indices =  relation_field[5].indices
+           labels = relation_field[5].labels
            assert len(indices) == len(labels) == 1
            ix = indices[0]
            label = labels[0]
@@ -101,15 +103,12 @@ if __name__ == "__main__":
     test = TestDygieReader()
     test.setUp()
     instance = test.dataset.instances[0]
-
-    print(list(instance.keys()))
-    tokens = instance["text"][5]
     relation_field = instance["relation_labels"]
-    print(dir(relation_field))
-    print(tokens)
-    # ner_field = instance["ner_labels"]
-    # print(ner_field)
-    # print(ner_field[4][36])
+
+    #print(list(instance.keys()))
+
+
+    test.test_relation_correct_scierc()
 
 
   #test.test_tokens_correct_scierc()
