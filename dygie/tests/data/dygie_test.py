@@ -16,7 +16,7 @@ class TestDygieReader(unittest.TestCase):
         # Sentence lengths: [20, 23, 36, 14, 14, 30, 31, 15].
         # Cumulative sentence lengths: [20, 43, 79, 93, 107, 137, 168, 183].
         self.reader = DyGIEReader(max_span_width=5)
-        self.dataset = self.reader.read("../fixtures/scierc_article.json")
+        self.dataset = self.reader.read("dygie/tests/fixtures/scierc_article.json")
 
     def tearDown(self):
         pass
