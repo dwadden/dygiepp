@@ -78,6 +78,9 @@ class TestDygieReader(AllenNlpTestCase):
         assert label == "USED-FOR"
 
     def test_coref_correct_scierc(self):
+        instance = self.dataset.instances[0]
+        coref_field = instance["coref_labels"]
+        spans = instance["spans"]
         # A list, one entry per sentence. For each sentence, a dict mapping spans to cluster id's.
         cluster_mappings = [{(6, 6): 1},
                             {},
@@ -87,17 +90,17 @@ class TestDygieReader(AllenNlpTestCase):
                             {(5, 7): 0, (19, 20): 2, (22, 24): 3},
                             {(5, 5): 3},
                             {(2, 2): 1}]
-
-        #iterate through all coref 
-        for instance, cluster_mapping in zip(self.instances, cluster_mappings):
-            coref_field = instance["coref_labels"]
-            for label, span in zip(coref_field.labels, coref_field.sequence_field.field_list):
+        for instance, cluster_mapping, span in zip(coref_field, cluster_mappings, spans):
+            curr_coref_field = instance
+            curr_span = span
+            for label, span in zip(curr_coref_field, curr_span):
                 start, end = span.span_start, span.span_end
                 if (start, end) in cluster_mapping:
-                    assert cluster_mapping[(start, end)] == label
+                    # print(start, end)
+                    # print(label.label)
+                    assert cluster_mapping[(start, end)] == label.label
                 else:
-                    assert label == -1
-
+                    assert label.label == -1
 
 
     def test_vocab_size_correct_scierc(self):
@@ -117,12 +120,10 @@ if __name__ == "__main__":
     test.setUp()
     instance = test.dataset.instances[0]
     coref_field = instance["coref_labels"]
-    spans = instance["spans"][3]
+    spans = instance["spans"]
 
-    print(coref_field[0][0].label)
-
-
-   # test.test_ner_correct_scierc()
+    test.test_coref_correct_scierc()
+# test.test_ner_correct_scierc()
     #test.test_relation_correct_scierc()
     #test.test_tokens_correct_scierc()
 
