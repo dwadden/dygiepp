@@ -3,22 +3,20 @@ Short unit tests to make sure our dataset readers are behaving correctly.
 Checks a sample from the scierc data
 """
 
-import itertools
-from allennlp.common.testing import AllenNlpTestCase
-from allennlp.common.util import ensure_list
+import unittest
 from allennlp.data.vocabulary import Vocabulary
 
 from dygie.data import DyGIEReader
 
 
-class TestDygieReader(AllenNlpTestCase):
+class TestDygieReader(unittest.TestCase):
 
     def setUp(self):
         # scierc
         # Sentence lengths: [20, 23, 36, 14, 14, 30, 31, 15].
         # Cumulative sentence lengths: [20, 43, 79, 93, 107, 137, 168, 183].
         self.reader = DyGIEReader(max_span_width=5)
-        self.dataset = self.reader.read("dygie/tests/fixtures/scierc_article.json")
+        self.dataset = self.reader.read("../fixtures/scierc_article.json")
 
     def tearDown(self):
         pass
@@ -99,12 +97,7 @@ class TestDygieReader(AllenNlpTestCase):
        assert vocab.get_vocab_size("coref_labels") == 0
 
 if __name__ == "__main__":
-    test = TestDygieReader()
-    test.setUp()
-    test.test_vocab_size_correct_scierc()
-    test.test_coref_correct_scierc()
-    test.test_ner_correct_scierc()
-    test.test_relation_correct_scierc()
-    test.test_tokens_correct_scierc()
+    unittest.main()
+
 
 
