@@ -100,7 +100,9 @@ class CorefResolver(Model):
             span_ix = output_dict[doc_key]["span_ix"]
             top_span_embeddings = output_dict[doc_key]["top_span_embeddings"]
             for ix, el in enumerate(output_dict[doc_key]["top_span_indices"].view(-1)):
-                new_span_embeddings_batched[span_ix[el] / span_embeddings_batched.shape[1] + offsets[doc_key], span_ix[el] % span_embeddings_batched.shape[1]] = top_span_embeddings[0, ix]
+                row_slice = span_ix[el] / span_embeddings_batched.shape[1] + offsets[doc_key]
+                col_slice = span_ix[el] % span_embeddings_batched.shape[1]
+                new_span_embeddings_batched[row_slice, col_slice] = top_span_embeddings[0, ix]
 
         return new_span_embeddings_batched
 
@@ -120,24 +122,30 @@ class CorefResolver(Model):
             assert antecedent_indices.max() <= top_span_embeddings.shape[1]
 
             antecedent_distribution = self.antecedent_softmax(coreference_scores)[:, :, 1:]
-            top_span_emb_repeated = top_span_embeddings.repeat(antecedent_distribution.shape[2],1,1)
-            if antecedent_indices.shape[0]==antecedent_indices.shape[1]:
-                selected_top_span_embs = util.batched_index_select(top_span_emb_repeated, antecedent_indices).unsqueeze(0)
-                entity_embs = (selected_top_span_embs.permute([3,0,1,2]) * antecedent_distribution).permute([1, 2, 3, 0]).sum(dim=2)
+            top_span_emb_repeated = top_span_embeddings.repeat(
+                antecedent_distribution.shape[2], 1, 1)
+            if antecedent_indices.shape[0] == antecedent_indices.shape[1]:
+                selected_top_span_embs = util.batched_index_select(
+                    top_span_emb_repeated, antecedent_indices).unsqueeze(0)
+                entity_embs = (selected_top_span_embs.permute(
+                    [3, 0, 1, 2]) * antecedent_distribution).permute([1, 2, 3, 0]).sum(dim=2)
             else:
-                ant_var1 = antecedent_indices.unsqueeze(0).unsqueeze(-1).repeat(1,1,1,top_span_embeddings.shape[-1])
-                top_var1 = top_span_embeddings.unsqueeze(1).repeat(1,antecedent_distribution.shape[1],1,1)
-                entity_embs = (torch.gather(top_var1, 2, ant_var1).permute([3,0,1,2]) * antecedent_distribution).permute([1, 2, 3, 0]).sum(dim=2)
-
-            #entity_embs = F.dropout(entity_embs)
+                ant_var1 = antecedent_indices.unsqueeze(
+                    0).unsqueeze(-1).repeat(1, 1, 1, top_span_embeddings.shape[-1])
+                top_var1 = top_span_embeddings.unsqueeze(1).repeat(
+                    1, antecedent_distribution.shape[1], 1, 1)
+                entity_embs = (torch.gather(top_var1, 2, ant_var1).permute(
+                    [3, 0, 1, 2]) * antecedent_distribution).permute([1, 2, 3, 0]).sum(dim=2)
 
             f_network_input = torch.cat([top_span_embeddings, entity_embs], dim=-1)
             f_weights = self._f_network(f_network_input)
             top_span_embeddings = f_weights * top_span_embeddings + (1.0 - f_weights) * entity_embs
 
-            #f_weights2 = self._f_network2(f_network_input)
-            #top_span_embeddings = f_weights2 * top_span_embeddings + (1.0 - f_weights2) * entity_embs
-            coreference_scores = self.get_coref_scores(top_span_embeddings, self._mention_pruner._scorer(top_span_embeddings), output_dict["antecedent_indices"], output_dict["valid_antecedent_offsets"], output_dict["valid_antecedent_log_mask"])
+            coreference_scores = self.get_coref_scores(
+                top_span_embeddings,
+                self._mention_pruner._scorer(
+                    top_span_embeddings), output_dict["antecedent_indices"],
+                output_dict["valid_antecedent_offsets"], output_dict["valid_antecedent_log_mask"])
 
         output_dict["coreference_scores"] = coreference_scores
         output_dict["top_span_embeddings"] = top_span_embeddings
@@ -146,12 +154,12 @@ class CorefResolver(Model):
     #@overrides
     #def forward(self,  # type: ignore
     def compute_representations(self,  # type: ignore
-                spans_batched: torch.IntTensor,
-                span_mask_batched,
-                span_embeddings_batched,  # TODO(dwadden) add type.
-                sentence_lengths,
-                coref_labels_batched: torch.IntTensor = None,
-                metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
+                                spans_batched: torch.IntTensor,
+                                span_mask_batched,
+                                span_embeddings_batched,  # TODO(dwadden) add type.
+                                sentence_lengths,
+                                coref_labels_batched: torch.IntTensor = None,
+                                metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
         """
         Run the forward pass. Since we can only have coreferences between spans in the same
         document, we loop over the documents in the batch. This function assumes that the inputs are
@@ -199,14 +207,15 @@ class CorefResolver(Model):
             output["loss"] = loss
         return output
 
-    def _compute_representations_doc(self,  # type: ignore
-                     spans_batched: torch.IntTensor,
-                     span_mask_batched,
-                     span_embeddings_batched,  # TODO(dwadden) add type.
-                     sentence_lengths,
-                     ix,
-                     coref_labels_batched: torch.IntTensor = None,
-                     metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
+    def _compute_representations_doc(
+            self,  # type: ignore
+            spans_batched: torch.IntTensor,
+            span_mask_batched,
+            span_embeddings_batched,  # TODO(dwadden) add type.
+            sentence_lengths,
+            ix,
+            coref_labels_batched: torch.IntTensor = None,
+            metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
         # pylint: disable=arguments-differ
         """
         Run the forward pass for a single document.
@@ -254,8 +263,9 @@ class CorefResolver(Model):
         valid_antecedent_indices, valid_antecedent_offsets, valid_antecedent_log_mask = \
             self._generate_valid_antecedents(num_spans_to_keep, max_antecedents, util.get_device_of(span_embeddings))
 
-        coreference_scores = self.get_coref_scores(top_span_embeddings, top_span_mention_scores,
-            valid_antecedent_indices, valid_antecedent_offsets, valid_antecedent_log_mask)
+        coreference_scores = self.get_coref_scores(
+            top_span_embeddings, top_span_mention_scores, valid_antecedent_indices,
+            valid_antecedent_offsets, valid_antecedent_log_mask)
 
         output_dict = {"top_spans": top_spans,
                        "antecedent_indices": valid_antecedent_indices,
@@ -272,8 +282,6 @@ class CorefResolver(Model):
                        "metadata": metadata}
 
         return output_dict
-
-    # TODO(Ulme) Split up method here?
 
     def get_coref_scores(self,
                          top_span_embeddings,

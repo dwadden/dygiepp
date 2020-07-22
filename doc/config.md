@@ -38,7 +38,14 @@ The user may also specify:
 - `cuda_device`: By default, training is performed on CPU. To train on a GPU, specify a device.
 
 
+## Parallel training
+
+TODO
+
 ## Changing arbitrary parts of the template
+
+TODO note that by default coref prop is turned off; need to turn it on here.
+
 
 The jsonnet object inheritance model allows you to modify any (perhaps deeply-nested) field of the base object using `+:` notation; see the jsonnet docs for more detail on this. For example, if you'd like to change the batch size and the learning rate on the optimizer, you could do:
 
