@@ -45,15 +45,6 @@ class TestDygieReader(AllenNlpTestCase):
             else:
                 assert label.label == ""
 
-        # for label, span in zip(ner_field.labels, ner_field.sequence_field.field_list):
-        #     start, end = span.span_start, span.span_end
-        #     if start == 3 and end == 5:
-        #         assert label == "OtherScientificTerm"
-        #     elif start == 10 and end == 12:
-        #         assert label == "Method"
-        #     else:
-        #         assert label == ""
-
     def test_relation_correct_scierc(self):
         instance = self.dataset.instances[0]
         relation_field = instance["relation_labels"][5]
@@ -115,3 +106,5 @@ if __name__ == "__main__":
     test.test_ner_correct_scierc()
     test.test_relation_correct_scierc()
     test.test_tokens_correct_scierc()
+
+
