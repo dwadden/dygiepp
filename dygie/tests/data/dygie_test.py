@@ -25,7 +25,6 @@ class TestDygieReader(AllenNlpTestCase):
         self.dataset = self.reader.read(str("/Users/kennychen/dygiepp/dygie/tests/fixtures/scierc_article.json"))
         #self.ds = self.reader._read(str("/Users/kennychen/dygiepp/dygie/tests/fixtures/scierc_article.json"))
 
-
     def tearDown(self):
         pass
 
@@ -37,18 +36,46 @@ class TestDygieReader(AllenNlpTestCase):
         text = [token.text for token in tokens]
         assert text[:6] == ["Thirdly", "the", "learned", "intrinsic", "object", "structure"]
 
-    # not done
     def test_ner_correct_scierc(self):
         instance = self.dataset.instances[0]
-        ner_field = instance["ner_labels"]
-        for label, span in zip(ner_field.labels, ner_field.sequence_field.field_list):
+        ner_field = instance["ner_labels"][3]
+        spans = instance["spans"][3]
+
+        for label, span in zip(ner_field, spans):
             start, end = span.span_start, span.span_end
-            if start == 3 and end == 5:
-                assert label == "OtherScientificTerm"
-            elif start == 10 and end == 12:
-                assert label == "Method"
+            if start == 2 and end == 3:
+                assert label.label == "Method"
+            elif start == 11 and end == 12:
+                assert label.label == "Method"
             else:
-                assert label == ""
+                assert label.label == ""
+
+        # for label, span in zip(ner_field.labels, ner_field.sequence_field.field_list):
+        #     start, end = span.span_start, span.span_end
+        #     if start == 3 and end == 5:
+        #         assert label == "OtherScientificTerm"
+        #     elif start == 10 and end == 12:
+        #         assert label == "Method"
+        #     else:
+        #         assert label == ""
+
+    def test_relation_correct_scierc(self):
+        instance = self.dataset.instances[0]
+        relation_field = instance["relation_labels"][5]
+        span_list = relation_field.sequence_field
+        # There should be one relation in this sentence,
+        indices = relation_field.indices
+        labels = relation_field.labels
+        assert len(indices) == len(labels) == 1
+        ix = indices[0]
+        label = labels[0]
+        # Check that the relation refers to the correct spans
+        span1 = span_list[ix[0]]
+        span2 = span_list[ix[1]]
+        assert ((span1.span_start == 19 and span1.span_end == 20 and
+                 span2.span_start == 22 and span2.span_end == 24))
+        # Check that the label's correct.
+        assert label == "USED-FOR"
 
     def test_coref_correct_scierc(self):
         # A list, one entry per sentence. For each sentence, a dict mapping spans to cluster id's.
@@ -60,7 +87,9 @@ class TestDygieReader(AllenNlpTestCase):
                             {(5, 7): 0, (19, 20): 2, (22, 24): 3},
                             {(5, 5): 3},
                             {(2, 2): 1}]
-        for instance, cluster_mapping in zip(self.instances_scierc, cluster_mappings):
+
+        #iterate through all coref 
+        for instance, cluster_mapping in zip(self.instances, cluster_mappings):
             coref_field = instance["coref_labels"]
             for label, span in zip(coref_field.labels, coref_field.sequence_field.field_list):
                 start, end = span.span_start, span.span_end
@@ -69,25 +98,7 @@ class TestDygieReader(AllenNlpTestCase):
                 else:
                     assert label == -1
 
-    def test_relation_correct_scierc(self):
-           instance = self.dataset.instances[0]
-           relation_field = instance["relation_labels"]
-           # relation_field.field_list[5] == relation_field[5]
-           # listfield of spanfields
-           span_list = relation_field[5].sequence_field
-           # There should be one relation in this sentence,
-           indices =  relation_field[5].indices
-           labels = relation_field[5].labels
-           assert len(indices) == len(labels) == 1
-           ix = indices[0]
-           label = labels[0]
-           # Check that the relation refers to the correct spans
-           span1 = span_list[ix[0]]
-           span2 = span_list[ix[1]]
-           assert ((span1.span_start == 19 and span1.span_end == 20 and
-                    span2.span_start == 22 and span2.span_end == 24))
-           # Check that the label's correct.
-           assert label == "USED-FOR"
+
 
     def test_vocab_size_correct_scierc(self):
        vocab = Vocabulary.from_instances(self.instances_scierc)
@@ -99,32 +110,23 @@ class TestDygieReader(AllenNlpTestCase):
        # For numeric labels, vocab size is 0.
        assert vocab.get_vocab_size("coref_labels") == 0
 
+
+
 if __name__ == "__main__":
     test = TestDygieReader()
     test.setUp()
     instance = test.dataset.instances[0]
-    relation_field = instance["relation_labels"]
+    coref_field = instance["coref_labels"]
+    spans = instance["spans"][3]
 
-    #print(list(instance.keys()))
-
-
-    test.test_relation_correct_scierc()
+    print(coref_field[0][0].label)
 
 
-  #test.test_tokens_correct_scierc()
+   # test.test_ner_correct_scierc()
+    #test.test_relation_correct_scierc()
+    #test.test_tokens_correct_scierc()
 
-#    def test_ner_correct_scierc(self):
-#        instance = self.instances_scierc[4]
-#        ner_field = instance["ner_labels"]
-#        for label, span in zip(ner_field.labels, ner_field.sequence_field.field_list):
-#            start, end = span.span_start, span.span_end
-#            if start == 3 and end == 5:
-#                assert label == "OtherScientificTerm"
-#            elif start == 10 and end == 12:
-#                assert label == "Method"
-#            else:
-#                assert label == ""
-#
+
 #
 #
 #    def test_relation_correct_scierc(self):
