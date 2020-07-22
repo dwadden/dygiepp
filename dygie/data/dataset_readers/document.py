@@ -39,7 +39,7 @@ class Document:
     def _update_sentences_with_clusters(self):
         "Add cluster dictionary to each sentence, if there are coreference clusters."
         for sent in self.sentences:
-            sent.cluster_dict = {} if self.clusters else None
+            sent.cluster_dict = {} if self.clusters is not None else None
 
         if self.clusters is None:
             return
