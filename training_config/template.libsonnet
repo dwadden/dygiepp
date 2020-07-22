@@ -120,7 +120,7 @@
         weight_decay: 0.0,
         parameter_groups: [
           [
-            ['_text_field_embedder'],
+            ['_embedder'],
             {
               lr: 5e-5,
               weight_decay: 0.01,
