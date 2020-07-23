@@ -112,7 +112,7 @@ class DyGIEReader(DatasetReader):
 
         return trigger_labels, arguments, argument_indices
 
-    def _process_sentence(self, sent: Sentence):
+    def _process_sentence(self, sent: Sentence, dataset: str):
         # Get the sentence text and define the `text_field`.
         sentence_text = [self._normalize_word(word) for word in sent.text]
         text_field = TextField([Token(word) for word in sentence_text], self._token_indexers)
@@ -130,7 +130,6 @@ class DyGIEReader(DatasetReader):
         # `spans`. But calling `as_tensor_dict()` fails on this specific data type. Matt G
         # recognized that this is an AllenNLP API issue and suggested that represent these as
         # `ListField[ListField[LabelField]]` instead.
-        dataset = sent.doc.dataset
         fields = {}
         fields["text"] = text_field
         fields["spans"] = span_field
@@ -162,7 +161,7 @@ class DyGIEReader(DatasetReader):
 
     def _process_sentence_fields(self, doc: Document):
         # Process each sentence.
-        sentence_fields = [self._process_sentence(sent) for sent in doc.sentences]
+        sentence_fields = [self._process_sentence(sent, doc.dataset) for sent in doc.sentences]
 
         # Make sure that all sentences have the same set of keys.
         first_keys = set(sentence_fields[0].keys())
@@ -185,7 +184,7 @@ class DyGIEReader(DatasetReader):
         """
         Convert a Document object into an instance.
         """
-        doc = Document(doc_text)
+        doc = Document.from_json(doc_text)
 
         fields = self._process_sentence_fields(doc)
         fields["metadata"] = MetadataField(doc)
