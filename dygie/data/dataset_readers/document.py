@@ -1,4 +1,4 @@
-from dygie.models.shared import fields_to_batches
+from dygie.models.shared import fields_to_batches, batches_to_fields
 import copy
 import numpy as np
 
@@ -41,6 +41,7 @@ class Document:
 
     @classmethod
     def from_json(cls, js):
+        "Read in from json-loaded dict."
         doc_key = js["doc_key"]
         dataset = js.get("dataset")
         entries = fields_to_batches(js, ["doc_key", "clusters"])
@@ -63,6 +64,19 @@ class Document:
         sentences = update_sentences_with_clusters(sentences, clusters)
 
         return cls(doc_key, dataset, sentences, clusters)
+
+    def to_json(self):
+        "Write to json dict."
+        res = {"doc_key": self.doc_key,
+               "dataset": self.dataset}
+        sents_json = [sent.to_json() for sent in self]
+        fields_json = batches_to_fields(sents_json)
+        res.update(fields_json)
+        if self.clusters:
+            res["clusters"] = [cluster.to_json() for cluster in self.clusters]
+
+        return res
+
 
     # TODO(dwadden) Write a unit test to make sure this does the correct thing.
     def split(self, max_tokens_per_doc):
@@ -182,6 +196,17 @@ class Sentence:
         else:
             self.events = None
 
+    def to_json(self):
+        res = {"sentences": self.text}
+        if self.ner is not None:
+            res["ner"] = [entry.to_json() for entry in self.ner]
+        if self.relations is not None:
+            res["relations"] = [entry.to_json() for entry in self.relations]
+        if self.events is not None:
+            res["events"] = self.events.to_json()
+
+        return res
+
     def __repr__(self):
         the_text = " ".join(self.text)
         the_lengths = np.array([len(x) for x in self.text])
@@ -296,6 +321,9 @@ class NER:
         return (self.span == other.span and
                 self.label == other.label)
 
+    def to_json(self):
+        return list(self.span.span_doc) + [self.label]
+
 
 class Relation:
     def __init__(self, relation, sentence):
@@ -313,6 +341,9 @@ class Relation:
     def __eq__(self, other):
         return (self.pair == other.pair) and (self.label == other.label)
 
+    def to_json(self):
+        return list(self.pair[0].span_doc) + list(self.pair[1].span_doc) + [self.label]
+
 
 class Event:
     def __init__(self, event, sentence):
@@ -325,6 +356,15 @@ class Event:
         for arg in args:
             span = Span(arg[0], arg[1], sentence)
             self.arguments.append(Argument(span, arg[2], self.trigger.label))
+
+    def to_json(self):
+        trig_json = [self.trigger.token.ix_doc, self.trigger.label]
+        arg_json = []
+        for arg in self.arguments:
+            arg_entry = list(arg.span.span_doc) + [arg.role]
+            arg_json.append(arg_entry)
+        res = [trig_json] + arg_json
+        return res
 
     def __repr__(self):
         res = "<"
@@ -355,6 +395,9 @@ class Events:
 
         self.trigger_dict = trigger_dict
         self.argument_dict = argument_dict
+
+    def to_json(self):
+        return [event.to_json() for event in self]
 
     def __len__(self):
         return len(self.event_list)
@@ -407,6 +450,9 @@ class Cluster:
 
         self.members = members
         self.cluster_id = cluster_id
+
+    def to_json(self):
+        return [list(member.span.span_doc) for member in self.members]
 
     def __repr__(self):
         return f"{self.cluster_id}: " + self.members.__repr__()

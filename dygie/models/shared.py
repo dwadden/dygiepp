@@ -41,3 +41,21 @@ def fields_to_batches(d, keys_to_ignore=[]):
     length = lengths[0]
     res = [{k: d[k][i] for k in keys} for i in range(length)]
     return res
+
+
+def batches_to_fields(batches):
+    """
+    The inverse of `fields_to_batches`.
+    """
+    # Make sure all the keys match.
+    first_keys = batches[0].keys()
+    for entry in batches[1:]:
+        if set(entry.keys()) != set(first_keys):
+            raise ValueError("Keys to not match on all entries.")
+
+    res = {k: [] for k in first_keys}
+    for batch in batches:
+        for k, v in batch.items():
+            res[k].append(v)
+
+    return res
