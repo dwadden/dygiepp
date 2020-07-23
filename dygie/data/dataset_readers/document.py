@@ -15,39 +15,53 @@ def get_sentence_of_span(span, sentence_starts, doc_tokens):
     return the_sentence
 
 
+def update_sentences_with_clusters(sentences, clusters):
+    "Add cluster dictionary to each sentence, if there are coreference clusters."
+    for sent in sentences:
+        sent.cluster_dict = {} if clusters is not None else None
+
+    if clusters is None:
+        return sentences
+
+    for clust in clusters:
+        for member in clust.members:
+            sent = member.sentence
+            sent.cluster_dict[member.span.span_sent] = member.cluster_id
+
+    return sentences
+
+
 class Document:
-    def __init__(self, js):
-        self.doc_key = js["doc_key"]
-        self.dataset = js.get("dataset")
+    def __init__(self, doc_key, dataset, sentences, clusters):
+        self.doc_key = doc_key
+        self.dataset = dataset
+        self.sentences = sentences
+        self.clusters = clusters
+
+    @classmethod
+    def from_json(cls, js):
+        doc_key = js["doc_key"]
+        dataset = js.get("dataset")
         entries = fields_to_batches(js, ["doc_key", "clusters"])
         sentence_lengths = [len(entry["sentences"]) for entry in entries]
         sentence_starts = np.cumsum(sentence_lengths)
         sentence_starts = np.roll(sentence_starts, 1)
         sentence_starts[0] = 0
-        self.sentence_starts = sentence_starts
-        self.sentences = [Sentence(entry, sentence_start, sentence_ix, self)
-                          for sentence_ix, (entry, sentence_start)
-                          in enumerate(zip(entries, sentence_starts))]
+        sentence_starts = sentence_starts
+        sentences = [Sentence(entry, sentence_start, sentence_ix)
+                     for sentence_ix, (entry, sentence_start)
+                     in enumerate(zip(entries, sentence_starts))]
         # Store cofereference annotations.
         if "clusters" in js:
-            self.clusters = [Cluster(entry, i, self)
-                             for i, entry in enumerate(js["clusters"])]
+            clusters = [Cluster(entry, i, sentences, sentence_starts)
+                        for i, entry in enumerate(js["clusters"])]
         else:
-            self.clusters = None
-        self._update_sentences_with_clusters()
+            clusters = None
 
-    def _update_sentences_with_clusters(self):
-        "Add cluster dictionary to each sentence, if there are coreference clusters."
-        for sent in self.sentences:
-            sent.cluster_dict = {} if self.clusters is not None else None
+        # Update the sentences with coreference cluster labels.
+        sentences = update_sentences_with_clusters(sentences, clusters)
 
-        if self.clusters is None:
-            return
-
-        for clust in self.clusters:
-            for member in clust.members:
-                sent = member.sentence
-                sent.cluster_dict[member.span.span_sent] = member.cluster_id
+        return cls(doc_key, dataset, sentences, clusters)
 
     def __repr__(self):
         return "\n".join([str(i) + ": " + " ".join(sent.text) for i, sent in enumerate(self.sentences)])
@@ -80,15 +94,14 @@ class Document:
 
 
 class Sentence:
-    def __init__(self, entry, sentence_start, sentence_ix, doc):
+    def __init__(self, entry, sentence_start, sentence_ix):
         self.sentence_start = sentence_start
         self.text = entry["sentences"]
         self.sentence_ix = sentence_ix
-        self.doc = doc
 
         # Store events.
         if "ner" in entry:
-            self.ner = [NER(this_ner, self.text, sentence_start)
+            self.ner = [NER(this_ner, self)
                         for this_ner in entry["ner"]]
             self.ner_dict = {entry.span.span_sent: entry.label for entry in self.ner}
         else:
@@ -97,7 +110,7 @@ class Sentence:
 
         # Store relations.
         if "relations" in entry:
-            self.relations = [Relation(this_relation, self.text, sentence_start) for
+            self.relations = [Relation(this_relation, self) for
                               this_relation in entry["relations"]]
             relation_dict = {}
             for rel in self.relations:
@@ -110,7 +123,7 @@ class Sentence:
 
         # Store events.
         if "events" in entry:
-            self.events = Events(entry["events"], self.text, sentence_start)
+            self.events = Events(entry["events"], self)
         else:
             self.events = None
 
@@ -130,14 +143,32 @@ class Sentence:
 
 
 class Span:
-    def __init__(self, start, end, text, sentence_start):
-        self.start_doc = start
-        self.end_doc = end
-        self.span_doc = (self.start_doc, self.end_doc)
-        self.start_sent = start - sentence_start
-        self.end_sent = end - sentence_start
-        self.span_sent = (self.start_sent, self.end_sent)
-        self.text = text[self.start_sent:self.end_sent + 1]
+    def __init__(self, start_doc, end_doc, sentence):
+        # The `start` and `end` are relative to the document. We convert them to be relative to the
+        # sentence.
+        self.sentence = sentence
+        self.start_sent = start_doc - sentence.sentence_start
+        self.end_sent = end_doc - sentence.sentence_start
+
+    @property
+    def start_doc(self):
+        return self.start_sent + self.sentence.sentence_start
+
+    @property
+    def end_doc(self):
+        return self.end_sent + self.sentence.sentence_start
+
+    @property
+    def span_doc(self):
+        return (self.start_doc, self.end_doc)
+
+    @property
+    def span_sent(self):
+        return (self.start_sent, self.end_sent)
+
+    @property
+    def text(self):
+        return self.sentence.text[self.start_sent:self.end_sent + 1]
 
     def __repr__(self):
         return str((self.start_sent, self.end_sent, self.text))
@@ -145,18 +176,25 @@ class Span:
     def __eq__(self, other):
         return (self.span_doc == other.span_doc and
                 self.span_sent == other.span_sent and
-                self.text == other.text)
+                self.sentence == other.sentence)
 
     def __hash__(self):
-        tup = self.span_doc + self.span_sent + (" ".join(self.text),)
+        tup = self.span_doc + self.span_sent + (" ".join(self.sentence.text),)
         return hash(tup)
 
 
 class Token:
-    def __init__(self, ix, text, sentence_start):
-        self.ix_doc = ix
-        self.ix_sent = ix - sentence_start
-        self.text = text[self.ix_sent]
+    def __init__(self, ix_doc, sentence):
+        self.sentence = sentence
+        self.ix_sent = ix_doc - sentence.sentence_start
+
+    @property
+    def ix_doc(self):
+        return self.ix_sent + self.sentence.sentence_start
+
+    @property
+    def text(self):
+        return self.sentence.text[self.ix_sent]
 
     def __repr__(self):
         return str((self.ix_sent, self.text))
@@ -190,8 +228,8 @@ class Argument:
 
 
 class NER:
-    def __init__(self, ner, text, sentence_start):
-        self.span = Span(ner[0], ner[1], text, sentence_start)
+    def __init__(self, ner, sentence):
+        self.span = Span(ner[0], ner[1], sentence)
         self.label = ner[2]
 
     def __repr__(self):
@@ -203,12 +241,12 @@ class NER:
 
 
 class Relation:
-    def __init__(self, relation, text, sentence_start):
+    def __init__(self, relation, sentence):
         start1, end1 = relation[0], relation[1]
         start2, end2 = relation[2], relation[3]
         label = relation[4]
-        span1 = Span(start1, end1, text, sentence_start)
-        span2 = Span(start2, end2, text, sentence_start)
+        span1 = Span(start1, end1, sentence)
+        span2 = Span(start2, end2, sentence)
         self.pair = (span1, span2)
         self.label = label
 
@@ -220,15 +258,15 @@ class Relation:
 
 
 class Event:
-    def __init__(self, event, text, sentence_start):
+    def __init__(self, event, sentence):
         trig = event[0]
         args = event[1:]
-        trigger_token = Token(trig[0], text, sentence_start)
+        trigger_token = Token(trig[0], sentence)
         self.trigger = Trigger(trigger_token, trig[1])
 
         self.arguments = []
         for arg in args:
-            span = Span(arg[0], arg[1], text, sentence_start)
+            span = Span(arg[0], arg[1], sentence)
             self.arguments.append(Argument(span, arg[2], self.trigger.label))
 
     def __repr__(self):
@@ -241,8 +279,8 @@ class Event:
 
 
 class Events:
-    def __init__(self, events_json, text, sentence_start):
-        self.event_list = [Event(this_event, text, sentence_start) for this_event in events_json]
+    def __init__(self, events_json, sentence):
+        self.event_list = [Event(this_event, sentence) for this_event in events_json]
         self.triggers = set([event.trigger for event in self.event_list])
         self.arguments = set([arg for event in self.event_list for arg in event.arguments])
 
@@ -292,17 +330,18 @@ class Events:
 
 
 class Cluster:
-    def __init__(self, cluster, cluster_id, document):
+    def __init__(self, cluster, cluster_id, sentences, sentence_starts):
         # Make sure the cluster ID is an int.
         if not isinstance(cluster_id, int):
             raise TypeError("Coreference cluster ID's must be ints.")
 
+        n_tokens = sum([len(x) for x in sentences])
+
         members = []
         for entry in cluster:
-            sentence_ix = get_sentence_of_span(entry, document.sentence_starts, document.n_tokens)
-            sentence = document[sentence_ix]
-            span = Span(entry[0], entry[1], sentence.text, sentence.sentence_start)
-            # If we're doing predicted clusters, use the predicted entities.
+            sentence_ix = get_sentence_of_span(entry, sentence_starts, n_tokens)
+            sentence = sentences[sentence_ix]
+            span = Span(entry[0], entry[1], sentence)
             ners = [x for x in sentence.ner if x.span == span]
             assert len(ners) <= 1
             ner = ners[0] if len(ners) == 1 else None
