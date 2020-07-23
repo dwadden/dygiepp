@@ -57,7 +57,15 @@ class CorefResolver(Model):
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(CorefResolver, self).__init__(vocab, regularizer)
 
-        antecedent_input_dim = 3 * span_emb_dim + feature_size
+        # 10 possible distance buckets.
+        self._num_distance_buckets = 10
+        self._spans_per_word = spans_per_word
+        self._max_antecedents = max_antecedents
+
+        self._distance_embedding = Embedding(embedding_dim=self._num_distance_buckets,
+                                             num_embeddings=self._num_distance_buckets)
+
+        antecedent_input_dim = 3 * span_emb_dim + self._num_distance_buckets
         antecedent_feedforward = make_feedforward(input_dim=antecedent_input_dim)
         self._antecedent_feedforward = TimeDistributed(antecedent_feedforward)
 
@@ -68,13 +76,6 @@ class CorefResolver(Model):
         self._mention_pruner = Pruner(feedforward_scorer)
         self._antecedent_scorer = TimeDistributed(torch.nn.Linear(
             antecedent_feedforward.get_output_dim(), 1))
-
-        # 10 possible distance buckets.
-        self._num_distance_buckets = 10
-        self._distance_embedding = Embedding(self._num_distance_buckets, feature_size)
-
-        self._spans_per_word = spans_per_word
-        self._max_antecedents = max_antecedents
 
         self._mention_recall = MentionRecall()
         self._conll_coref_scores = ConllCorefScores()
@@ -100,9 +101,10 @@ class CorefResolver(Model):
             span_ix = output_dict[doc_key]["span_ix"]
             top_span_embeddings = output_dict[doc_key]["top_span_embeddings"]
             for ix, el in enumerate(output_dict[doc_key]["top_span_indices"].view(-1)):
-                row_slice = span_ix[el] / span_embeddings_batched.shape[1] + offsets[doc_key]
-                col_slice = span_ix[el] % span_embeddings_batched.shape[1]
-                new_span_embeddings_batched[row_slice, col_slice] = top_span_embeddings[0, ix]
+                # TODO(dwadden) Why is floor division what we want here? Emailed Ulme about this.
+                row_ix = span_ix[el] // span_embeddings_batched.shape[1] + offsets[doc_key]
+                col_ix = span_ix[el] % span_embeddings_batched.shape[1]
+                new_span_embeddings_batched[row_ix, col_ix] = top_span_embeddings[0, ix]
 
         return new_span_embeddings_batched
 
@@ -159,14 +161,15 @@ class CorefResolver(Model):
                                 span_embeddings_batched,  # TODO(dwadden) add type.
                                 sentence_lengths,
                                 coref_labels_batched: torch.IntTensor = None,
-                                metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
+                                metadata=None) -> Dict[str, torch.Tensor]:
         """
         Run the forward pass. Since we can only have coreferences between spans in the same
         document, we loop over the documents in the batch. This function assumes that the inputs are
         in order, but may go across documents.
         """
         output_docs = {}
-        doc_keys = [entry["doc_key"] for entry in metadata]
+        # TODO(dwadden) Update this when I implement multiple documents per minibatch.
+        doc_keys = [metadata.doc_key] * len(metadata)
         uniq_keys = []
         for entry in doc_keys:
             if entry not in uniq_keys:
@@ -176,7 +179,7 @@ class CorefResolver(Model):
         for key in uniq_keys:
             ix_list = [1 if entry == key else 0 for entry in doc_keys]
             indices[key] = ix_list
-            doc_metadata = [entry for entry in metadata if entry["doc_key"] == key]
+            doc_metadata = metadata
             ix = torch.tensor(ix_list, dtype=torch.bool)
             if sentence_lengths[ix].sum().item() > 1:
                 output_docs[key] = self._compute_representations_doc(
@@ -352,13 +355,13 @@ class CorefResolver(Model):
             evaluation_metadata = self._make_evaluation_metadata(metadata, sentence_lengths)
 
             self._mention_recall(top_spans, evaluation_metadata)
+
+            # TODO(dwadden) Shouldnt need to do the unsqueeze here; figure out what's happening.
             self._conll_coref_scores(
-                top_spans, valid_antecedent_indices, predicted_antecedents, evaluation_metadata)
+                top_spans, valid_antecedent_indices.unsqueeze(0), predicted_antecedents, evaluation_metadata)
 
             output_dict["loss"] = negative_marginal_log_likelihood
 
-        if metadata is not None:
-            output_dict["document"] = [x["sentence"] for x in metadata]
         return output_dict
 
     @overrides
@@ -687,7 +690,7 @@ class CorefResolver(Model):
         cluster_dict = {}
         sentence_offset = shared.cumsum_shifted(sentence_lengths).tolist()
         for entry, sentence_start in zip(metadata, sentence_offset):
-            for span, cluster_id in entry["cluster_dict"].items():
+            for span, cluster_id in entry.cluster_dict.items():
                 span_offset = (span[0] + sentence_start, span[1] + sentence_start)
                 if cluster_id in cluster_dict:
                     cluster_dict[cluster_id].append(span_offset)

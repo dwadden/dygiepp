@@ -74,6 +74,30 @@ template.DyGIE {
 }
 ```
 
+## Removing pretrained BERT embeddings (during debugging, for instance).
+
+Add these lines to the relevant `.jsonnet` file:
+
+```jsonnet
+dataset_reader +: {
+  token_indexers: {
+    tokens: {
+      type: "single_id"
+    }
+  }
+},
+model :+ {
+  embedder: {
+    token_embedders: {
+      tokens: {
+        type: "embedding",
+        embedding_dim: 100,
+      }
+    }
+  }
+}
+```
+
 ## A full example
 
 ```jsonnet
