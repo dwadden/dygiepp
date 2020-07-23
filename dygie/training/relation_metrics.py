@@ -12,7 +12,9 @@ class RelationMetrics(Metric):
     def __init__(self):
         self.reset()
 
-    # TODO(dwadden) Should refactor this to not require decoding.
+    # TODO(dwadden) This requires decoding because the dataset reader gets rid of gold spans wider
+    # than the span width. So, I can't just compare the tensor of gold labels to the tensor of
+    # predicted labels.
     @overrides
     def __call__(self, predicted_relation_list, metadata_list):
         for predicted_relations, metadata in zip(predicted_relation_list, metadata_list):

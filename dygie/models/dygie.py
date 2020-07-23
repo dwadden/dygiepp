@@ -159,7 +159,6 @@ class DyGIE(Model):
         # TODO(dwadden) Get rid of this when I find a better way to do it.
         return x if x is None else x.squeeze(0)
 
-
     @overrides
     def forward(self,
                 text,

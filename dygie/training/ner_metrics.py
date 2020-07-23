@@ -5,6 +5,9 @@ import torch
 
 from allennlp.training.metrics.metric import Metric
 
+# TODO(dwadden) Need to use the decoded predictions so that we catch the gold examples longer than
+# the span boundary.
+
 class NERMetrics(Metric):
     """
     Computes precision, recall, and micro-averaged F1 from a list of predicted and gold labels.
