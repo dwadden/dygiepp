@@ -2,7 +2,7 @@ local template = import "template.libsonnet";
 
 template.DyGIE {
   bert_model: "allenai/scibert_scivocab_cased",
-  cuda_device: 0,
+  cuda_device: -1,
   data_paths: {
     train: "data/scierc/processed_data/json/train.json",
     validation: "data/scierc/processed_data/json/dev.json",

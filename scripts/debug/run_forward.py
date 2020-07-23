@@ -8,11 +8,9 @@ from dygie.data.dataset_readers.dygie import DyGIEReader
 from dygie.data.iterators import batch_iterator
 from dygie.models import dygie
 
-
-
 token_indexers = {"tokens": token_indexers.SingleIdTokenIndexer()}
 reader = DyGIEReader(max_span_width=8, token_indexers=token_indexers)
-data = reader.read("data/scierc/processed_data/json/train-head.json")
+data = reader.read("data/scierc/processed_data/json/train.json")
 vocab = vocabulary.Vocabulary.from_instances(data)
 data.index_with(vocab)
 
@@ -25,13 +23,11 @@ for name in ["type", "embedder", "initializer", "module_initializer"]:
     del model_dict[name]
 
 iterator = batch_iterator.BatchIterator(batch_size=1, dataset=data)
-for batch in iterator:
-    break
 
 model = dygie.DyGIE(vocab=vocab,
                     embedder=embedder,
                     **model_dict)
 
 
-inst = data[0]
-res = model(**batch)
+for batch in iterator:
+    res = model(**batch)
