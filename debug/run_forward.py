@@ -19,7 +19,7 @@ data.index_with(vocab)
 token_embedder = token_embedders.Embedding(num_embeddings=vocab.get_vocab_size("tokens"), embedding_dim=100)
 embedder = text_field_embedders.BasicTextFieldEmbedder({"tokens": token_embedder})
 
-file_dict = json.loads(evaluate_file("training_config/scierc.jsonnet"))
+file_dict = json.loads(evaluate_file("training_config/debug.jsonnet"))
 model_dict = file_dict["model"]
 for name in ["type", "embedder", "initializer", "module_initializer"]:
     del model_dict[name]
