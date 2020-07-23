@@ -1,4 +1,5 @@
 from dygie.models.shared import fields_to_batches
+import copy
 import numpy as np
 
 
@@ -63,6 +64,56 @@ class Document:
 
         return cls(doc_key, dataset, sentences, clusters)
 
+    # TODO(dwadden) Write a unit test to make sure this does the correct thing.
+    def split(self, max_tokens_per_doc):
+        """
+        Greedily split a long document into smaller documents, each shorter than
+        `max_tokens_per_doc`
+        """
+        # TODO(dwadden) Implement splitting when there's coref annotations. This is more difficult
+        # because coreference clusters have to be split across documents.
+        if self.clusters is not None:
+            raise NotImplementedError("Splitting documents with coreference annotations not implemented.")
+
+        # If the document is already short enough, return it as a list with a single item.
+        if self.n_tokens <= max_tokens_per_doc:
+            return [self]
+
+        sentences = copy.deepcopy(self.sentences)
+
+        sentence_groups = []
+        current_group = []
+        group_length = 0
+        sentence_tok_offset = 0
+        sentence_ix_offset = 0
+        for sentence in sentences:
+            # Can't deal with single sentences longer than the limit.
+            if len(sentence) > max_tokens_per_doc:
+                msg = f"Sentence \"{''.join(sentence.text)}\" has more than {max_tokens_per_doc} tokens. Please split this sentence."
+                raise ValueError(msg)
+
+            if group_length + len(sentence) <= max_tokens_per_doc:
+                sentence.sentence_start -= sentence_tok_offset
+                sentence.sentence_ix -= sentence_ix_offset
+                current_group.append(sentence)
+                group_length += len(sentence)
+            else:
+                sentence_groups.append(current_group)
+                sentence_tok_offset = sentence.sentence_start
+                sentence_ix_offset = sentence.sentence_ix
+                sentence.sentence_start -= sentence_tok_offset
+                sentence.sentence_ix -= sentence_ix_offset
+                current_group = [sentence]
+                group_length = len(sentence)
+
+        sentence_groups.append(current_group)
+
+        doc_keys = [f"{self.doc_key}_SPLIT_{i}" for i in range(len(sentence_groups))]
+        res = [self.__class__(doc_key, self.dataset, sentence_group, self.clusters)
+               for doc_key, sentence_group in zip(doc_keys, sentence_groups)]
+
+        return res
+
     def __repr__(self):
         return "\n".join([str(i) + ": " + " ".join(sent.text) for i, sent in enumerate(self.sentences)])
 
@@ -75,6 +126,10 @@ class Document:
     def print_plaintext(self):
         for sent in self:
             print(" ".join(sent.text))
+
+    @property
+    def n_tokens(self):
+        return sum([len(sent) for sent in self.sentences])
 
     def find_cluster(self, entity):
         """
@@ -96,8 +151,8 @@ class Document:
 class Sentence:
     def __init__(self, entry, sentence_start, sentence_ix):
         self.sentence_start = sentence_start
-        self.text = entry["sentences"]
         self.sentence_ix = sentence_ix
+        self.text = entry["sentences"]
 
         # Store events.
         if "ner" in entry:
@@ -147,6 +202,8 @@ class Span:
         # The `start` and `end` are relative to the document. We convert them to be relative to the
         # sentence.
         self.sentence = sentence
+        # Need to store the sentence text to make span objects hashable.
+        self.sentence_text = " ".join(sentence.text)
         self.start_sent = start_doc - sentence.sentence_start
         self.end_sent = end_doc - sentence.sentence_start
 
@@ -179,7 +236,7 @@ class Span:
                 self.sentence == other.sentence)
 
     def __hash__(self):
-        tup = self.span_doc + self.span_sent + (" ".join(self.sentence.text),)
+        tup = self.span_sent + (self.sentence_text,)
         return hash(tup)
 
 
