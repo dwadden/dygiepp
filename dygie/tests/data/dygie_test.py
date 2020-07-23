@@ -87,17 +87,15 @@ class TestDygieReader(unittest.TestCase):
                     assert label.label == -1
 
     def test_vocab_size_correct_scierc(self):
-       vocab = Vocabulary.from_instances(self.dataset.instances)
-       # There are 4 unique NER labels and 6 relation labels in the text fixture doc. For the ner
-       # labels, there is an extra category for the null label. For the relation labels, there
-       # isn't. This is due to the way their respective `Field`s represent labels.
-       assert vocab.get_vocab_size("None__ner_labels") == 5
-       assert vocab.get_vocab_size("None__relation_labels") == 6
-       # For numeric labels, vocab size is 0.
-       assert vocab.get_vocab_size("coref_labels") == 0
+        vocab = Vocabulary.from_instances(self.dataset.instances)
+        # There are 4 unique NER labels and 6 relation labels in the text fixture doc. For the ner
+        # labels, there is an extra category for the null label. For the relation labels, there
+        # isn't. This is due to the way their respective `Field`s represent labels.
+        assert vocab.get_vocab_size("None__ner_labels") == 5
+        assert vocab.get_vocab_size("None__relation_labels") == 6
+        # For numeric labels, vocab size is 0.
+        assert vocab.get_vocab_size("coref_labels") == 0
+
 
 if __name__ == "__main__":
     unittest.main()
-
-
-
