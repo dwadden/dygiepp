@@ -34,12 +34,12 @@ class EventMetrics(Metric):
         for predicted_events, metadata in zip(predicted_events_list, metadata_list):
             # Trigger scoring.
             predicted_triggers = predicted_events["trigger_dict"]
-            gold_triggers = metadata["trigger_dict"]
+            gold_triggers = metadata.events.trigger_dict
             self._score_triggers(predicted_triggers, gold_triggers)
 
             # Argument scoring.
             predicted_arguments = predicted_events["argument_dict"]
-            gold_arguments = metadata["argument_dict"]
+            gold_arguments = metadata.events.argument_dict
             self._score_arguments(
                 predicted_triggers, gold_triggers, predicted_arguments, gold_arguments)
 

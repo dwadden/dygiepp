@@ -62,10 +62,10 @@ class CorefResolver(Model):
         self._spans_per_word = spans_per_word
         self._max_antecedents = max_antecedents
 
-        self._distance_embedding = Embedding(embedding_dim=self._num_distance_buckets,
+        self._distance_embedding = Embedding(embedding_dim=feature_size,
                                              num_embeddings=self._num_distance_buckets)
 
-        antecedent_input_dim = 3 * span_emb_dim + self._num_distance_buckets
+        antecedent_input_dim = 3 * span_emb_dim + feature_size
         antecedent_feedforward = make_feedforward(input_dim=antecedent_input_dim)
         self._antecedent_feedforward = TimeDistributed(antecedent_feedforward)
 

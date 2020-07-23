@@ -190,18 +190,16 @@ class Argument:
 
 
 class NER:
-    def __init__(self, ner, text, sentence_start, flavor=None):
+    def __init__(self, ner, text, sentence_start):
         self.span = Span(ner[0], ner[1], text, sentence_start)
         self.label = ner[2]
-        self.flavor = flavor
 
     def __repr__(self):
         return self.span.__repr__() + ": " + self.label
 
     def __eq__(self, other):
         return (self.span == other.span and
-                self.label == other.label and
-                self.flavor == other.flavor)
+                self.label == other.label)
 
 
 class Relation:
@@ -267,7 +265,7 @@ class Events:
         return len(self.event_list)
 
     def __getitem__(self, i):
-       return self.event_list[i]
+        return self.event_list[i]
 
     def __repr__(self):
         return "\n\n".join([event.__repr__() for event in self.event_list])

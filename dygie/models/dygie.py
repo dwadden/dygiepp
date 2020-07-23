@@ -194,6 +194,8 @@ class DyGIE(Model):
         # Encode using BERT, then debatch.
         # Since the data are batched, we use `num_wrapping_dims=1` to unwrap the document dimension.
         # (1, n_sents, max_sententence_length, embedding_dim)
+
+        # TODO(dwadden) Deal with the case where the input is longer than 512.
         text_embeddings = self._embedder(text, num_wrapping_dims=1)
         # (n_sents, max_n_wordpieces, embedding_dim)
         text_embeddings = self._debatch(text_embeddings)

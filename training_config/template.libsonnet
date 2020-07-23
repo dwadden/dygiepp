@@ -95,7 +95,7 @@
           trigger_spans_per_word: 0.3,
           argument_spans_per_word: 0.8,
           loss_weights: {
-            trigger: 1.0,
+            trigger: 0.2,
             arguments: 1.0,
           },
         },

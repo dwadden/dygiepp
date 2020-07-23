@@ -7,7 +7,6 @@ experiment_name="scierc"
 config_file="./training_config/scierc.jsonnet"
 
 # Train model.
-    allennlp train $config_file \
+allennlp train $config_file \
     --serialization-dir ./models/$experiment_name \
-    --force \
-    --include-package dygie \
+    --include-package dygie

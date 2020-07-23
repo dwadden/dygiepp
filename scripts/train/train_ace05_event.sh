@@ -8,11 +8,7 @@ config_file="./training_config/ace05_event.jsonnet"
 cuda_device=$1
 
 # Train model.
-ie_train_data_path=$data_root/train.json \
-    ie_dev_data_path=$data_root/dev.json \
-    ie_test_data_path=$data_root/test.json \
-    cuda_device=$cuda_device \
-    allennlp train $config_file \
-    --cache-directory $data_root/cached \
+allennlp train $config_file \
     --serialization-dir ./models/$experiment_name \
-    --include-package dygie
+    --include-package dygie \
+    --force
