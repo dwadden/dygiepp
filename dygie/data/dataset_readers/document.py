@@ -77,7 +77,6 @@ class Document:
 
         return res
 
-
     # TODO(dwadden) Write a unit test to make sure this does the correct thing.
     def split(self, max_tokens_per_doc):
         """
@@ -107,11 +106,13 @@ class Document:
                 raise ValueError(msg)
 
             if group_length + len(sentence) <= max_tokens_per_doc:
+                # If we're not at the limit, add it to the current sentence group.
                 sentence.sentence_start -= sentence_tok_offset
                 sentence.sentence_ix -= sentence_ix_offset
                 current_group.append(sentence)
                 group_length += len(sentence)
             else:
+                # Otherwise, start a new sentence group and adjust sentence offsets.
                 sentence_groups.append(current_group)
                 sentence_tok_offset = sentence.sentence_start
                 sentence_ix_offset = sentence.sentence_ix
@@ -120,8 +121,10 @@ class Document:
                 current_group = [sentence]
                 group_length = len(sentence)
 
+        # Add the final sentence group.
         sentence_groups.append(current_group)
 
+        # Create a separate document for each sentence group.
         doc_keys = [f"{self.doc_key}_SPLIT_{i}" for i in range(len(sentence_groups))]
         res = [self.__class__(doc_key, self.dataset, sentence_group, self.clusters)
                for doc_key, sentence_group in zip(doc_keys, sentence_groups)]
