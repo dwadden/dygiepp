@@ -248,7 +248,7 @@ class DyGIE(Model):
             # The `text_embeddings` serve as representations for event triggers.
             output_events = self._events(
                 text_mask, text_embeddings, spans, span_mask, span_embeddings,
-                sentence_lengths, output_ner, trigger_labels, argument_labels,
+                sentence_lengths, trigger_labels, argument_labels,
                 ner_labels, metadata)
 
         if "loss" not in output_coref:

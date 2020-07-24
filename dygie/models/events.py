@@ -24,7 +24,6 @@ class EventExtractor(Model):
     """
     Event extraction for DyGIE.
     """
-    # TODO(dwadden) add option to make `mention_feedforward` be the NER tagger.
 
     def __init__(self,
                  vocab: Vocabulary,
@@ -114,7 +113,6 @@ class EventExtractor(Model):
                 span_mask,
                 span_embeddings,  # TODO(dwadden) add type.
                 sentence_lengths,
-                output_ner,     # Needed if we're using entity beam approach.
                 trigger_labels,
                 argument_labels,
                 ner_labels,
@@ -125,7 +123,6 @@ class EventExtractor(Model):
         """
         self._active_namespaces = {"trigger": f"{metadata.dataset}__trigger_labels",
                                    "argument": f"{metadata.dataset}__argument_labels"}
-        ner_scores = output_ner["ner_scores"]
 
         # Compute trigger scores.
         trigger_scores = self._compute_trigger_scores(
@@ -159,7 +156,7 @@ class EventExtractor(Model):
         gold_labels = None
         (top_arg_embeddings, top_arg_mask,
          top_arg_indices, top_arg_scores, num_arg_spans_kept) = mention_pruner(
-             span_embeddings, span_mask, num_arg_spans_to_keep, ner_scores, gold_labels)
+             span_embeddings, span_mask, num_arg_spans_to_keep, gold_labels)
 
         top_arg_mask = top_arg_mask.unsqueeze(-1)
         top_arg_spans = util.batched_index_select(spans,
@@ -171,16 +168,12 @@ class EventExtractor(Model):
         # or gold if specified.
         if self.training:
             top_trig_labels = trigger_labels.gather(1, top_trig_indices)
-            top_ner_labels = ner_labels.gather(1, top_arg_indices)
         else:
             softmax_triggers = trigger_scores.softmax(dim=-1)
             top_trig_labels = util.batched_index_select(softmax_triggers, top_trig_indices)
-            softmax_ner = ner_scores.softmax(dim=-1)
-            top_ner_labels = util.batched_index_select(softmax_ner, top_arg_indices)
 
         # Make a dict of all arguments that are needed to make trigger / argument pair embeddings.
         trig_arg_emb_dict = dict(top_trig_labels=top_trig_labels,
-                                 top_ner_labels=top_ner_labels,
                                  top_trig_indices=top_trig_indices,
                                  top_arg_spans=top_arg_spans,
                                  text_emb=trigger_embeddings,
@@ -302,7 +295,7 @@ class EventExtractor(Model):
 
     def _compute_trig_arg_embeddings(self,
                                      top_trig_embeddings, top_arg_embeddings,
-                                     top_trig_labels, top_ner_labels, top_trig_indices,
+                                     top_trig_labels, top_trig_indices,
                                      top_arg_spans, text_emb, text_mask):
         """
         Create trigger / argument pair embeddings, consisting of:
@@ -344,39 +337,6 @@ class EventExtractor(Model):
         res = torch.cat([dist_emb, trigger_before_feature, trigger_inside_feature], dim=-1)
 
         return res
-
-    def _get_context(self, span_starts, span_ends, text_emb):
-        """
-        Given span start and end (inclusive), get the context on either side.
-        """
-        # The text_emb are already zero-padded on the right, which is correct.
-        assert span_starts.size() == span_ends.size()
-        batch_size, seq_length, emb_size = text_emb.size()
-        num_candidates = span_starts.size(1)
-        padding = torch.zeros(batch_size, self._context_window, emb_size, device=text_emb.device)
-        # [batch_size, seq_length + 2 x context_window, emb_size]
-        padded_emb = torch.cat([padding, text_emb, padding], dim=1)
-
-        pad_batch = []
-        for batch_ix, (start_ixs, end_ixs) in enumerate(zip(span_starts, span_ends)):
-            pad_entry = []
-            for start_ix, end_ix in zip(start_ixs, end_ixs):
-                # The starts are inclusive, ends are exclusive.
-                left_start = start_ix
-                left_end = start_ix + self._context_window
-                right_start = end_ix + self._context_window + 1
-                right_end = end_ix + 2 * self._context_window + 1
-                left_pad = padded_emb[batch_ix, left_start:left_end]
-                right_pad = padded_emb[batch_ix, right_start:right_end]
-                pad = torch.cat([left_pad, right_pad], dim=0).view(-1).unsqueeze(0)
-                pad_entry.append(pad)
-
-            pad_entry = torch.cat(pad_entry, dim=0).unsqueeze(0)
-            pad_batch.append(pad_entry)
-
-        pad_batch = torch.cat(pad_batch, dim=0)
-
-        return pad_batch
 
     def _compute_argument_scores(self, pairwise_embeddings, top_trig_scores, top_arg_scores,
                                  top_arg_mask, prepend_zeros=True):
