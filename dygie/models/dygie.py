@@ -253,16 +253,12 @@ class DyGIE(Model):
                 sentence_lengths, trigger_labels, argument_labels,
                 ner_labels, metadata)
 
-        if "loss" not in output_coref:
-            output_coref["loss"] = 0
-        if "loss" not in output_relation:
-            output_relation["loss"] = 0
-
-        # TODO(dwadden) just did this part.
-        loss = (self._loss_weights['coref'] * output_coref['loss'] +
-                self._loss_weights['ner'] * output_ner['loss'] +
-                self._loss_weights['relation'] * output_relation['loss'] +
-                self._loss_weights['events'] * output_events['loss'])
+        # Use `get` since there are some cases where the output dict won't have a loss - for
+        # instance, when doing prediction.
+        loss = (self._loss_weights['coref'] * output_coref.get("loss", 0) +
+                self._loss_weights['ner'] * output_ner.get("loss", 0) +
+                self._loss_weights['relation'] * output_relation.get("loss", 0) +
+                self._loss_weights['events'] * output_events.get("loss", 0))
 
         output_dict = dict(coref=output_coref,
                            relation=output_relation,

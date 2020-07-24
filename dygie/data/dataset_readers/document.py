@@ -74,7 +74,8 @@ class Document:
         res.update(fields_json)
         if self.clusters is not None:
             res["clusters"] = [cluster.to_json() for cluster in self.clusters]
-        if self.predicted_clusters is not None:
+        # TODO(dwadden) Don't use hasattr.
+        if hasattr(self, "predicted_clusters"):
             res["predicted_clusters"] = [cluster.to_json() for cluster in self.predicted_clusters]
 
         return res
