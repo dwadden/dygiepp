@@ -10,11 +10,12 @@ We provide details on the data preprocessing for each of the datasets available 
 
 ## Data format
 
-After preprocessing, all the datasets will be formatted like the [SciERC dataset](http://nlp.cs.washington.edu/sciIE/). After downloading the data, you can look at `data/scierc/processed_data/json/train.json` as an example. Each line in the dataset is a JSON representation of a document (technically, the files should be given the `.jsonl` extension since each line is a JSON object, sorry for the confusion).
+After preprocessing, all the datasets will be formatted like the [SciERC dataset](http://nlp.cs.washington.edu/sciIE/). After downloading the data, you can look at `data/scierc/normalized_data/json/train.json` as an example. Each line in the dataset is a JSON representation of a document (technically, the files should be given the `.jsonl` extension since each line is a JSON object, sorry for the confusion).
 
 ### Mandatory fields
 
 - `doc_key`: A unique string identifier for the document.
+- `dataset`: A string identifier for the dataset this document comes from. For more on this field, see the document on [multi-datset training](doc/multi-dataset.md)
 - `sentences`: The senteces in the document, written as a nested list of tokens. For instance,
   ```json
   [
