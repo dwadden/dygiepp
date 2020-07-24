@@ -44,12 +44,12 @@ class Document:
         "Read in from json-loaded dict."
         doc_key = js["doc_key"]
         dataset = js.get("dataset")
-        entries = fields_to_batches(js, ["doc_key", "clusters"])
+        entries = fields_to_batches(js, ["doc_key", "dataset", "clusters"])
         sentence_lengths = [len(entry["sentences"]) for entry in entries]
         sentence_starts = np.cumsum(sentence_lengths)
         sentence_starts = np.roll(sentence_starts, 1)
         sentence_starts[0] = 0
-        sentence_starts = sentence_starts
+        sentence_starts = sentence_starts.tolist()
         sentences = [Sentence(entry, sentence_start, sentence_ix)
                      for sentence_ix, (entry, sentence_start)
                      in enumerate(zip(entries, sentence_starts))]
@@ -209,7 +209,7 @@ class Sentence:
 
     def __repr__(self):
         the_text = " ".join(self.text)
-        the_lengths = np.array([len(x) for x in self.text])
+        the_lengths = [len(x) for x in self.text]
         tok_ixs = ""
         for i, offset in enumerate(the_lengths):
             true_offset = offset if i < 10 else offset - 1
