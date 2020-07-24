@@ -29,7 +29,6 @@ class DyGIEPredictor(Predictor):
         # to load in entire documents as a single instance. I added a
         # `predict_hack` flag to `ie_json.py`. When set to True, it yields full
         # documents instead of sentences.
-        self._dataset_reader._predict_hack = True
         self._decode_fields = dict(coref="clusters",
                                    ner="decoded_ner",
                                    relation="decoded_relations",
@@ -59,33 +58,12 @@ class DyGIEPredictor(Predictor):
         model = self._model
         cuda_device = model._get_prediction_device()
 
-        doc_keys = [entry["metadata"]["doc_key"] for entry in instance]
-        assert len(set(doc_keys)) == 1
-        doc_key = doc_keys[0]
+        dataset = Batch([instance])
+        dataset.index_instances(model.vocab)
+        model_input = util.move_to_device(dataset.as_tensor_dict(), cuda_device)
+        outputs = model.make_output_human_readable(model(**model_input))
 
-        sentence_lengths = [len(entry["metadata"]["sentence"]) for entry in instance]
-        sentence_starts = np.cumsum(sentence_lengths)
-        sentence_starts = np.roll(sentence_starts, 1)
-        sentence_starts[0] = 0
-
-        decoded_instance = {x: [] for x in self._decode_fields}
-
-        # If we're doing coref, predict on the whole document together. This may
-        # run out of memory. Otherwise just predict a sentence at a time.
-        if self._model._loss_weights["coref"]:
-            batches = [Batch(instance)]
-        else:
-            batches = [Batch([sentence]) for sentence in instance]
-
-        for dataset in batches:
-            dataset.index_instances(model.vocab)
-            model_input = util.move_to_device(dataset.as_tensor_dict(), cuda_device)
-            pred = model(**model_input)
-            decoded = model.decode(pred)
-
-            for k, v in self._decode_fields.items():
-                if k in decoded:
-                    decoded_instance[k].extend(decoded[k][v])
+        import ipdb; ipdb.set_trace()
 
         predictions = {}
         predictions["doc_key"] = doc_key

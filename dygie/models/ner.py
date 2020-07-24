@@ -65,6 +65,8 @@ class NERTagger(Model):
 
             self._ner_metrics[namespace] = NERMetrics(self._n_labels[namespace], null_label)
 
+        self._active_namespace = None
+
         self._loss = torch.nn.CrossEntropyLoss(reduction="sum")
 
     @overrides
@@ -82,8 +84,8 @@ class NERTagger(Model):
         # Shape: (Batch size, Number of Spans, Span Embedding Size)
         # span_embeddings
 
-        namespace = f"{metadata.dataset}__ner_labels"
-        scorer = self._ner_scorers[namespace]
+        self._active_namespace = f"{metadata.dataset}__ner_labels"
+        scorer = self._ner_scorers[self._active_namespace]
 
         ner_scores = scorer(span_embeddings)
         # Give large negative scores to masked-out elements.
@@ -102,9 +104,9 @@ class NERTagger(Model):
                        "predicted_ner": predicted_ner}
 
         if ner_labels is not None:
-            metrics = self._ner_metrics[namespace]
+            metrics = self._ner_metrics[self._active_namespace]
             metrics(predicted_ner, ner_labels, span_mask)
-            ner_scores_flat = ner_scores.view(-1, self._n_labels[namespace])
+            ner_scores_flat = ner_scores.view(-1, self._n_labels[self._active_namespace])
             ner_labels_flat = ner_labels.view(-1)
             mask_flat = span_mask.view(-1).bool()
 
@@ -131,7 +133,7 @@ class NERTagger(Model):
                 ner = ner.item()
                 if ner > 0:
                     the_span = (span[0].item(), span[1].item())
-                    the_label = self.vocab.get_token_from_index(ner, "ner_labels")
+                    the_label = self.vocab.get_token_from_index(ner, self._active_namespace)
                     entry_list.append((the_span[0], the_span[1], the_label))
                     entry_dict[the_span] = the_label
             res_list.append(entry_list)

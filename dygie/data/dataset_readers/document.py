@@ -226,14 +226,14 @@ class Sentence:
 
 
 class Span:
-    def __init__(self, start_doc, end_doc, sentence):
+    def __init__(self, start, end, sentence, sentence_offsets=False):
         # The `start` and `end` are relative to the document. We convert them to be relative to the
         # sentence.
         self.sentence = sentence
         # Need to store the sentence text to make span objects hashable.
         self.sentence_text = " ".join(sentence.text)
-        self.start_sent = start_doc - sentence.sentence_start
-        self.end_sent = end_doc - sentence.sentence_start
+        self.start_sent = start if sentence_offsets else start - sentence.sentence_start
+        self.end_sent = end if sentence_offsets else end - sentence.sentence_start
 
     @property
     def start_doc(self):
@@ -269,9 +269,9 @@ class Span:
 
 
 class Token:
-    def __init__(self, ix_doc, sentence):
+    def __init__(self, ix, sentence, sentence_offsets=False):
         self.sentence = sentence
-        self.ix_sent = ix_doc - sentence.sentence_start
+        self.ix_sent = ix if sentence_offsets else ix - sentence.sentence_start
 
     @property
     def ix_doc(self):
@@ -313,8 +313,8 @@ class Argument:
 
 
 class NER:
-    def __init__(self, ner, sentence):
-        self.span = Span(ner[0], ner[1], sentence)
+    def __init__(self, ner, sentence, sentence_offsets=False):
+        self.span = Span(ner[0], ner[1], sentence, sentence_offsets)
         self.label = ner[2]
 
     def __repr__(self):
@@ -329,12 +329,12 @@ class NER:
 
 
 class Relation:
-    def __init__(self, relation, sentence):
+    def __init__(self, relation, sentence, sentence_offsets=False):
         start1, end1 = relation[0], relation[1]
         start2, end2 = relation[2], relation[3]
         label = relation[4]
-        span1 = Span(start1, end1, sentence)
-        span2 = Span(start2, end2, sentence)
+        span1 = Span(start1, end1, sentence, sentence_offsets)
+        span2 = Span(start2, end2, sentence, sentence_offsets)
         self.pair = (span1, span2)
         self.label = label
 
@@ -349,15 +349,15 @@ class Relation:
 
 
 class Event:
-    def __init__(self, event, sentence):
+    def __init__(self, event, sentence, sentence_offsets=False):
         trig = event[0]
         args = event[1:]
-        trigger_token = Token(trig[0], sentence)
+        trigger_token = Token(trig[0], sentence, sentence_offsets)
         self.trigger = Trigger(trigger_token, trig[1])
 
         self.arguments = []
         for arg in args:
-            span = Span(arg[0], arg[1], sentence)
+            span = Span(arg[0], arg[1], sentence, sentence_offsets)
             self.arguments.append(Argument(span, arg[2], self.trigger.label))
 
     def to_json(self):
@@ -379,8 +379,9 @@ class Event:
 
 
 class Events:
-    def __init__(self, events_json, sentence):
-        self.event_list = [Event(this_event, sentence) for this_event in events_json]
+    def __init__(self, events_json, sentence, sentence_offsets=False):
+        self.event_list = [Event(this_event, sentence, sentence_offsets)
+                           for this_event in events_json]
         self.triggers = set([event.trigger for event in self.event_list])
         self.arguments = set([arg for event in self.event_list for arg in event.arguments])
 

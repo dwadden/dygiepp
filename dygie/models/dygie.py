@@ -1,5 +1,6 @@
 import logging
 from typing import Dict, List, Optional, Union
+import copy
 
 import torch
 import torch.nn.functional as F
@@ -17,6 +18,7 @@ from dygie.models.coref import CorefResolver
 from dygie.models.ner import NERTagger
 from dygie.models.relation import RelationExtractor
 from dygie.models.events import EventExtractor
+from dygie.data.dataset_readers import document
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -268,6 +270,8 @@ class DyGIE(Model):
                            events=output_events)
         output_dict['loss'] = loss
 
+        output_dict["metadata"] = metadata
+
         return output_dict
 
     def update_span_embeddings(self, span_embeddings, span_mask, top_span_embeddings,
@@ -303,7 +307,26 @@ class DyGIE(Model):
             which are in turn comprised of a list of (start, end) inclusive spans into the
             original document.
         """
-        # TODO(dwadden) which things are already decoded?
+
+        doc = copy.deepcopy(output_dict["metadata"])
+
+        decoded_ner = self._ner.make_output_human_readable(output_dict["ner"])["decoded_ner"]
+        for decoded_entry, sentence in zip(decoded_ner, doc):
+            predictions = [document.NER(this_ner, sentence, sentence_offsets=True)
+                           for this_ner in decoded_entry]
+            sentence.predicted_ner = predictions
+
+        decoded_relations = self._relation.make_output_human_readable(output_dict["relation"])["decoded_relations"]
+        for decoded_entry, sentence in zip(decoded_relations, doc):
+            predictions = [document.Relation(this_relation, sentence, sentence_offsets=True)
+                           for this_relation in decoded_entry]
+            sentence.predicted_relations = predictions
+
+
+        decoded_coref = self._coref.make_output_human_readable(output_dict["coref"])
+        import ipdb; ipdb.set_trace()
+
+
         res = {}
         if self._loss_weights["coref"] > 0:
             res["coref"] = self._coref.make_output_human_readable(output_dict["coref"])
