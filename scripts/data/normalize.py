@@ -31,7 +31,7 @@ def get_args():
     parser.add_argument("--test_name", type=str, default="test",
                         help="Name of the file with the test split.")
     parser.add_argument("--max_tokens_per_doc", type=int, default=500,
-                        help="Maximum tokens per document. Longer ones will be split.")
+                        help="Maximum tokens per document. Longer ones will be split. If set to 0, do not split documents.")
     parser.add_argument("--dataset", type=str, default=None, help="Dataset name.")
     return parser.parse_args()
 
@@ -60,7 +60,11 @@ class Normalizer:
     def process_entry(self, entry):
         doc = Document.from_json(entry)
         doc.dataset = self.dataset
-        splits = doc.split(self.max_tokens_per_doc)
+        if self.max_tokens_per_doc > 0:
+            splits = doc.split(self.max_tokens_per_doc)
+        else:
+            splits = [doc]
+
         return [split.to_json() for split in splits]
 
 
