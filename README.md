@@ -238,14 +238,15 @@ Run `./scripts/pretrained/get_dygiepp_pretrained.sh` to download all the availab
 
 To make a prediction, you can use `allennlp predict`. For example, to make a prediction with the pretrained scierc model, you can do:
 
-```
+```bash
 allennlp predict pretrained/scierc.tar.gz \
     data/scierc/processed_data/json/test.json \
     --predictor dygie \
     --include-package dygie \
     --use-dataset-reader \
     --output-file predictions/scierc-test.jsonl \
-    --cuda-device 0
+    --cuda-device 0 \
+    --silent
 ```
 
 **Caveat**: Models trained to predict coreference clusters need to make predictions on a whole document at once. This can cause memory issues. To get around this there are two options:

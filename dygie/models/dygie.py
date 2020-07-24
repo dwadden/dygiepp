@@ -310,34 +310,33 @@ class DyGIE(Model):
 
         doc = copy.deepcopy(output_dict["metadata"])
 
-        decoded_ner = self._ner.make_output_human_readable(output_dict["ner"])["decoded_ner"]
-        for decoded_entry, sentence in zip(decoded_ner, doc):
-            predictions = [document.NER(this_ner, sentence, sentence_offsets=True)
-                           for this_ner in decoded_entry]
-            sentence.predicted_ner = predictions
-
-        decoded_relations = self._relation.make_output_human_readable(output_dict["relation"])["decoded_relations"]
-        for decoded_entry, sentence in zip(decoded_relations, doc):
-            predictions = [document.Relation(this_relation, sentence, sentence_offsets=True)
-                           for this_relation in decoded_entry]
-            sentence.predicted_relations = predictions
-
-
-        decoded_coref = self._coref.make_output_human_readable(output_dict["coref"])
-        import ipdb; ipdb.set_trace()
-
-
-        res = {}
         if self._loss_weights["coref"] > 0:
-            res["coref"] = self._coref.make_output_human_readable(output_dict["coref"])
-        if self._loss_weights["ner"] > 0:
-            res["ner"] = self._ner.make_output_human_readable(output_dict["ner"])
-        if self._loss_weights["relation"] > 0:
-            res["relation"] = self._relation.make_output_human_readable(output_dict["relation"])
-        if self._loss_weights["events"] > 0:
-            res["events"] = output_dict["events"]
+            decoded_coref = self._coref.make_output_human_readable(output_dict["coref"])["predicted_clusters"][0]
+            sentences = doc.sentences
+            sentence_starts = [sent.sentence_start for sent in sentences]
+            predicted_clusters = [document.Cluster(entry, i, sentences, sentence_starts)
+                                  for i, entry in enumerate(decoded_coref)]
+            doc.predicted_clusters = predicted_clusters
+            # TODO(dwadden) update the sentences with cluster information.
 
-        return res
+        if self._loss_weights["ner"] > 0:
+            decoded_ner = self._ner.make_output_human_readable(output_dict["ner"])["decoded_ner"]
+            for decoded_entry, sentence in zip(decoded_ner, doc):
+                predictions = [document.NER(this_ner, sentence, sentence_offsets=True)
+                               for this_ner in decoded_entry]
+                sentence.predicted_ner = predictions
+
+        if self._loss_weights["relation"] > 0:
+            decoded_relations = self._relation.make_output_human_readable(output_dict["relation"])["decoded_relations"]
+            for decoded_entry, sentence in zip(decoded_relations, doc):
+                predictions = [document.Relation(this_relation, sentence, sentence_offsets=True)
+                               for this_relation in decoded_entry]
+                sentence.predicted_relations = predictions
+
+        if self._loss_weights["events"] > 0:
+            raise NotImplementedError("Need to do events outputs.")
+
+        return doc
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         """

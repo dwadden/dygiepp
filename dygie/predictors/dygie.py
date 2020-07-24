@@ -25,18 +25,6 @@ class DyGIEPredictor(Predictor):
     def __init__(
             self, model: Model, dataset_reader: DatasetReader) -> None:
         super().__init__(model, dataset_reader)
-        # After the code was finished, I realized that to do prediction we need
-        # to load in entire documents as a single instance. I added a
-        # `predict_hack` flag to `ie_json.py`. When set to True, it yields full
-        # documents instead of sentences.
-        self._decode_fields = dict(coref="clusters",
-                                   ner="decoded_ner",
-                                   relation="decoded_relations",
-                                   events="decoded_events")
-        self._decode_names = dict(coref="predicted_clusters",
-                                  ner="predicted_ner",
-                                  relation="predicted_relations",
-                                  events="predicted_events")
 
     def predict(self, document):
         return self.predict_json({"document": document})
@@ -61,87 +49,9 @@ class DyGIEPredictor(Predictor):
         dataset = Batch([instance])
         dataset.index_instances(model.vocab)
         model_input = util.move_to_device(dataset.as_tensor_dict(), cuda_device)
-        outputs = model.make_output_human_readable(model(**model_input))
+        prediction = model.make_output_human_readable(model(**model_input))
 
-        import ipdb; ipdb.set_trace()
-
-        predictions = {}
-        predictions["doc_key"] = doc_key
-        predictions["sentences"] = [x["metadata"]["sentence"] for x in instance]
-        for k, v in decoded_instance.items():
-            # If we didn't train on this task, don't predict on it.
-            if self._model._loss_weights[k] == 0:
-                continue
-            predictions[self._decode_names[k]] = self._cleanup(
-                k, v, sentence_starts)
-
-        # Include the gold fields corresponding to the predicted fields.
-        for field in ["ner", "relation", "events"]:
-            assert field not in predictions
-            predicted_field = f"predicted_{field}"
-            if f"predicted_{field}" in predictions:
-                values = [inst["metadata"][field] for inst in instance]
-                # If we have data, store it.
-                if any([x != [] for x in values]):
-                    assert len(values) == len(predictions[predicted_field])
-                    predictions[field] = values
-
-        return predictions
-
-    @staticmethod
-    def _check_lengths(d):
-        keys = list(d.keys())
-        # Dict fields that won't have the same length as the # of sentences in the doc.
-        keys_to_remove = ["doc_key", "clusters", "predicted_clusters"]
-        for key in keys_to_remove:
-            if key in keys:
-                keys.remove(key)
-        lengths = [len(d[k]) for k in keys]
-        assert len(set(lengths)) == 1
-
-    def _cleanup(self, k, decoded, sentence_starts):
-        dispatch = {"coref": self._cleanup_coref,
-                    "ner": self._cleanup_ner,
-                    "relation": self._cleanup_relation,
-                    "events": self._cleanup_event}  # TODO(dwadden) make this nicer later if worth it.
-        return dispatch[k](decoded, sentence_starts)
-
-    @staticmethod
-    def _cleanup_coref(decoded, sentence_starts):
-        "Convert from nested list of tuples to nested list of lists."
-        # The coref code assumes batch sizes other than 1. We only have 1.
-        assert len(decoded) == 1
-        decoded = decoded[0]
-        res = []
-        for cluster in decoded:
-            cleaned = [list(x) for x in cluster]  # Convert from tuple to list.
-            res.append(cleaned)
-        return res
-
-    @staticmethod
-    def _cleanup_ner(decoded, sentence_starts):
-        assert len(decoded) == len(sentence_starts)
-        res = []
-        for sentence, sentence_start in zip(decoded, sentence_starts):
-            res_sentence = []
-            for tag in sentence:
-                new_tag = [tag[0] + sentence_start, tag[1] + sentence_start, tag[2]]
-                res_sentence.append(new_tag)
-            res.append(res_sentence)
-        return res
-
-    @staticmethod
-    def _cleanup_relation(decoded, sentence_starts):
-        "Add sentence offsets to relation results."
-        assert len(decoded) == len(sentence_starts)  # Length check.
-        res = []
-        for sentence, sentence_start in zip(decoded, sentence_starts):
-            res_sentence = []
-            for rel in sentence:
-                cleaned = [x + sentence_start for x in rel[:4]] + [rel[4]]
-                res_sentence.append(cleaned)
-            res.append(res_sentence)
-        return res
+        return prediction.to_json()
 
     @staticmethod
     def _cleanup_event(decoded, sentence_starts):

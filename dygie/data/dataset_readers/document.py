@@ -74,6 +74,8 @@ class Document:
         res.update(fields_json)
         if self.clusters is not None:
             res["clusters"] = [cluster.to_json() for cluster in self.clusters]
+        if self.predicted_clusters is not None:
+            res["predicted_clusters"] = [cluster.to_json() for cluster in self.predicted_clusters]
 
         return res
 
@@ -203,10 +205,16 @@ class Sentence:
         res = {"sentences": self.text}
         if self.ner is not None:
             res["ner"] = [entry.to_json() for entry in self.ner]
+        # TODO(dwadden) Don't treat predicted and gold data differently.
+        if hasattr(self, "predicted_ner"):
+            res["predicted_ner"] = [entry.to_json() for entry in self.predicted_ner]
         if self.relations is not None:
             res["relations"] = [entry.to_json() for entry in self.relations]
+        if hasattr(self, "predicted_relations"):
+            res["predicted_relations"] = [entry.to_json() for entry in self.predicted_relations]
         if self.events is not None:
             res["events"] = self.events.to_json()
+        # TODO(dwadden) do predicted events.
 
         return res
 

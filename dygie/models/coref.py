@@ -435,7 +435,7 @@ class CorefResolver(Model):
                 spans_to_cluster_ids[(span_start, span_end)] = predicted_cluster_id
             batch_clusters.append(clusters)
 
-        output_dict["clusters"] = batch_clusters
+        output_dict["predicted_clusters"] = batch_clusters
         return output_dict
 
     @overrides
