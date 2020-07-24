@@ -5,7 +5,6 @@
 experiment_name="ace05-event"
 data_root="./data/ace-event/processed-data/default-settings/json"
 config_file="./training_config/ace05_event.jsonnet"
-cuda_device=$1
 
 # Train model.
 allennlp train $config_file \

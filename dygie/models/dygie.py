@@ -148,8 +148,8 @@ class DyGIE(Model):
                     ["relation_precision", "relation_recall", "relation_f1"]],
             "coref": [f"MEAN__{name}" for name in
                       ["coref_precision", "coref_recall", "coref_f1", "coref_mention_recall"]],
-            "events": [f"MEAN__{name}" for name in
-                       ["trig_class_f1", "arg_class_f1"]]}
+            # TODO(dwadden) Need to fix this to get different metrics for different datasets.
+            "events": ["trig_class_f1", "arg_class_f1"]}
         if target_task not in lookup:
             raise ValueError(f"Invalied value {target_task} has been given as the target task.")
         return lookup[target_task]

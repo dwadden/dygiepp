@@ -11,7 +11,7 @@ from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 from allennlp.modules import TimeDistributed
 from allennlp.modules.token_embedders import Embedding
 
-from dygie.training.event_metrics import EventMetrics, ArgumentStats
+from dygie.training.event_metrics import EventMetrics
 from dygie.models.shared import fields_to_batches
 from dygie.models.entity_beam_pruner import make_pruner
 
@@ -97,8 +97,8 @@ class EventExtractor(Model):
         self._argument_spans_per_word = argument_spans_per_word
 
         # Metrics
+        # TODO(dwadden) Need different metrics for different namespaces.
         self._metrics = EventMetrics()
-        self._argument_stats = ArgumentStats()
 
         self._active_namespaces = {"trigger": None, "argument": None}
 
@@ -218,7 +218,6 @@ class EventExtractor(Model):
             predictions = self.make_output_human_readable(output_dict)["decoded_events"]
             assert len(predictions) == len(metadata)  # Make sure length of predictions is right.
             self._metrics(predictions, metadata)
-            self._argument_stats(predictions)
 
             loss = (self._loss_weights["trigger"] * trigger_loss +
                     self._loss_weights["arguments"] * argument_loss)
@@ -252,10 +251,8 @@ class EventExtractor(Model):
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         f1_metrics = self._metrics.get_metric(reset)
-        argument_stats = self._argument_stats.get_metric(reset)
         res = {}
         res.update(f1_metrics)
-        res.update(argument_stats)
         return res
 
     def _decode_trigger(self, output):

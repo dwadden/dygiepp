@@ -7,7 +7,7 @@
       'ner': '+MEAN__ner_f1',
       'relation': '+MEAN__relation_f1',
       'coref': '+MEAN__coref_f1',
-      'events': '+MEAN__arg_class_f1'
+      'events': '+arg_class_f1'
     },
 
     ////////////////////
