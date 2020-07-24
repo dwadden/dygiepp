@@ -5,6 +5,8 @@ import torch
 
 from allennlp.training.metrics.metric import Metric
 
+from dygie.training.f1 import compute_f1
+
 # TODO(dwadden) Need to use the decoded predictions so that we catch the gold examples longer than
 # the span boundary.
 
@@ -43,9 +45,10 @@ class NERMetrics(Metric):
         recall : float
         f1-measure : float
         """
-        precision = float(self._true_positives) / (float(self._true_positives + self._false_positives) + 1e-13)
-        recall = float(self._true_positives) / (float(self._true_positives + self._false_negatives) + 1e-13)
-        f1_measure = 2. * ((precision * recall) / (precision + recall + 1e-13))
+        predicted = self._true_positives + self._false_positives
+        gold = self._true_positives + self._false_negatives
+        matched = self._true_positives
+        precision, recall, f1_measure = compute_f1(predicted, gold, matched)
 
         # Reset counts if at end of epoch.
         if reset:

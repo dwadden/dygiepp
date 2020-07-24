@@ -129,6 +129,8 @@ class NERTagger(Model):
         for spans, span_mask, predicted_NERs in zip(spans_batch, span_mask_batch, predicted_ner_batch):
             entry_list = []
             entry_dict = {}
+            # TODO(dwadden) I think there is an implicit assumption here that null label is = 0.
+            # Fix this
             for span, ner in zip(spans[span_mask], predicted_NERs[span_mask]):
                 ner = ner.item()
                 if ner > 0:
