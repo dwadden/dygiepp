@@ -72,7 +72,7 @@ class Document:
         sents_json = [sent.to_json() for sent in self]
         fields_json = batches_to_fields(sents_json)
         res.update(fields_json)
-        if self.clusters:
+        if self.clusters is not None:
             res["clusters"] = [cluster.to_json() for cluster in self.clusters]
 
         return res
