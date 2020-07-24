@@ -8,7 +8,7 @@ DyGIE is capable of performing multi-task learning for 4 tasks:
 
 There may be instances where it is desirable to train different tasks on multiple different datasets - for instance, a coreference resolution model trained on OntoNotes could be used to improve NER predictions on the ACE dataset. It may even be useful to train multiple named entity recognition models sharing the same underlying span representations.
 
-Multi-dataset training with DyGIE is implemented as follows. Each line in the [data](doc/data.md) input to the model must have a `dataset` field. We make the following assumptions:
+Multi-dataset training with DyGIE is implemented as follows. Each line in the [data](data.md) input to the model must have a `dataset` field. We make the following assumptions:
 
 - The NER, relation, and event label namespaces for different `dataset`s are _disjoint_. A separate model is trained for each dataset.
 - The coreference labels for different `dataset`s are _shared_. A single coreference resolution model is trained on all datasets.
