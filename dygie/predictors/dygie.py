@@ -38,6 +38,7 @@ class DyGIEPredictor(Predictor):
         # Need to override to tell Python how to deal with Numpy ints.
         return json.dumps(outputs, default=int) + "\n"
 
+    # TODO(dwadden) Can this be implemented in `forward_on_instance`  instead?
     @overrides
     def predict_instance(self, instance):
         """
