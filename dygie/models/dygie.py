@@ -307,6 +307,7 @@ class DyGIE(Model):
         doc = copy.deepcopy(output_dict["metadata"])
 
         if self._loss_weights["coref"] > 0:
+            # TODO(dwadden) Will need to get rid of the [0] when batch training is enabled.
             decoded_coref = self._coref.make_output_human_readable(output_dict["coref"])["predicted_clusters"][0]
             sentences = doc.sentences
             sentence_starts = [sent.sentence_start for sent in sentences]
@@ -330,7 +331,26 @@ class DyGIE(Model):
                 sentence.predicted_relations = predictions
 
         if self._loss_weights["events"] > 0:
-            raise NotImplementedError("Need to do events outputs.")
+            # TODO(dwadden) Not sure this works.
+            decoded_events = self._events.make_output_human_readable(output_dict["events"])["decoded_events"]
+            for decoded_sent, sentence in zip(decoded_events, doc):
+                trigger_dict = decoded_sent["trigger_dict"]
+                argument_dict = decoded_sent["argument_dict_with_scores"]
+                events_json = []
+                for trigger_ix, trigger_label in trigger_dict.items():
+                    this_event = []
+                    this_event.append([trigger_ix + sentence.sentence_start, trigger_label])
+                    event_arguments = {k: v for k, v in argument_dict.items() if k[0] == trigger_ix}
+                    this_event_args = []
+                    for k, v in event_arguments.items():
+                        entry = [x + sentence.sentence_start for x in k[1]] + list(v)
+                        this_event_args.append(entry)
+                    this_event_args = sorted(this_event_args, key=lambda entry: entry[0])
+                    this_event.extend(this_event_args)
+                    events_json.append(this_event)
+
+                events = document.Events(events_json, sentence, sentence_offsets=True)
+                sentence.events = events
 
         return doc
 
