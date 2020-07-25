@@ -215,7 +215,8 @@ class Sentence:
             res["predicted_relations"] = [entry.to_json() for entry in self.predicted_relations]
         if self.events is not None:
             res["events"] = self.events.to_json()
-        # TODO(dwadden) do predicted events.
+        if hasattr(self, "predicted_events"):
+            res["predicted_events"] = self.predicted_events.to_json()
 
         return res
 

@@ -324,7 +324,7 @@ class DyGIE(Model):
                 sentence.predicted_ner = predictions
 
         if self._loss_weights["relation"] > 0:
-            decoded_relations = self._relation.make_output_human_readable(output_dict["relation"])["decoded_relations"]
+            decoded_relations = output_dict["relation"]["decoded_relations"]
             for decoded_entry, sentence in zip(decoded_relations, doc):
                 predictions = [document.Relation(this_relation, sentence, sentence_offsets=True)
                                for this_relation in decoded_entry]
@@ -332,25 +332,25 @@ class DyGIE(Model):
 
         if self._loss_weights["events"] > 0:
             # TODO(dwadden) Not sure this works.
-            decoded_events = self._events.make_output_human_readable(output_dict["events"])["decoded_events"]
+            decoded_events = output_dict["events"]["decoded_events"]
             for decoded_sent, sentence in zip(decoded_events, doc):
                 trigger_dict = decoded_sent["trigger_dict"]
-                argument_dict = decoded_sent["argument_dict_with_scores"]
+                argument_dict = decoded_sent["argument_dict"]
                 events_json = []
                 for trigger_ix, trigger_label in trigger_dict.items():
                     this_event = []
-                    this_event.append([trigger_ix + sentence.sentence_start, trigger_label])
+                    this_event.append([trigger_ix, trigger_label])
                     event_arguments = {k: v for k, v in argument_dict.items() if k[0] == trigger_ix}
                     this_event_args = []
                     for k, v in event_arguments.items():
-                        entry = [x + sentence.sentence_start for x in k[1]] + list(v)
+                        entry = list(k[1]) + [v]
                         this_event_args.append(entry)
                     this_event_args = sorted(this_event_args, key=lambda entry: entry[0])
                     this_event.extend(this_event_args)
                     events_json.append(this_event)
 
                 events = document.Events(events_json, sentence, sentence_offsets=True)
-                sentence.events = events
+                sentence.predicted_events = events
 
         return doc
 
