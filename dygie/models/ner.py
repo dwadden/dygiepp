@@ -2,6 +2,7 @@ import logging
 from typing import Any, Dict, List, Optional, Callable
 
 import torch
+from torch.nn import functional as F
 from overrides import overrides
 
 from allennlp.data import Vocabulary
@@ -10,6 +11,7 @@ from allennlp.modules import TimeDistributed
 from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
 
 from dygie.training.ner_metrics import NERMetrics
+from dygie.data.dataset_readers import document
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -98,10 +100,10 @@ class NERTagger(Model):
 
         _, predicted_ner = ner_scores.max(2)
 
-        output_dict = {"spans": spans,
-                       "span_mask": span_mask,
-                       "ner_scores": ner_scores,
-                       "predicted_ner": predicted_ner}
+        predictions = self.predict(ner_scores.detach().cpu(),
+                                   spans.detach().cpu(),
+                                   span_mask.detach().cpu(),
+                                   metadata)
 
         if ner_labels is not None:
             metrics = self._ner_metrics[self._active_namespace]
@@ -111,39 +113,39 @@ class NERTagger(Model):
             mask_flat = span_mask.view(-1).bool()
 
             loss = self._loss(ner_scores_flat[mask_flat], ner_labels_flat[mask_flat])
-            output_dict["loss"] = loss
 
-        if metadata is not None:
-            output_dict["document"] = [x.text for x in metadata]
+            output_dict = {"loss": loss,
+                           "predictions": predictions}
 
         return output_dict
 
-    @overrides
-    def make_output_human_readable(self, output_dict: Dict[str, torch.Tensor]):
-        predicted_ner_batch = output_dict["predicted_ner"].detach().cpu()
-        spans_batch = output_dict["spans"].detach().cpu()
-        span_mask_batch = output_dict["span_mask"].detach().cpu().bool()
+    def predict(self, ner_scores, spans, span_mask, metadata):
+        # TODO(dwadden) Make sure the iteration works in documents with a single sentence.
+        # Zipping up and iterating iterates over the zeroth dimension of each tensor; this
+        # corresponds to iterating over sentences.
+        predictions = []
+        zipped = zip(ner_scores, spans, span_mask, metadata)
+        for ner_scores_sent, spans_sent, span_mask_sent, sentence in zipped:
+            predicted_scores_raw, predicted_labels = [
+                x.detach().cpu() for x in ner_scores_sent.max(dim=1)]
+            softmax_scores = F.softmax(ner_scores_sent, dim=1)
+            predicted_scores_softmax, _ = [x.detach().cpu() for x in softmax_scores.max(dim=1)]
+            ix = (predicted_labels != 0) & span_mask_sent.bool()
 
-        res_list = []
-        res_dict = []
-        for spans, span_mask, predicted_NERs in zip(spans_batch, span_mask_batch, predicted_ner_batch):
-            entry_list = []
-            entry_dict = {}
-            # TODO(dwadden) I think there is an implicit assumption here that null label is = 0.
-            # Fix this
-            for span, ner in zip(spans[span_mask], predicted_NERs[span_mask]):
-                ner = ner.item()
-                if ner > 0:
-                    the_span = (span[0].item(), span[1].item())
-                    the_label = self.vocab.get_token_from_index(ner, self._active_namespace)
-                    entry_list.append((the_span[0], the_span[1], the_label))
-                    entry_dict[the_span] = the_label
-            res_list.append(entry_list)
-            res_dict.append(entry_dict)
+            predictions_sent = []
+            zip_pred = zip(predicted_labels[ix], predicted_scores_raw[ix],
+                           predicted_scores_softmax[ix], spans_sent[ix])
+            for label, label_score_raw, label_score_softmax, label_span in zip_pred:
+                label_str = self.vocab.get_token_from_index(label.item(), self._active_namespace)
+                span_start, span_end = label_span.tolist()
+                ner = [span_start, span_end, label_str, label_score_raw.item(),
+                       label_score_softmax.item()]
+                prediction = document.PredictedNER(ner, sentence, sentence_offsets=True)
+                predictions_sent.append(prediction)
 
-        output_dict["decoded_ner"] = res_list
-        output_dict["decoded_ner_dict"] = res_dict
-        return output_dict
+            predictions.append(predictions_sent)
+
+        return predictions
 
     # TODO(dwadden) This code is repeated elsewhere. Refactor.
     @overrides

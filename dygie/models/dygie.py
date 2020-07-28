@@ -317,10 +317,7 @@ class DyGIE(Model):
             # TODO(dwadden) update the sentences with cluster information.
 
         if self._loss_weights["ner"] > 0:
-            decoded_ner = self._ner.make_output_human_readable(output_dict["ner"])["decoded_ner"]
-            for decoded_entry, sentence in zip(decoded_ner, doc):
-                predictions = [document.NER(this_ner, sentence, sentence_offsets=True)
-                               for this_ner in decoded_entry]
+            for predictions, sentence in zip(output_dict["ner"]["predictions"], doc):
                 sentence.predicted_ner = predictions
 
         if self._loss_weights["relation"] > 0:

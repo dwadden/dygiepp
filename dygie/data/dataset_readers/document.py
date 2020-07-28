@@ -338,6 +338,20 @@ class NER:
         return list(self.span.span_doc) + [self.label]
 
 
+class PredictedNER:
+    def __init__(self, ner, sentence, sentence_offsets=False):
+        self.span = Span(ner[0], ner[1], sentence, sentence_offsets)
+        self.label = ner[2]
+        self.raw_score = ner[3]
+        self.softmax_score = ner[4]
+
+    def __repr__(self):
+        return f"{self.span.__repr__()}: {self.label} with confidence {self.softmax_score}"
+
+    def to_json(self):
+        return list(self.span.span_doc) + [self.label, self.raw_score, self.softmax_score]
+
+
 class Relation:
     def __init__(self, relation, sentence, sentence_offsets=False):
         start1, end1 = relation[0], relation[1]
