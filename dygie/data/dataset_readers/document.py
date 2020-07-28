@@ -3,6 +3,10 @@ import copy
 import numpy as np
 
 
+def format_float(x):
+    return round(x, 4)
+
+
 def get_sentence_of_span(span, sentence_starts, doc_tokens):
     """
     Return the index of the sentence that the span is part of.
@@ -183,6 +187,11 @@ class Sentence:
             self.ner = None
             self.ner_dict = None
 
+        # Predicted ner.
+        if "predicted_ner" in entry:
+            self.predicted_ner = [PredictedNER(this_ner, self)
+                                  for this_ner in entry["predicted_ner"]]
+
         # Store relations.
         if "relations" in entry:
             self.relations = [Relation(this_relation, self) for
@@ -346,10 +355,11 @@ class PredictedNER:
         self.softmax_score = ner[4]
 
     def __repr__(self):
-        return f"{self.span.__repr__()}: {self.label} with confidence {self.softmax_score}"
+        return f"{self.span.__repr__()}: {self.label} with confidence {self.softmax_score:0.4f}"
 
     def to_json(self):
-        return list(self.span.span_doc) + [self.label, self.raw_score, self.softmax_score]
+        return (list(self.span.span_doc) +
+                [self.label, format_float(self.raw_score), format_float(self.softmax_score)])
 
 
 class Relation:
