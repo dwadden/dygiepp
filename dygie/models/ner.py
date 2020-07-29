@@ -104,6 +104,7 @@ class NERTagger(Model):
                                    spans.detach().cpu(),
                                    span_mask.detach().cpu(),
                                    metadata)
+        output_dict = {"predictions": predictions}
 
         if ner_labels is not None:
             metrics = self._ner_metrics[self._active_namespace]
@@ -114,8 +115,7 @@ class NERTagger(Model):
 
             loss = self._loss(ner_scores_flat[mask_flat], ner_labels_flat[mask_flat])
 
-            output_dict = {"loss": loss,
-                           "predictions": predictions}
+            output_dict["loss"] = loss
 
         return output_dict
 
