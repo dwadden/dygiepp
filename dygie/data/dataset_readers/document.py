@@ -337,7 +337,7 @@ class NER:
         self.label = ner[2]
 
     def __repr__(self):
-        return self.span.__repr__() + ": " + self.label
+        return f"{self.span.__repr__()}: {self.label}"
 
     def __eq__(self, other):
         return (self.span == other.span and
@@ -349,6 +349,7 @@ class NER:
 
 class PredictedNER:
     def __init__(self, ner, sentence, sentence_offsets=False):
+        "The input should be a list: [span_start, span_end, label, raw_score, softmax_score]."
         self.span = Span(ner[0], ner[1], sentence, sentence_offsets)
         self.label = ner[2]
         self.raw_score = ner[3]
@@ -373,7 +374,7 @@ class Relation:
         self.label = label
 
     def __repr__(self):
-        return self.pair[0].__repr__() + ", " + self.pair[1].__repr__() + ": " + self.label
+        return f"{self.pair[0].__repr__()}, {self.pair[1].__repr__()}: {self.label}"
 
     def __eq__(self, other):
         return (self.pair == other.pair) and (self.label == other.label)
