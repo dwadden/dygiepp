@@ -78,38 +78,38 @@ class RelationExtractor(Model):
         """
         self._active_namespace = f"{metadata.dataset}__relation_labels"
 
-        output_dict = self.compute_representations(
-            spans, span_mask, span_embeddings, sentence_lengths, relation_labels, metadata)
-
-        output_dict = self.predict_labels(relation_labels, output_dict, metadata)
-
-        return output_dict
-
-    def compute_representations(self,  # type: ignore
-                                spans: torch.IntTensor,
-                                span_mask,
-                                span_embeddings,  # TODO(dwadden) add type.
-                                sentence_lengths,
-                                relation_labels: torch.IntTensor = None,
-                                metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
-
         (top_span_embeddings, top_span_mention_scores,
          num_spans_to_keep, top_span_mask,
          top_span_indices, top_spans) = self._prune_spans(
              spans, span_mask, span_embeddings, sentence_lengths)
 
-        relation_scores = self.get_relation_scores(top_span_embeddings,
-                                                   top_span_mention_scores)
+        relation_scores = self._compute_relation_scores(
+            self._compute_span_pair_embeddings(top_span_embeddings), top_span_mention_scores)
 
-        output_dict = {"top_spans": top_spans,
-                       "top_span_embeddings": top_span_embeddings,
-                       "top_span_mention_scores": top_span_mention_scores,
-                       "relation_scores": relation_scores,
-                       "num_spans_to_keep": num_spans_to_keep,
-                       "top_span_indices": top_span_indices,
-                       "top_span_mask": top_span_mask,
-                       "loss": 0}
+        # Subtract 1 so that the "null" relation corresponds to -1.
+        _, predicted_relations = relation_scores.max(-1)
+        predicted_relations -= 1
 
+        output_dict = {}
+        output_dict["predicted_relations"] = predicted_relations
+        decoded_relations_list, decoded_relations_dict = self.make_output_human_readable(
+            top_spans, predicted_relations, num_spans_to_keep)
+        output_dict["decoded_relations"] = decoded_relations_list
+
+        # Evaluate loss and F1 if labels were provided.
+        if relation_labels is not None:
+            # Compute cross-entropy loss.
+            gold_relations = self._get_pruned_gold_relations(
+                relation_labels, top_span_indices, top_span_mask)
+
+            cross_entropy = self._get_cross_entropy_loss(relation_scores, gold_relations)
+
+            # Compute F1.
+            assert len(decoded_relations_dict) == len(metadata)  # Make sure length of predictions is right.
+            relation_metrics = self._relation_metrics[self._active_namespace]
+            relation_metrics(decoded_relations_dict, metadata)
+
+            output_dict["loss"] = cross_entropy
         return output_dict
 
     def _prune_spans(self, spans, span_mask, span_embeddings, sentence_lengths):
@@ -133,45 +133,16 @@ class RelationExtractor(Model):
 
         return top_span_embeddings, top_span_mention_scores, num_spans_to_keep, top_span_mask, top_span_indices, top_spans
 
-    def predict_labels(self, relation_labels, output_dict, metadata):
-        relation_scores = output_dict["relation_scores"]
-
-        # Subtract 1 so that the "null" relation corresponds to -1.
-        _, predicted_relations = relation_scores.max(-1)
-        predicted_relations -= 1
-
-        output_dict["predicted_relations"] = predicted_relations
-        output_dict = self.make_output_human_readable(output_dict)
-
-        # Evaluate loss and F1 if labels were provided.
-        if relation_labels is not None:
-            # Compute cross-entropy loss.
-            gold_relations = self._get_pruned_gold_relations(
-                relation_labels, output_dict["top_span_indices"], output_dict["top_span_mask"])
-
-            cross_entropy = self._get_cross_entropy_loss(relation_scores, gold_relations)
-
-            # Compute F1.
-            predictions = output_dict["decoded_relations_dict"]
-            assert len(predictions) == len(metadata)  # Make sure length of predictions is right.
-            relation_metrics = self._relation_metrics[self._active_namespace]
-
-            # TODO(dwadden) I'm here.
-            relation_metrics(predictions, metadata)
-
-            output_dict["loss"] = cross_entropy
-        return output_dict
-
     @overrides
-    def make_output_human_readable(self, output_dict):
+    def make_output_human_readable(self, top_spans, predicted_relations, num_spans_to_keep):
         """
         Take the output and convert it into a list of dicts. Each entry is a sentence. Each key is a
         pair of span indices for that sentence, and each value is the relation label on that span
         pair.
         """
-        top_spans_batch = output_dict["top_spans"].detach().cpu()
-        predicted_relations_batch = output_dict["predicted_relations"].detach().cpu()
-        num_spans_to_keep_batch = output_dict["num_spans_to_keep"].detach().cpu()
+        top_spans_batch = top_spans.detach().cpu()
+        predicted_relations_batch = predicted_relations.detach().cpu()
+        num_spans_to_keep_batch = num_spans_to_keep.detach().cpu()
         res_dict = []
         res_list = []
 
@@ -183,9 +154,7 @@ class RelationExtractor(Model):
             res_dict.append(entry_dict)
             res_list.append(entry_list)
 
-        output_dict["decoded_relations_dict"] = res_dict
-        output_dict["decoded_relations"] = res_list
-        return output_dict
+        return res_list, res_dict
 
     # TODO(dwadden) This code is repeated elsewhere. Refactor.
     @overrides
@@ -249,10 +218,6 @@ class RelationExtractor(Model):
         pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
 
         return pair_embeddings
-
-    def get_relation_scores(self, top_span_embeddings, top_span_mention_scores):
-        return self._compute_relation_scores(self._compute_span_pair_embeddings(top_span_embeddings),
-                                             top_span_mention_scores)
 
     def _compute_relation_scores(self, pairwise_embeddings, top_span_mention_scores):
         relation_feedforward = self._relation_feedforwards[self._active_namespace]
