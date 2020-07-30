@@ -141,6 +141,7 @@ class RelationExtractor(Model):
         predicted_relations -= 1
 
         output_dict["predicted_relations"] = predicted_relations
+        output_dict = self.make_output_human_readable(output_dict)
 
         # Evaluate loss and F1 if labels were provided.
         if relation_labels is not None:
@@ -151,7 +152,7 @@ class RelationExtractor(Model):
             cross_entropy = self._get_cross_entropy_loss(relation_scores, gold_relations)
 
             # Compute F1.
-            predictions = self.make_output_human_readable(output_dict)["decoded_relations_dict"]
+            predictions = output_dict["decoded_relations_dict"]
             assert len(predictions) == len(metadata)  # Make sure length of predictions is right.
             relation_metrics = self._relation_metrics[self._active_namespace]
 
