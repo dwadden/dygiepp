@@ -13,6 +13,7 @@ from allennlp.modules import TimeDistributed
 
 from dygie.training.relation_metrics import RelationMetrics
 from dygie.models.entity_beam_pruner import Pruner
+from dygie.data.dataset_readers import document
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -86,15 +87,12 @@ class RelationExtractor(Model):
         relation_scores = self._compute_relation_scores(
             self._compute_span_pair_embeddings(top_span_embeddings), top_span_mention_scores)
 
-        # Subtract 1 so that the "null" relation corresponds to -1.
-        _, predicted_relations = relation_scores.max(-1)
-        predicted_relations -= 1
+        prediction_dict, predictions = self.predict(top_spans.detach().cpu(),
+                                                    relation_scores.detach().cpu(),
+                                                    num_spans_to_keep.detach().cpu(),
+                                                    metadata)
 
-        output_dict = {}
-        output_dict["predicted_relations"] = predicted_relations
-        decoded_relations_list, decoded_relations_dict = self.make_output_human_readable(
-            top_spans, predicted_relations, num_spans_to_keep)
-        output_dict["decoded_relations"] = decoded_relations_list
+        output_dict = {"predictions": predictions}
 
         # Evaluate loss and F1 if labels were provided.
         if relation_labels is not None:
@@ -105,9 +103,9 @@ class RelationExtractor(Model):
             cross_entropy = self._get_cross_entropy_loss(relation_scores, gold_relations)
 
             # Compute F1.
-            assert len(decoded_relations_dict) == len(metadata)  # Make sure length of predictions is right.
+            assert len(prediction_dict) == len(metadata)  # Make sure length of predictions is right.
             relation_metrics = self._relation_metrics[self._active_namespace]
-            relation_metrics(decoded_relations_dict, metadata)
+            relation_metrics(prediction_dict, metadata)
 
             output_dict["loss"] = cross_entropy
         return output_dict
@@ -132,6 +130,22 @@ class RelationExtractor(Model):
                                               flat_top_span_indices)
 
         return top_span_embeddings, top_span_mention_scores, num_spans_to_keep, top_span_mask, top_span_indices, top_spans
+
+    def predict(self, top_spans, relation_scores, num_spans_to_keep, metadata):
+        preds_dict = []
+        predictions = []
+        zipped = zip(top_spans, relation_scores, num_spans_to_keep, metadata)
+
+        for top_spans_sent, relation_scores_sent, num_spans_sent, sentence in zipped:
+            pred_dict_sent, predictions_sent = self._decode_sentence(
+                top_spans_sent, relation_scores_sent, num_spans_sent, sentence)
+            preds_dict.append(pred_dict_sent)
+            predictions.append(predictions_sent)
+
+        return preds_dict, predictions
+
+
+
 
     @overrides
     def make_output_human_readable(self, top_spans, predicted_relations, num_spans_to_keep):
@@ -177,26 +191,39 @@ class RelationExtractor(Model):
 
         return res
 
-    def _decode_sentence(self, top_spans, predicted_relations, num_spans_to_keep):
+    def _decode_sentence(self, top_spans, relation_scores, num_spans_to_keep, sentence):
         # TODO(dwadden) speed this up?
         # Throw out all predictions that shouldn't be kept.
         keep = num_spans_to_keep.item()
         top_spans = [tuple(x) for x in top_spans.tolist()]
 
         # Iterate over all span pairs and labels. Record the span if the label isn't null.
+        predicted_scores_raw, predicted_labels = relation_scores.max(dim=-1)
+        softmax_scores = F.softmax(relation_scores, dim=-1)
+        predicted_scores_softmax, _ = softmax_scores.max(dim=-1)
+        predicted_labels -= 1  # Subtract 1 so that null labels get -1.
+
+        keep_mask = torch.zeros(len(top_spans))
+        keep_mask[:keep] = 1
+        keep_mask = keep_mask.bool()
+
+        ix = (predicted_labels >= 0) & keep_mask
+
         res_dict = {}
-        res_list = []
-        for i, j in itertools.product(range(keep), range(keep)):
+        predictions = []
+        for i, j in ix.nonzero():
             span_1 = top_spans[i]
             span_2 = top_spans[j]
-            label = predicted_relations[i, j].item()
-            if label >= 0:
-                label_name = self.vocab.get_token_from_index(label, namespace=self._active_namespace)
-                res_dict[(span_1, span_2)] = label_name
-                list_entry = (span_1[0], span_1[1], span_2[0], span_2[1], label_name)
-                res_list.append(list_entry)
+            label = predicted_labels[i, j].item()
+            raw_score = predicted_scores_raw[i, j].item()
+            softmax_score = predicted_scores_softmax[i, j].item()
 
-        return res_dict, res_list
+            label_name = self.vocab.get_token_from_index(label, namespace=self._active_namespace)
+            res_dict[(span_1, span_2)] = label_name
+            list_entry = (span_1[0], span_1[1], span_2[0], span_2[1], label_name, raw_score, softmax_score)
+            predictions.append(document.PredictedRelation(list_entry, sentence, sentence_offsets=True))
+
+        return res_dict, predictions
 
     @staticmethod
     def _compute_span_pair_embeddings(top_span_embeddings: torch.FloatTensor):

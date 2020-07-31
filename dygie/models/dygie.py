@@ -321,10 +321,7 @@ class DyGIE(Model):
                 sentence.predicted_ner = predictions
 
         if self._loss_weights["relation"] > 0:
-            decoded_relations = output_dict["relation"]["decoded_relations"]
-            for decoded_entry, sentence in zip(decoded_relations, doc):
-                predictions = [document.Relation(this_relation, sentence, sentence_offsets=True)
-                               for this_relation in decoded_entry]
+            for predictions, sentence in zip(output_dict["relation"]["predictions"], doc):
                 sentence.predicted_relations = predictions
 
         if self._loss_weights["events"] > 0:

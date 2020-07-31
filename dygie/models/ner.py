@@ -126,10 +126,9 @@ class NERTagger(Model):
         predictions = []
         zipped = zip(ner_scores, spans, span_mask, metadata)
         for ner_scores_sent, spans_sent, span_mask_sent, sentence in zipped:
-            predicted_scores_raw, predicted_labels = [
-                x.detach().cpu() for x in ner_scores_sent.max(dim=1)]
+            predicted_scores_raw, predicted_labels = ner_scores_sent.max(dim=1)
             softmax_scores = F.softmax(ner_scores_sent, dim=1)
-            predicted_scores_softmax, _ = [x.detach().cpu() for x in softmax_scores.max(dim=1)]
+            predicted_scores_softmax, _ = softmax_scores.max(dim=1)
             ix = (predicted_labels != 0) & span_mask_sent.bool()
 
             predictions_sent = []

@@ -205,6 +205,11 @@ class Sentence:
             self.relations = None
             self.relation_dict = None
 
+        # Predicted relations.
+        if "predicted_relations" in entry:
+            self.predicted_relations = [PredictedRelation(this_relation, self) for
+                                        this_relation in entry["predicted_relations"]]
+
         # Store events.
         if "events" in entry:
             self.events = Events(entry["events"], self)
@@ -381,6 +386,29 @@ class Relation:
 
     def to_json(self):
         return list(self.pair[0].span_doc) + list(self.pair[1].span_doc) + [self.label]
+
+
+class PredictedRelation:
+    def __init__(self, relation, sentence, sentence_offsets=False):
+        "Input format: [start_1, end_1, start_2, end_2, label, raw_score, softmax_score]."
+        # TODO(dwadden) Refactor this to share code with `Relation` class.
+        start1, end1 = relation[0], relation[1]
+        start2, end2 = relation[2], relation[3]
+        label = relation[4]
+        span1 = Span(start1, end1, sentence, sentence_offsets)
+        span2 = Span(start2, end2, sentence, sentence_offsets)
+        self.pair = (span1, span2)
+        self.label = label
+        self.raw_score = relation[5]
+        self.softmax_score = relation[6]
+
+    def __repr__(self):
+        return (f"{self.pair[0].__repr__()}, {self.pair[1].__repr__()}: {self.label} "
+                f"with confidence {self.softmax_score:0.4f}")
+
+    def to_json(self):
+        return (list(self.pair[0].span_doc) + list(self.pair[1].span_doc) +
+                [self.label, format_float(self.raw_score), format_float(self.softmax_score)])
 
 
 class Event:
