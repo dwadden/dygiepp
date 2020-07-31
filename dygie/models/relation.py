@@ -137,63 +137,14 @@ class RelationExtractor(Model):
         zipped = zip(top_spans, relation_scores, num_spans_to_keep, metadata)
 
         for top_spans_sent, relation_scores_sent, num_spans_sent, sentence in zipped:
-            pred_dict_sent, predictions_sent = self._decode_sentence(
+            pred_dict_sent, predictions_sent = self._predict_sentence(
                 top_spans_sent, relation_scores_sent, num_spans_sent, sentence)
             preds_dict.append(pred_dict_sent)
             predictions.append(predictions_sent)
 
         return preds_dict, predictions
 
-
-
-
-    @overrides
-    def make_output_human_readable(self, top_spans, predicted_relations, num_spans_to_keep):
-        """
-        Take the output and convert it into a list of dicts. Each entry is a sentence. Each key is a
-        pair of span indices for that sentence, and each value is the relation label on that span
-        pair.
-        """
-        top_spans_batch = top_spans.detach().cpu()
-        predicted_relations_batch = predicted_relations.detach().cpu()
-        num_spans_to_keep_batch = num_spans_to_keep.detach().cpu()
-        res_dict = []
-        res_list = []
-
-        # Collect predictions for each sentence in minibatch.
-        zipped = zip(top_spans_batch, predicted_relations_batch, num_spans_to_keep_batch)
-        for top_spans, predicted_relations, num_spans_to_keep in zipped:
-            entry_dict, entry_list = self._decode_sentence(
-                top_spans, predicted_relations, num_spans_to_keep)
-            res_dict.append(entry_dict)
-            res_list.append(entry_list)
-
-        return res_list, res_dict
-
-    # TODO(dwadden) This code is repeated elsewhere. Refactor.
-    @overrides
-    def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        "Loop over the metrics for all namespaces, and return as dict."
-        res = {}
-        for namespace, metrics in self._relation_metrics.items():
-            precision, recall, f1 = metrics.get_metric(reset)
-            prefix = namespace.replace("_labels", "")
-            to_update = {f"{prefix}_precision": precision,
-                         f"{prefix}_recall": recall,
-                         f"{prefix}_f1": f1}
-            res.update(to_update)
-
-        res_avg = {}
-        for name in ["precision", "recall", "f1"]:
-            values = [res[key] for key in res if name in key]
-            res_avg[f"MEAN__relation_{name}"] = sum(values) / len(values)
-            res.update(res_avg)
-
-        return res
-
-    def _decode_sentence(self, top_spans, relation_scores, num_spans_to_keep, sentence):
-        # TODO(dwadden) speed this up?
-        # Throw out all predictions that shouldn't be kept.
+    def _predict_sentence(self, top_spans, relation_scores, num_spans_to_keep, sentence):
         keep = num_spans_to_keep.item()
         top_spans = [tuple(x) for x in top_spans.tolist()]
 
@@ -224,6 +175,27 @@ class RelationExtractor(Model):
             predictions.append(document.PredictedRelation(list_entry, sentence, sentence_offsets=True))
 
         return res_dict, predictions
+
+    # TODO(dwadden) This code is repeated elsewhere. Refactor.
+    @overrides
+    def get_metrics(self, reset: bool = False) -> Dict[str, float]:
+        "Loop over the metrics for all namespaces, and return as dict."
+        res = {}
+        for namespace, metrics in self._relation_metrics.items():
+            precision, recall, f1 = metrics.get_metric(reset)
+            prefix = namespace.replace("_labels", "")
+            to_update = {f"{prefix}_precision": precision,
+                         f"{prefix}_recall": recall,
+                         f"{prefix}_f1": f1}
+            res.update(to_update)
+
+        res_avg = {}
+        for name in ["precision", "recall", "f1"]:
+            values = [res[key] for key in res if name in key]
+            res_avg[f"MEAN__relation_{name}"] = sum(values) / len(values)
+            res.update(res_avg)
+
+        return res
 
     @staticmethod
     def _compute_span_pair_embeddings(top_span_embeddings: torch.FloatTensor):
