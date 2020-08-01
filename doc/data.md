@@ -104,6 +104,48 @@ Getting a dataset like this into the DyGIE format requires tokenizing the text, 
 
 If you're stuck on preprocessing a dataset, post an issue. Or, if you come up with a nice, general preprocessing script for labeled data, submit a PR!
 
+### Input sentence lengths
+
+Most transformer-based encoders have a 512-token limit. Sentences longer than this will cause an error. Unfortunately, you can't just check that each of your `sentences` fields is at most 512 tokens. These tokens are converted to BERT's byte pair encoding, and a single "word token" may be split into multiple "BERT tokens". We have provided a script `scripts/data/check_sentence_length.py`, which you can run on an input file. It will identify sentences whose byte pair encodings exceed the limit of the encoder you're using.
+
+If you have sentences that are too long, you have two options:
+
+1. Split the long sentences, and re-run `check_sentence_length.py` to make check that they're short enough.
+
+2. Modify the config so that the encoder splits long sentences into bite-sized pieces, encodes them separately, and merges them back together. I haven't tried this (PR's getting this to work would be welcome). To train a model this way, it should work to modify the training config like so:
+
+```jsonnet
+dataset_reader +: {
+  token_indexers +: {
+    bert +: {
+      max_length: 512
+    }
+  }
+},
+model +: {
+  embedder +: {
+    token_embedders +: {
+      bert +: {
+        max_length: 512
+      }
+    }
+  }
+}
+```
+
+I'm not sure this will work with `allennlp predict`; these options might have to be set with the `--overrides` flag to the `predict` command.
+
+For more information, check the `max_length` parameter on AllenNLP's [PretrainedTransformerMismatchedIndexer](https://docs.allennlp.org/master/api/data/token_indexers/pretrained_transformer_mismatched_indexer/). Note that the token indexer and token embedder must be given the same `max_length`.
+
+If you're using a model other than BERT and you don't know the correct `max_length` to set, you can get it like this:
+
+```python
+from transformers import AutoConfig
+
+config = AutoConfig.from_pretrained([model_name])
+print(config.max_position_embeddings)
+```
+
 
 ## Preprocesing details for existing datasets
 
