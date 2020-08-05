@@ -111,7 +111,6 @@
       },
       num_epochs: 50,
       grad_norm: 5.0,
-      patience: 10,
       cuda_device: dygie.cuda_device,
       validation_metric: validation_metrics[dygie.target_task],
       optimizer: {
