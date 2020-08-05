@@ -1,5 +1,4 @@
 import logging
-import itertools
 from typing import Any, Dict, List, Optional, Callable
 
 import torch
@@ -8,7 +7,7 @@ from overrides import overrides
 
 from allennlp.data import Vocabulary
 from allennlp.models.model import Model
-from allennlp.nn import util, InitializerApplicator, RegularizerApplicator
+from allennlp.nn import util, RegularizerApplicator
 from allennlp.modules import TimeDistributed
 
 from dygie.training.relation_metrics import RelationMetrics

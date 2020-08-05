@@ -28,7 +28,6 @@
     bert_model :: 'bert-base-cased',
     max_span_width :: 8,
     cuda_device :: -1,
-    num_epochs :: 25,
 
     ////////////////////
 
@@ -110,9 +109,9 @@
       checkpointer: {
         num_serialized_models_to_keep: 3,
       },
-      num_epochs: dygie.num_epochs,
+      num_epochs: 50,
       grad_norm: 5.0,
-      patience: 5,
+      patience: 10,
       cuda_device: dygie.cuda_device,
       validation_metric: validation_metrics[dygie.target_task],
       optimizer: {
@@ -131,8 +130,7 @@
         ],
       },
       learning_rate_scheduler: {
-        type: 'slanted_triangular',
-        num_epochs: dygie.num_epochs,
+        type: 'slanted_triangular'
       }
     },
   },
