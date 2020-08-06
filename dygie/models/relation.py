@@ -161,7 +161,8 @@ class RelationExtractor(Model):
 
         res_dict = {}
         predictions = []
-        for i, j in ix.nonzero():
+
+        for i, j in ix.nonzero(as_tuple=False):
             span_1 = top_spans[i]
             span_2 = top_spans[j]
             label = predicted_labels[i, j].item()

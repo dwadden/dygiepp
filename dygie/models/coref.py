@@ -229,7 +229,7 @@ class CorefResolver(Model):
         # TODO(dwadden) How to handle case where only one span from a cluster makes it into the
         # minibatch? Should I get rid of the cluster?
         # TODO(dwadden) Write quick unit tests for correctness, time permitting.
-        span_ix = span_mask_batched.view(-1).nonzero().squeeze()  # Indices of the spans to keep.
+        span_ix = span_mask_batched.view(-1).nonzero(as_tuple=False).squeeze()  # Indices of the spans to keep.
         spans, span_embeddings = self._flatten_spans(
             spans_batched, span_ix, span_embeddings_batched, sentence_lengths)
         coref_labels = self._flatten_coref_labels(coref_labels_batched, span_ix)

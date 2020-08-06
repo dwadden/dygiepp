@@ -31,7 +31,7 @@ def main():
         instance.index_fields(vocab)
         td = instance.as_tensor_dict()
         n_wordpieces = td["text"]["bert"]["wordpiece_mask"].sum(dim=1)
-        too_long = (n_wordpieces > max_length).nonzero().squeeze(-1).tolist()
+        too_long = (n_wordpieces > max_length).nonzero(as_tuple=False).squeeze(-1).tolist()
         lengths = n_wordpieces[too_long]
 
         if too_long:

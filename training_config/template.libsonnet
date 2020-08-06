@@ -26,6 +26,9 @@
 
     // DEFAULT VALUES. May be set by child class..
     bert_model :: 'bert-base-cased',
+    // If using a different BERT, this number may be different. It's up to the user to set the
+    // appropriate value.
+    max_wordpieces_per_sentence :: 512,
     max_span_width :: 8,
     cuda_device :: -1,
 
@@ -42,6 +45,7 @@
         bert: {
           type: 'pretrained_transformer_mismatched',
           model_name: dygie.bert_model,
+          max_length: dygie.max_wordpieces_per_sentence
         },
       },
       max_span_width: dygie.max_span_width,
@@ -58,6 +62,7 @@
           bert: {
             type: 'pretrained_transformer_mismatched',
             model_name: dygie.bert_model,
+            max_length: dygie.max_wordpieces_per_sentence
           },
         },
       },
