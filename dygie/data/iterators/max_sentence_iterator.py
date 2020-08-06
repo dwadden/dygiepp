@@ -17,9 +17,10 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class BatchIterator(PyTorchDataLoader):
     """
     First arranges dataset by number of sentences
+    then yields batches according to sentence limit
     """
 
-    def _create_batches(self, instances: Iterable[Instance], sentence_limit: 12):
+    def _create_batches(self, instances: Iterable[Instance], sentence_limit= 12) -> Iterable[Batch]:
         # sort dataset by length
         instances.sort(key=lambda instance: instance["text"].sequence_length())
         curr_batch = []
