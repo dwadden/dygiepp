@@ -8,6 +8,9 @@ from allennlp.data.batch import Batch
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
+# TODO(dwadden / kenny): This actually doesn't work. Things have changed in AllenNLP V1 and we need
+# to update the Sampler, not the DataLoader. More info here:
+# https://guide.allennlp.org/reading-data#1.
 @DataLoader.register("max_sentence")
 class MaxSentenceIterator(PyTorchDataLoader):
     """
