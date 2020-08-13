@@ -127,7 +127,6 @@ class EventExtractor(Model):
         # Compute trigger scores.
         trigger_scores = self._compute_trigger_scores(
             trigger_embeddings, trigger_mask)
-        _, predicted_triggers = trigger_scores.max(-1)
 
         # Get trigger candidates for event argument labeling.
         num_trigs_to_keep = torch.floor(
@@ -162,37 +161,22 @@ class EventExtractor(Model):
         top_arg_spans = util.batched_index_select(spans,
                                                   top_arg_indices)
 
-        # Collect trigger and ner labels, in case they're included as features to the argument
-        # classifier.
-        # At train time, use the gold labels. At test time, use the labels predicted by the model,
-        # or gold if specified.
-        if self.training:
-            top_trig_labels = trigger_labels.gather(1, top_trig_indices)
-        else:
-            softmax_triggers = trigger_scores.softmax(dim=-1)
-            top_trig_labels = util.batched_index_select(softmax_triggers, top_trig_indices)
-
-        # Make a dict of all arguments that are needed to make trigger / argument pair embeddings.
-        trig_arg_emb_dict = dict(top_trig_labels=top_trig_labels,
-                                 top_trig_indices=top_trig_indices,
-                                 top_arg_spans=top_arg_spans,
-                                 text_emb=trigger_embeddings,
-                                 text_mask=trigger_mask)
-
+        # Compute trigger / argument pair embeddings.
         trig_arg_embeddings = self._compute_trig_arg_embeddings(
-            top_trig_embeddings, top_arg_embeddings, **trig_arg_emb_dict)
+            top_trig_embeddings, top_arg_embeddings, top_trig_indices, top_arg_spans)
         argument_scores = self._compute_argument_scores(
             trig_arg_embeddings, top_trig_scores, top_arg_scores, top_arg_mask)
 
-        _, predicted_arguments = argument_scores.max(-1)
-        predicted_arguments -= 1  # The null argument has label -1.
+        # Get predictions
+        predictions = self.predict(
+            top_trig_indices, top_arg_spans, trigger_scores, argument_scores, metadata)
+
+        import ipdb; ipdb.set_trace()
 
         output_dict = {"top_trigger_indices": top_trig_indices,
                        "top_argument_spans": top_arg_spans,
                        "trigger_scores": trigger_scores,
                        "argument_scores": argument_scores,
-                       "predicted_triggers": predicted_triggers,
-                       "predicted_arguments": predicted_arguments,
                        "num_triggers_kept": num_trigs_kept,
                        "num_argument_spans_kept": num_arg_spans_kept,
                        "sentence_lengths": sentence_lengths}
@@ -218,6 +202,24 @@ class EventExtractor(Model):
             output_dict["loss"] = loss
 
         return output_dict
+
+    def predict(self, top_trig_indices, top_arg_spans, trigger_scores, argument_scores, metadata):
+        zipped = zip(top_trig_indices, top_arg_spans, trigger_scores, argument_scores, metadata)
+        # Zip up the arguments, predict for each sentence, and put back together.
+        for args in zipped:
+            predictions_sentence = self._predict_sentence(*args)
+
+            # TODO(dwadden) I'm here.
+            import ipdb; ipdb.set_trace()
+            _, predicted_triggers = trigger_scores.max(-1)
+
+            _, predicted_arguments = argument_scores.max(-1)
+            predicted_arguments -= 1  # The null argument has label -1.
+
+    def _predict_sentence(
+        self, top_trig_indices, top_arg_spans, trigger_scores, argument_scores, sentence):
+        import ipdb; ipdb.set_trace()
+
 
     @overrides
     def make_output_human_readable(self, output_dict):
@@ -294,9 +296,10 @@ class EventExtractor(Model):
         return trigger_scores
 
     def _compute_trig_arg_embeddings(self,
-                                     top_trig_embeddings, top_arg_embeddings,
-                                     top_trig_labels, top_trig_indices,
-                                     top_arg_spans, text_emb, text_mask):
+                                     top_trig_embeddings,
+                                     top_arg_embeddings,
+                                     top_trig_indices,
+                                     top_arg_spans):
         """
         Create trigger / argument pair embeddings, consisting of:
         - The embeddings of the trigger and argument pair.
