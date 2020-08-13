@@ -30,8 +30,6 @@ Finally, you'll need SciBERT for the scientific datasets. Run `python scripts/pr
 
 ### Docker build
 
-@GillesJ has very kindly contributed a Dockerfile to manage dependencies. I haven't tested it and won't be able to help with debugging. But PR's are welcome.
-
 A `Dockerfile` is provided with the Pytorch + CUDA + CUDNN base image for a full-stack install.
 It will create conda environments `dygiepp` for modeling & `ace-event-preprocess` for ACE05-Event preprocessing.
 
@@ -41,6 +39,8 @@ This takes a long time, so you will want to comment out unneeded tasks in the Do
 - Comment out unneeded task sections in Dockerfile.
 - Build container: `docker build --tag dygiepp:dev .`
 - Run the container interactively: `docker run --gpus all -it --rm --ipc=host --name dygiepp dygiep:dev`
+
+**NOTE**: This Dockerfile was added in a PR from a contributor. I haven't tested it, so it's not "officially supported". More PR's are welcome, though.
 
 
 ## Training a model
