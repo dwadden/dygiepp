@@ -1,3 +1,5 @@
+from abc import ABC
+
 from dygie.models.shared import fields_to_batches, batches_to_fields
 import copy
 import numpy as np
@@ -216,6 +218,10 @@ class Sentence:
         else:
             self.events = None
 
+        # Predicted events.
+        if "predicted_events" in entry:
+            self.predicted_events = PredictedEvents(entry["predicted_events"], self)
+
     def to_json(self):
         res = {"sentences": self.text}
         if self.ner is not None:
@@ -310,7 +316,9 @@ class Token:
 
 
 class Trigger:
-    def __init__(self, token, label):
+    def __init__(self, trig, sentence, sentence_offsets):
+        token = Token(trig[0], sentence, sentence_offsets)
+        label = trig[1]
         self.token = token
         self.label = label
 
@@ -321,10 +329,23 @@ class Trigger:
         return [self.token.ix_doc, self.label]
 
 
+class PredictedTrigger(Trigger):
+    def __init__(self, trig, sentence, sentence_offsets):
+        super().__init__(trig, sentence, sentence_offsets)
+        self.raw_score = trig[2]
+        self.softmax_score = trig[3]
+
+    def __repr__(self):
+        return super().__repr__() + f" with confidence {self.softmax_score:0.4f}"
+
+    def to_json(self):
+        return super().to_json() + [format_float(self.raw_score), format_float(self.softmax_score)]
+
+
 class Argument:
-    def __init__(self, span, role, event_type):
-        self.span = span
-        self.role = role
+    def __init__(self, arg, event_type, sentence, sentence_offsets):
+        self.span = Span(arg[0], arg[1], sentence, sentence_offsets)
+        self.role = arg[2]
         self.event_type = event_type
 
     def __repr__(self):
@@ -340,6 +361,19 @@ class Argument:
 
     def to_json(self):
         return list(self.span.span_doc) + [self.role]
+
+
+class PredictedArgument(Argument):
+    def __init__(self, arg, event_type, sentence, sentence_offsets):
+        super().__init__(arg, event_type, sentence, sentence_offsets)
+        self.raw_score = arg[3]
+        self.softmax_score = arg[4]
+
+    def __repr__(self):
+        return super().__repr__() + f" with confidence {self.softmax_score:0.4f}"
+
+    def to_json(self):
+        return super().to_json() + [format_float(self.raw_score), format_float(self.softmax_score)]
 
 
 class NER:
@@ -406,17 +440,19 @@ class PredictedRelation(Relation):
         return super().to_json() + [format_float(self.raw_score), format_float(self.softmax_score)]
 
 
-class Event:
+# This code is a little tricky. We want Events to use Triggers and Arguments, while PredictedEvents
+# use PredictedTriggers and PredictedArguments. I create a base class that defines the methods, and
+# then subclasses set the constructors to be used.
+class EventBase(ABC):
     def __init__(self, event, sentence, sentence_offsets=False):
         trig = event[0]
         args = event[1:]
-        trigger_token = Token(trig[0], sentence, sentence_offsets)
-        self.trigger = Trigger(trigger_token, trig[1])
+        self.trigger = self.trigger_constructor(trig, sentence, sentence_offsets)
 
         self.arguments = []
         for arg in args:
-            span = Span(arg[0], arg[1], sentence, sentence_offsets)
-            self.arguments.append(Argument(span, arg[2], self.trigger.label))
+            this_arg = self.argument_constructor(arg, self.trigger.label, sentence, sentence_offsets)
+            self.arguments.append(this_arg)
 
     def to_json(self):
         trig_json = self.trigger.to_json()
@@ -433,9 +469,20 @@ class Event:
         return res
 
 
-class Events:
+class Event(EventBase):
+    trigger_constructor = Trigger
+    argument_constructor = Argument
+
+
+class PredictedEvent(EventBase):
+    trigger_constructor = PredictedTrigger
+    argument_constructor = PredictedArgument
+
+
+# Same pattern as above. Define base class, and pass constructors to child classes.
+class EventsBase(ABC):
     def __init__(self, events_json, sentence, sentence_offsets=False):
-        self.event_list = [Event(this_event, sentence, sentence_offsets)
+        self.event_list = [self.event_constructor(this_event, sentence, sentence_offsets)
                            for this_event in events_json]
         self.triggers = set([event.trigger for event in self.event_list])
         self.arguments = set([arg for event in self.event_list for arg in event.arguments])
@@ -486,6 +533,14 @@ class Events:
             if candidate == argument:
                 return True
         return False
+
+
+class Events(EventsBase):
+    event_constructor = Event
+
+
+class PredictedEvents(EventsBase):
+    event_constructor = PredictedEvent
 
 
 class Cluster:
