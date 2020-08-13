@@ -10,14 +10,14 @@
 # Because this script is fairly involved, I put the heavy lifting into
 # functions.
 
-out_dir=data/genia
+out_dir=./data/genia
 log_dir=$out_dir/logs
 raw_dir=$out_dir/raw-data
 ner_dir=$raw_dir/GENIAcorpus3.02p
 
 download_raw() {
     # Download the data.
-    mkdir $raw_dir
+    mkdir -p $raw_dir
 
     # Download the entities.
     wget -nv http://www.nactem.ac.uk/GENIA/current/GENIA-corpus/Part-of-speech/GENIAcorpus3.02p.tgz \
@@ -28,7 +28,7 @@ download_raw() {
         -P $raw_dir
 
     # Decompress and cleanup
-    mkdir $ner_dir
+    mkdir -p $ner_dir
     tar -xf $raw_dir/GENIAcorpus3.02p.tgz -C $ner_dir
     tar -xf $raw_dir/GENIA_MedCo_coreference_corpus_1.0.tar.gz -C $raw_dir
     rm $raw_dir/*.tgz $raw_dir/*.tar.gz
@@ -39,7 +39,7 @@ download_sutd() {
     # https://gitlab.com/sutd_nlp/overlapping_mentions/tree/master.
     # We preprocess the data to align our folds with theirs.
     out_dir=$raw_dir/sutd-original
-    mkdir $out_dir
+    mkdir -p $out_dir
 
     url_base=https://gitlab.com/sutd_nlp/overlapping_mentions/raw/master/data/GENIA/scripts
 
@@ -61,9 +61,9 @@ convert_sutd() {
     tmpdir="$sutd_base/tmp"
     finaldir="$sutd_base/correct-format"
 
-    mkdir $sutd_base
-    mkdir $tmpdir
-    mkdir $finaldir
+    mkdir -p $sutd_base
+    mkdir -p $tmpdir
+    mkdir -p $finaldir
 
     python ./scripts/data/genia/genia_xml_to_inline_sutd.py $corpus_name $tmpdir
 
@@ -77,8 +77,8 @@ convert_sutd() {
 
 ####################
 
-mkdir $out_dir
-mkdir $log_dir
+mkdir -p $out_dir
+mkdir -p $log_dir
 
 echo "Downloading raw GENIA data."
 download_raw > $log_dir/00-download-genia.log
