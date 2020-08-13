@@ -352,20 +352,18 @@ class NER:
         return list(self.span.span_doc) + [self.label]
 
 
-class PredictedNER:
+class PredictedNER(NER):
     def __init__(self, ner, sentence, sentence_offsets=False):
         "The input should be a list: [span_start, span_end, label, raw_score, softmax_score]."
-        self.span = Span(ner[0], ner[1], sentence, sentence_offsets)
-        self.label = ner[2]
+        super().__init__(ner, sentence, sentence_offsets)
         self.raw_score = ner[3]
         self.softmax_score = ner[4]
 
     def __repr__(self):
-        return f"{self.span.__repr__()}: {self.label} with confidence {self.softmax_score:0.4f}"
+        return super().__repr__() + f" with confidence {self.softmax_score:0.4f}"
 
     def to_json(self):
-        return (list(self.span.span_doc) +
-                [self.label, format_float(self.raw_score), format_float(self.softmax_score)])
+        return super().to_json() + [format_float(self.raw_score), format_float(self.softmax_score)]
 
 
 class Relation:
@@ -388,27 +386,18 @@ class Relation:
         return list(self.pair[0].span_doc) + list(self.pair[1].span_doc) + [self.label]
 
 
-class PredictedRelation:
+class PredictedRelation(Relation):
     def __init__(self, relation, sentence, sentence_offsets=False):
         "Input format: [start_1, end_1, start_2, end_2, label, raw_score, softmax_score]."
-        # TODO(dwadden) Refactor this to share code with `Relation` class.
-        start1, end1 = relation[0], relation[1]
-        start2, end2 = relation[2], relation[3]
-        label = relation[4]
-        span1 = Span(start1, end1, sentence, sentence_offsets)
-        span2 = Span(start2, end2, sentence, sentence_offsets)
-        self.pair = (span1, span2)
-        self.label = label
+        super().__init__(relation, sentence, sentence_offsets)
         self.raw_score = relation[5]
         self.softmax_score = relation[6]
 
     def __repr__(self):
-        return (f"{self.pair[0].__repr__()}, {self.pair[1].__repr__()}: {self.label} "
-                f"with confidence {self.softmax_score:0.4f}")
+        return super().__repr__() + f" with confidence {self.softmax_score:0.4f}"
 
     def to_json(self):
-        return (list(self.pair[0].span_doc) + list(self.pair[1].span_doc) +
-                [self.label, format_float(self.raw_score), format_float(self.softmax_score)])
+        return super().to_json() + [format_float(self.raw_score), format_float(self.softmax_score)]
 
 
 class Event:
