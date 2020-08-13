@@ -317,6 +317,9 @@ class Trigger:
     def __repr__(self):
         return self.token.__repr__()[:-1] + ", " + self.label + ")"
 
+    def to_json(self):
+        return [self.token.ix_doc, self.label]
+
 
 class Argument:
     def __init__(self, span, role, event_type):
@@ -334,6 +337,9 @@ class Argument:
 
     def __hash__(self):
         return self.span.__hash__() + hash((self.role, self.event_type))
+
+    def to_json(self):
+        return list(self.span.span_doc) + [self.role]
 
 
 class NER:
@@ -413,11 +419,8 @@ class Event:
             self.arguments.append(Argument(span, arg[2], self.trigger.label))
 
     def to_json(self):
-        trig_json = [self.trigger.token.ix_doc, self.trigger.label]
-        arg_json = []
-        for arg in self.arguments:
-            arg_entry = list(arg.span.span_doc) + [arg.role]
-            arg_json.append(arg_entry)
+        trig_json = self.trigger.to_json()
+        arg_json = [arg.to_json() for arg in self.arguments]
         res = [trig_json] + arg_json
         return res
 
