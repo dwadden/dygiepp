@@ -1,11 +1,6 @@
-from collections import deque
-from typing import Iterable, Deque
+from typing import Iterable
 import logging
-import numpy as np
 
-from overrides import overrides
-
-from allennlp.common.util import lazy_groups_of
 from allennlp.data.instance import Instance
 from allennlp.data.dataloader import DataLoader, PyTorchDataLoader
 from allennlp.data.batch import Batch
@@ -13,23 +8,25 @@ from allennlp.data.batch import Batch
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@DataLoader.register("max_sentence_batch")
-class BatchIterator(PyTorchDataLoader):
+@DataLoader.register("max_sentence")
+class MaxSentenceIterator(PyTorchDataLoader):
     """
-    First arranges dataset by number of sentences
-    then yields batches according to sentence limit
+    First arranges dataset by number of sentences, then yields batches according to sentence limit.
     """
+    def __init__(self, max_sentences, **kwargs):
+        super().__init__(**kwargs)
+        self._max_sentences = max_sentences
 
-    def _create_batches(self, instances: Iterable[Instance], sentence_limit= 12) -> Iterable[Batch]:
-        # sort dataset by length
-        instances.sort(key=lambda instance: instance["text"].sequence_length())
+    def _create_batches(self, instances: Iterable[Instance]) -> Iterable[Batch]:
+        # Sort dataset by length
+        instances = sorted(instances, key=lambda instance: instance["text"].sequence_length())
         curr_batch = []
         total_sentences_in_batch = 0
 
         for instance in instances:
             doc_length = instance["text"].sequence_length()
             # If we're under the limit, add to current batch
-            if total_sentences_in_batch + doc_length <= sentence_limit:
+            if total_sentences_in_batch + doc_length <= self._max_sentences:
                 curr_batch.append(instance)
                 total_sentences_in_batch += doc_length
             # Else, reset and yield the current batch.
@@ -38,4 +35,5 @@ class BatchIterator(PyTorchDataLoader):
                 curr_batch = [instance]
                 total_sentences_in_batch = instance["text"].sequence_length()
                 yield Batch(batch_to_yield)
-        yield Batch(curr_batch) #yield last batch regardless of size
+
+        yield Batch(curr_batch)  # Yield last batch regardless of size
