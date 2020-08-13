@@ -101,7 +101,10 @@ class CorefResolver(Model):
             span_ix = output_dict[doc_key]["span_ix"]
             top_span_embeddings = output_dict[doc_key]["top_span_embeddings"]
             for ix, el in enumerate(output_dict[doc_key]["top_span_indices"].view(-1)):
-                # TODO(dwadden) Why is floor division what we want here? Emailed Ulme about this.
+                # This floor division is correct. We're doing division with a remainder, where
+                # `row_ix` is the quotient (plus an offset added at the end) and `col_ix` is the
+                # remainder. This converts from a span index to a row and column index in the span
+                # embedding matrix.
                 row_ix = span_ix[el] // span_embeddings_batched.shape[1] + offsets[doc_key]
                 col_ix = span_ix[el] % span_embeddings_batched.shape[1]
                 new_span_embeddings_batched[row_ix, col_ix] = top_span_embeddings[0, ix]
