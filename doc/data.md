@@ -179,6 +179,8 @@ Unfortunately, different papers have used different conventions and therefore ou
   ```
   To include these mentions as entity mentions, use the flag `--include_times_and_values`. Note that all values are given entity type `VALUE`. Some work has assigned entity types using the `TYPE` of the value - for instance `"Numeric"` in the example above. We welcome a pull request to add this feature.
 
+  In order to run training on data with times and values, the config must be editted in `./training_config/ace05_event.jsonnet`: change `n_ner_labels: 8,`to `n_ner_labels: 10,`.
+
 - **include_pronouns**: By default, pronouns (entities with `TYPE="PRO"`) are also *ignored*. For instance, this annotation  would be ignored:
   ```xml
   <entity_mention ID="AFP_ENG_20030330.0211-E3-2" TYPE="PRO" LDCTYPE="WHQ" LDCATR="FALSE">
