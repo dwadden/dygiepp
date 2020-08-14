@@ -98,7 +98,7 @@ The results will go in `./data/ace05/processed-data`. The intermediate files wil
 
 #### Training a model
 
-Enter `bash ./scripts/train/train_ace05_relation.sh [gpu-id]`. A model trained this way will not reproduce the numbers in the paper. We're in the process of debugging and will update.
+Enter `bash ./scripts/train/train_ace05_relation.sh [gpu-id]`. The performance we're getting is unfortunately worse than the numbers in the paper (see [Pretrained Models](#pretrained-models)), probably due to an issue in the training config.
 
 ### ACE05 Event
 
@@ -198,6 +198,7 @@ Run `./scripts/pretrained/get_dygiepp_pretrained.sh` to download all the availab
 - [GENIA lightweight](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/genia-lightweight.tar.gz)
 - [ChemProt (lightweight only)](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/chemprot.tar.gz)
 - [ACE05 event (uses BERT large)](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/ace05-event.tar.gz)
+- [ACE05 relation](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/ace05-relation.tar.gz)
 
 #### Performance of downloaded models
 
@@ -240,6 +241,16 @@ Run `./scripts/pretrained/get_dygiepp_pretrained.sh` to download all the availab
   2020-05-25 17:05:14,044 - INFO - allennlp.commands.evaluate - trig_class_f1: 0.7029914529914529
   2020-05-25 17:05:14,044 - INFO - allennlp.commands.evaluate - _arg_id_f1: 0.5414364640883979
   2020-05-25 17:05:14,044 - INFO - allennlp.commands.evaluate - arg_class_f1: 0.5130228887134964
+  ```
+
+- ACE05-Relation
+  ```
+  2020-08-14 11:43:49,955 - INFO - allennlp.commands.evaluate - _ner_precision: 0.8531958003315527
+  2020-08-14 11:43:49,955 - INFO - allennlp.commands.evaluate - _ner_recall: 0.846027397260274
+  2020-08-14 11:43:49,955 - INFO - allennlp.commands.evaluate - _ner_f1: 0.8495964783565164
+  2020-08-14 11:43:49,955 - INFO - allennlp.commands.evaluate - rel_precision: 0.5838264299802761
+  2020-08-14 11:43:49,955 - INFO - allennlp.commands.evaluate - rel_recall: 0.5143353605560382
+  2020-08-14 11:43:49,955 - INFO - allennlp.commands.evaluate - rel_f1: 0.5468822170900692
   ```
 
 ## Making predictions on existing datasets
