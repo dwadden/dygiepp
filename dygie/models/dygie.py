@@ -325,26 +325,8 @@ class DyGIE(Model):
                 sentence.predicted_relations = predictions
 
         if self._loss_weights["events"] > 0:
-            # TODO(dwadden) Not sure this works.
-            decoded_events = output_dict["events"]["decoded_events"]
-            for decoded_sent, sentence in zip(decoded_events, doc):
-                trigger_dict = decoded_sent["trigger_dict"]
-                argument_dict = decoded_sent["argument_dict"]
-                events_json = []
-                for trigger_ix, trigger_label in trigger_dict.items():
-                    this_event = []
-                    this_event.append([trigger_ix, trigger_label])
-                    event_arguments = {k: v for k, v in argument_dict.items() if k[0] == trigger_ix}
-                    this_event_args = []
-                    for k, v in event_arguments.items():
-                        entry = list(k[1]) + [v]
-                        this_event_args.append(entry)
-                    this_event_args = sorted(this_event_args, key=lambda entry: entry[0])
-                    this_event.extend(this_event_args)
-                    events_json.append(this_event)
-
-                events = document.Events(events_json, sentence, sentence_offsets=True)
-                sentence.predicted_events = events
+            for predictions, sentence in zip(output_dict["events"]["predictions"], doc):
+                sentence.predicted_events = predictions
 
         return doc
 
