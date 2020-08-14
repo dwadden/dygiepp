@@ -107,6 +107,8 @@ class EventExtractor(Model):
         self._trigger_loss = torch.nn.CrossEntropyLoss(reduction="sum")
         self._argument_loss = torch.nn.CrossEntropyLoss(reduction="sum", ignore_index=-1)
 
+    ####################
+
     @overrides
     def forward(self,  # type: ignore
                 trigger_mask,
@@ -205,62 +207,107 @@ class EventExtractor(Model):
 
         return output_dict
 
+    ####################
 
+    # Embeddings
 
-################################################################################
+    def _compute_trig_arg_embeddings(self,
+                                     top_trig_embeddings,
+                                     top_arg_embeddings,
+                                     top_trig_indices,
+                                     top_arg_spans):
+        """
+        Create trigger / argument pair embeddings, consisting of:
+        - The embeddings of the trigger and argument pair.
+        - Optionally, the embeddings of the trigger and argument labels.
+        - Optionally, embeddings of the words surrounding the trigger and argument.
+        """
+        num_trigs = top_trig_embeddings.size(1)
+        num_args = top_arg_embeddings.size(1)
 
+        trig_emb_expanded = top_trig_embeddings.unsqueeze(2)
+        trig_emb_tiled = trig_emb_expanded.repeat(1, 1, num_args, 1)
 
-    # def predict(self, top_trig_indices, top_arg_spans, trigger_scores, argument_scores,
-    #             top_trig_mask, top_arg_mask, metadata):
-    #     zipped = zip(top_trig_indices, top_arg_spans, trigger_scores, argument_scores,
-    #                  top_trig_mask, top_arg_mask, metadata)
-    #     # Zip up the arguments, predict for each sentence, and put back together.
-    #     for args in zipped:
-    #         predictions_sentence = self._predict_sentence(*args)
+        arg_emb_expanded = top_arg_embeddings.unsqueeze(1)
+        arg_emb_tiled = arg_emb_expanded.repeat(1, num_trigs, 1, 1)
 
-    #         # TODO(dwadden) I'm here.
-    #         import ipdb; ipdb.set_trace()
+        distance_embeddings = self._compute_distance_embeddings(top_trig_indices, top_arg_spans)
 
-    #         _, predicted_arguments = argument_scores.max(-1)
-    #         predicted_arguments -= 1  # The null argument has label -1.
+        pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled, distance_embeddings]
+        pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
 
-    # def _predict_sentence(self, top_trig_indices, top_arg_spans, trigger_scores,
-    #                       argument_scores, top_trig_mask, top_arg_mask, sentence):
-    #         triggers = self._predict_triggers(top_trig_indices, trigger_scores, top_trig_mask, sentence)
-    #         events = self._predict_events(triggers, top_arg_spans, argument_scores, top_trig_mask,
-    #                                       top_arg_mask, sentence)
-    #         import ipdb; ipdb.set_trace()
+        return pair_embeddings
 
-    # def _predict_triggers(self, top_trig_indices, trigger_scores, trigger_mask, sentence):
-    #     predicted_trigger_scores_raw, predicted_trigger_labels = trigger_scores.max(dim=1)
-    #     softmax_scores = F.softmax(trigger_scores, dim=-1)
-    #     predicted_trigger_scores_softmax, _ = softmax_scores.max(dim=1)
-    #     ix = (predicted_trigger_labels != 0) & trigger_mask.bool()
-    #     token_indices = ix.nonzero(as_tuple=False).squeeze(-1)
+    def _compute_distance_embeddings(self, top_trig_indices, top_arg_spans):
+        top_trig_ixs = top_trig_indices.unsqueeze(2)
+        arg_span_starts = top_arg_spans[:, :, 0].unsqueeze(1)
+        arg_span_ends = top_arg_spans[:, :, 1].unsqueeze(1)
+        dist_from_start = top_trig_ixs - arg_span_starts
+        dist_from_end = top_trig_ixs - arg_span_ends
+        # Distance from trigger to arg.
+        dist = torch.min(dist_from_start.abs(), dist_from_end.abs())
+        # When the trigger is inside the arg span, also set the distance to zero.
+        trigger_inside = (top_trig_ixs >= arg_span_starts) & (top_trig_ixs <= arg_span_ends)
+        dist[trigger_inside] = 0
+        dist_buckets = util.bucket_values(dist, self._num_distance_buckets)
+        dist_emb = self._distance_embedding(dist_buckets)
+        trigger_before_feature = (top_trig_ixs < arg_span_starts).float().unsqueeze(-1)
+        trigger_inside_feature = trigger_inside.float().unsqueeze(-1)
+        res = torch.cat([dist_emb, trigger_before_feature, trigger_inside_feature], dim=-1)
 
-    #     zip_pred = zip(predicted_trigger_labels[ix], predicted_trigger_scores_raw[ix],
-    #                    predicted_trigger_scores_softmax[ix], token_indices)
-    #     triggers = []
-    #     for label, score_raw, score_softmax, token_index in zip_pred:
-    #         token_index = token_index.item()
-    #         label_str = self.vocab.get_token_from_index(
-    #             label.item(), namespace=self._active_namespaces["trigger"])
-    #         trigger = document.PredictedTrigger(
-    #             [token_index, label_str, score_raw.item(), score_softmax.item()],
-    #             sentence,
-    #             sentence_offsets=True)
-    #         triggers.append(trigger)
+        return res
 
-    #     return triggers
+    ####################
 
-    # def _predict_events(self, triggers, top_arg_spans, argument_scores, top_trig_mask,
-    #                     top_arg_mask, sentence):
-    #         for trigger in triggers:
-    #             trigger_ix = trigger.token.ix_sent
-    #             import ipdb; ipdb.set_trace()
+    # Scorers
 
+    def _compute_trigger_scores(self, trigger_embeddings, trigger_mask):
+        """
+        Compute trigger scores for all tokens.
+        """
+        trigger_scorer = self._trigger_scorers[self._active_namespaces["trigger"]]
+        trigger_scores = trigger_scorer(trigger_embeddings)
+        # Give large negative scores to masked-out elements.
+        mask = trigger_mask.unsqueeze(-1)
+        trigger_scores = util.replace_masked_values(trigger_scores, mask.bool(), -1e20)
+        dummy_dims = [trigger_scores.size(0), trigger_scores.size(1), 1]
+        dummy_scores = trigger_scores.new_zeros(*dummy_dims)
+        trigger_scores = torch.cat((dummy_scores, trigger_scores), -1)
+        # Give large negative scores to the masked-out values.
+        return trigger_scores
 
-################################################################################
+    def _compute_argument_scores(self, pairwise_embeddings, top_trig_scores, top_arg_scores,
+                                 top_arg_mask, prepend_zeros=True):
+        batch_size = pairwise_embeddings.size(0)
+        max_num_trigs = pairwise_embeddings.size(1)
+        max_num_args = pairwise_embeddings.size(2)
+        argument_feedforward = self._argument_feedforwards[self._active_namespaces["argument"]]
+
+        feature_dim = argument_feedforward.input_dim
+        embeddings_flat = pairwise_embeddings.view(-1, feature_dim)
+
+        arguments_projected_flat = argument_feedforward(embeddings_flat)
+
+        argument_scorer = self._argument_scorers[self._active_namespaces["argument"]]
+        argument_scores_flat = argument_scorer(arguments_projected_flat)
+
+        argument_scores = argument_scores_flat.view(batch_size, max_num_trigs, max_num_args, -1)
+
+        # Add the mention scores for each of the candidates.
+
+        argument_scores += (top_trig_scores.unsqueeze(-1) +
+                            top_arg_scores.transpose(1, 2).unsqueeze(-1))
+
+        shape = [argument_scores.size(0), argument_scores.size(1), argument_scores.size(2), 1]
+        dummy_scores = argument_scores.new_zeros(*shape)
+
+        if prepend_zeros:
+            argument_scores = torch.cat([dummy_scores, argument_scores], -1)
+        return argument_scores
+
+    ####################
+
+    # Predictions / decoding.
 
     def predict(self, output_dict, document):
         """
@@ -344,115 +391,9 @@ class EventExtractor(Model):
 
         return events
 
-################################################################################
+    ####################
 
-
-
-
-
-
-
-
-
-
-    @overrides
-    def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        f1_metrics = self._metrics.get_metric(reset)
-        res = {}
-        res.update(f1_metrics)
-        return res
-
-
-
-    def _compute_trigger_scores(self, trigger_embeddings, trigger_mask):
-        """
-        Compute trigger scores for all tokens.
-        """
-        trigger_scorer = self._trigger_scorers[self._active_namespaces["trigger"]]
-        trigger_scores = trigger_scorer(trigger_embeddings)
-        # Give large negative scores to masked-out elements.
-        mask = trigger_mask.unsqueeze(-1)
-        trigger_scores = util.replace_masked_values(trigger_scores, mask.bool(), -1e20)
-        dummy_dims = [trigger_scores.size(0), trigger_scores.size(1), 1]
-        dummy_scores = trigger_scores.new_zeros(*dummy_dims)
-        trigger_scores = torch.cat((dummy_scores, trigger_scores), -1)
-        # Give large negative scores to the masked-out values.
-        return trigger_scores
-
-    def _compute_trig_arg_embeddings(self,
-                                     top_trig_embeddings,
-                                     top_arg_embeddings,
-                                     top_trig_indices,
-                                     top_arg_spans):
-        """
-        Create trigger / argument pair embeddings, consisting of:
-        - The embeddings of the trigger and argument pair.
-        - Optionally, the embeddings of the trigger and argument labels.
-        - Optionally, embeddings of the words surrounding the trigger and argument.
-        """
-        num_trigs = top_trig_embeddings.size(1)
-        num_args = top_arg_embeddings.size(1)
-
-        trig_emb_expanded = top_trig_embeddings.unsqueeze(2)
-        trig_emb_tiled = trig_emb_expanded.repeat(1, 1, num_args, 1)
-
-        arg_emb_expanded = top_arg_embeddings.unsqueeze(1)
-        arg_emb_tiled = arg_emb_expanded.repeat(1, num_trigs, 1, 1)
-
-        distance_embeddings = self._compute_distance_embeddings(top_trig_indices, top_arg_spans)
-
-        pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled, distance_embeddings]
-        pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
-
-        return pair_embeddings
-
-    def _compute_distance_embeddings(self, top_trig_indices, top_arg_spans):
-        top_trig_ixs = top_trig_indices.unsqueeze(2)
-        arg_span_starts = top_arg_spans[:, :, 0].unsqueeze(1)
-        arg_span_ends = top_arg_spans[:, :, 1].unsqueeze(1)
-        dist_from_start = top_trig_ixs - arg_span_starts
-        dist_from_end = top_trig_ixs - arg_span_ends
-        # Distance from trigger to arg.
-        dist = torch.min(dist_from_start.abs(), dist_from_end.abs())
-        # When the trigger is inside the arg span, also set the distance to zero.
-        trigger_inside = (top_trig_ixs >= arg_span_starts) & (top_trig_ixs <= arg_span_ends)
-        dist[trigger_inside] = 0
-        dist_buckets = util.bucket_values(dist, self._num_distance_buckets)
-        dist_emb = self._distance_embedding(dist_buckets)
-        trigger_before_feature = (top_trig_ixs < arg_span_starts).float().unsqueeze(-1)
-        trigger_inside_feature = trigger_inside.float().unsqueeze(-1)
-        res = torch.cat([dist_emb, trigger_before_feature, trigger_inside_feature], dim=-1)
-
-        return res
-
-    def _compute_argument_scores(self, pairwise_embeddings, top_trig_scores, top_arg_scores,
-                                 top_arg_mask, prepend_zeros=True):
-        batch_size = pairwise_embeddings.size(0)
-        max_num_trigs = pairwise_embeddings.size(1)
-        max_num_args = pairwise_embeddings.size(2)
-        argument_feedforward = self._argument_feedforwards[self._active_namespaces["argument"]]
-
-        feature_dim = argument_feedforward.input_dim
-        embeddings_flat = pairwise_embeddings.view(-1, feature_dim)
-
-        arguments_projected_flat = argument_feedforward(embeddings_flat)
-
-        argument_scorer = self._argument_scorers[self._active_namespaces["argument"]]
-        argument_scores_flat = argument_scorer(arguments_projected_flat)
-
-        argument_scores = argument_scores_flat.view(batch_size, max_num_trigs, max_num_args, -1)
-
-        # Add the mention scores for each of the candidates.
-
-        argument_scores += (top_trig_scores.unsqueeze(-1) +
-                            top_arg_scores.transpose(1, 2).unsqueeze(-1))
-
-        shape = [argument_scores.size(0), argument_scores.size(1), argument_scores.size(2), 1]
-        dummy_scores = argument_scores.new_zeros(*shape)
-
-        if prepend_zeros:
-            argument_scores = torch.cat([dummy_scores, argument_scores], -1)
-        return argument_scores
+    # Loss function and evaluation metrics.
 
     @staticmethod
     def _get_pruned_gold_arguments(argument_labels, top_trig_indices, top_arg_indices,
@@ -498,3 +439,10 @@ class EventExtractor(Model):
         # Compute cross-entropy loss.
         loss = self._argument_loss(scores_flat, labels_flat)
         return loss
+
+    @overrides
+    def get_metrics(self, reset: bool = False) -> Dict[str, float]:
+        f1_metrics = self._metrics.get_metric(reset)
+        res = {}
+        res.update(f1_metrics)
+        return res
