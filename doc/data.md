@@ -83,6 +83,19 @@ print(data[0])  # Print the first document.
 print(data[0][1].ner)  # Print the named entities in the second sentence of the first document.
 ```
 
+### User-defined sentence metadata
+
+You can define additional metadata associated with each sentence that will be ignored by the model; these metadata fields should be prefixed with `_`. For instance, if you wanted to explicitly keep track of the index of each sentence in a document, you could add a field to your input document
+
+```python
+{
+  "doc_key": "some_document",
+  "dataset": "some_dataset",
+  "sentences": [["One", "sentence"], ["Another", "sentence"]],
+  "_sentence_index": [0, 1]   # User-added metadata field.
+}
+```
+
 ## Formatting a new dataset
 
 ### Unlabled data

@@ -3,6 +3,8 @@ from abc import ABC
 from dygie.models.shared import fields_to_batches, batches_to_fields
 import copy
 import numpy as np
+import re
+import json
 
 
 def format_float(x):
@@ -38,12 +40,43 @@ def update_sentences_with_clusters(sentences, clusters):
     return sentences
 
 
+class Dataset:
+    def __init__(self, documents):
+        self.documents = documents
+
+    def __getitem__(self, i):
+        return self.documents[i]
+
+    def __len__(self):
+        return len(self.documents)
+
+    def __repr__(self):
+        return f"Dataset with {self.__len__()} documents."
+
+    @classmethod
+    def from_jsonl(cls, fname):
+        documents = []
+        with open(fname, "r") as f:
+            for line in f:
+                doc = Document.from_json(json.loads(line))
+                documents.append(doc)
+
+        return cls(documents)
+
+    def to_jsonl(self, fname):
+        to_write = [doc.to_json() for doc in self]
+        with open(fname, "w") as f:
+            for entry in to_write:
+                print(json.dumps(entry), file=f)
+
+
 class Document:
-    def __init__(self, doc_key, dataset, sentences, clusters):
+    def __init__(self, doc_key, dataset, sentences, clusters=None, predicted_clusters=None):
         self.doc_key = doc_key
         self.dataset = dataset
         self.sentences = sentences
         self.clusters = clusters
+        self.predicted_clusters = predicted_clusters
 
     @classmethod
     def from_json(cls, js):
@@ -65,11 +98,18 @@ class Document:
                         for i, entry in enumerate(js["clusters"])]
         else:
             clusters = None
+        # TODO(dwadden) Need to treat predicted clusters differently and update sentences
+        # appropriately.
+        if "predicted_clusters" in js:
+            predicted_clusters = [Cluster(entry, i, sentences, sentence_starts)
+                                  for i, entry in enumerate(js["predicted_clusters"])]
+        else:
+            predicted_clusters = None
 
         # Update the sentences with coreference cluster labels.
         sentences = update_sentences_with_clusters(sentences, clusters)
 
-        return cls(doc_key, dataset, sentences, clusters)
+        return cls(doc_key, dataset, sentences, clusters, predicted_clusters)
 
     def to_json(self):
         "Write to json dict."
@@ -80,8 +120,7 @@ class Document:
         res.update(fields_json)
         if self.clusters is not None:
             res["clusters"] = [cluster.to_json() for cluster in self.clusters]
-        # TODO(dwadden) Don't use hasattr.
-        if hasattr(self, "predicted_clusters"):
+        if self.predicted_clusters is not None:
             res["predicted_clusters"] = [cluster.to_json() for cluster in self.predicted_clusters]
 
         return res
@@ -180,6 +219,9 @@ class Sentence:
         self.sentence_ix = sentence_ix
         self.text = entry["sentences"]
 
+        # Metadata fields are prefixed with a `_`.
+        self.metadata = {k: v for k, v in entry.items() if re.match("^_", k)}
+
         # Store events.
         if "ner" in entry:
             self.ner = [NER(this_ner, self)
@@ -193,6 +235,8 @@ class Sentence:
         if "predicted_ner" in entry:
             self.predicted_ner = [PredictedNER(this_ner, self)
                                   for this_ner in entry["predicted_ner"]]
+        else:
+            self.predicted_ner = None
 
         # Store relations.
         if "relations" in entry:
@@ -211,6 +255,8 @@ class Sentence:
         if "predicted_relations" in entry:
             self.predicted_relations = [PredictedRelation(this_relation, self) for
                                         this_relation in entry["predicted_relations"]]
+        else:
+            self.predicted_relations = None
 
         # Store events.
         if "events" in entry:
@@ -221,22 +267,26 @@ class Sentence:
         # Predicted events.
         if "predicted_events" in entry:
             self.predicted_events = PredictedEvents(entry["predicted_events"], self)
+        else:
+            self.predicted_events = None
 
     def to_json(self):
         res = {"sentences": self.text}
         if self.ner is not None:
             res["ner"] = [entry.to_json() for entry in self.ner]
-        # TODO(dwadden) Don't treat predicted and gold data differently.
-        if hasattr(self, "predicted_ner"):
+        if self.predicted_ner is not None:
             res["predicted_ner"] = [entry.to_json() for entry in self.predicted_ner]
         if self.relations is not None:
             res["relations"] = [entry.to_json() for entry in self.relations]
-        if hasattr(self, "predicted_relations"):
+        if self.predicted_relations is not None:
             res["predicted_relations"] = [entry.to_json() for entry in self.predicted_relations]
         if self.events is not None:
             res["events"] = self.events.to_json()
-        if hasattr(self, "predicted_events"):
+        if self.predicted_events is not None:
             res["predicted_events"] = self.predicted_events.to_json()
+
+        for k, v in self.metadata.items():
+            res[k] = v
 
         return res
 
