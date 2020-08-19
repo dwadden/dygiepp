@@ -39,7 +39,7 @@ bash scripts/train.sh scierc
 
 The resulting model will go in `models/scierc`. For more information on how to modify training configs (e.g. to change the GPU used for training), see [config.md](doc/config.md).
 
-Information on preparing specific training datasets is below.
+Information on preparing specific training datasets is below. For more information on how to create training batches that utilize GPU resources efficiently, see [model.md](doc/model.md)
 
 
 ### SciERC
