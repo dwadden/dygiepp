@@ -102,7 +102,10 @@ You can define additional metadata associated with each sentence that will be ig
 When model predictions are saved to file, they are formatted as described above, but with the following changes:
 
 - The field names have the word `predicted` prepended. For instance, `predicted_ner`, `predicted_relations`, etc.
-- Each prediction has two additional entries appended, specifying the logit score and softmax probability for the predicted label. For instance, a single predicted relation prediction has the form `[start_tok_1, end_tok_1, start_tok_2, end_tok_2, predicted_label, label_logit, label_softmax]`. A single predicted even has the form `[[trigger_tok, predited_event_type, event_type_logit, event_type_softmax], [start_tok_arg1, end_tok_arg1, predicted_arg1_type, arg1_type_logit, arg1_type_softmax], ...]`. TODO: This hasn't been implemented yet for coreference.
+- Each prediction has two additional entries appended, specifying the logit score and softmax probability for the predicted label. For instance:
+  - A single predicted relation prediction has the form `[start_tok_1, end_tok_1, start_tok_2, end_tok_2, predicted_label, label_logit, label_softmax]`.
+  - A single predicted event has the form `[[trigger_tok, predited_event_type, event_type_logit, event_type_softmax], [start_tok_arg1, end_tok_arg1, predicted_arg1_type, arg1_type_logit, arg1_type_softmax], ...]`.
+  - TODO: This hasn't been implemented yet for coreference.
 
 
 ## Formatting a new dataset
