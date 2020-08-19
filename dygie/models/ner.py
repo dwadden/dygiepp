@@ -162,7 +162,7 @@ class NERTagger(Model):
         res_avg = {}
         for name in ["precision", "recall", "f1"]:
             values = [res[key] for key in res if name in key]
-            res_avg[f"MEAN__ner_{name}"] = sum(values) / len(values)
+            res_avg[f"MEAN__ner_{name}"] = sum(values) / len(values) if values else 0
             res.update(res_avg)
 
         return res
