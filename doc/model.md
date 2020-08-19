@@ -5,7 +5,7 @@ We include some notes and common modeling issues here. This document will grow o
 
 ## Batching and batch size
 
-AllenNLP has a data structure to represent an [Instance](https://guide.allennlp.org/reading-data), which it defines as "the atomic unit of prediction in machine learning". For example, in sentiment classification, an `Instance` would usually be a single sentence.
+AllenNLP has a data structure to represent an [Instance](https://guide.allennlp.org/reading-data#1), which it defines as "the atomic unit of prediction in machine learning". For example, in sentiment classification, an `Instance` would usually be a single sentence.
 
 `Instance`s are slighly awkward for DyGIE++, because
 three tasks (named entity tagging, relation extraction, event extraction) are *within-sentence*, making a sentence the natural unit for an `Instance`. However, coreference resolution is *cross-sentence*, making a *document* the natural unit for an `Instance`.
