@@ -96,7 +96,7 @@ class Collator:
 ####################
 
 
-def get_args():
+def get_args(args=None):
     parser = argparse.ArgumentParser(
         description="Collate a dataset. Re-organize into `documents` with sentences of similar length.")
     parser.add_argument("input_directory", type=str,
@@ -116,7 +116,12 @@ def get_args():
     parser.add_argument("--max_sentences_per_doc", type=int, default=16,
                         help="Maximum number of sentences allowed in a document.")
     parser.add_argument("--dataset", type=str, default=None, help="Dataset name.")
-    return parser.parse_args()
+
+    # If args are given, parse them; otherwise use command line.
+    if args is not None:
+        return parser.parse_args(args)
+    else:
+        return parser.parse_args()
 
 
 class CollateRunner:

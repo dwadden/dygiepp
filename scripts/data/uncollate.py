@@ -70,7 +70,7 @@ class UnCollator:
             sent.sentence_ix = sentence_ix
             sent.sentence_start = sentence_start
             # Remove unnecessary metadata fields.
-            for field in ["orig_sent_ix", "orig_doc_key"]:
+            for field in ["_orig_sent_ix", "_orig_doc_key"]:
                 del sent.metadata[field]
             sentences.append(sent)
             sentence_ix += 1
@@ -85,7 +85,7 @@ class UnCollator:
 ####################
 
 
-def get_args():
+def get_args(args=None):
     parser = argparse.ArgumentParser(
         description="Un-collated a previously collated a dataset.")
     parser.add_argument("input_directory", type=str,
@@ -102,7 +102,12 @@ def get_args():
                         help="Name of the file with the dev split. For instance, `validation`.")
     parser.add_argument("--test_name", type=str, default="test",
                         help="Name of the file with the test split.")
-    return parser.parse_args()
+
+    # If args are given, parse them; otherwise use command line.
+    if args is not None:
+        return parser.parse_args(args)
+    else:
+        return parser.parse_args()
 
 
 class UnCollateRunner:
