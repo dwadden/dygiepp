@@ -7,9 +7,7 @@ import json
 import os
 import shutil
 
-
-from dygie.data.collate import collate, uncollate
-
+# TODO need to import the collate code.
 
 class TestCollate(unittest.TestCase):
     def setUp(self):
