@@ -20,9 +20,9 @@ The choice we have made is to model an `Instance` as a *document*. By default, w
 
 - **Problem**: If you're not doing coreference resolution, then it's wasteful to have minibatches with sentences of widely varying lengths. Instead, you should create minibatches of similar-length sentences from different documents.
 - **Solution**: Our solution is as follows:
-  - "Collate" the dataset into "psuedo-documents" containing sentences of similar length. Keep track of the original document that each sentence came from. Users may write their own script, or use [collate.py](../scripts/data/collate.py) to accomplish this.
+  - "Collate" the dataset into "psuedo-documents" containing sentences of similar length. Keep track of the original document that each sentence came from. Users may write their own script, or use [collate.py](../dygie/data/collate/collate.py) to accomplish this.
   - Run training / prediction / whatever else.
-  - For predictions, "de-collate" the predictions to recover the original documents. TODO write a "de-collating script".
+  - For predictions, "un-collate" the predictions to recover the original documents using [uncollate.py](../dygie/data/collate/uncollate.py)
 - **Details**: It's up to the user to collate the sentences in a way that makes good use of GPU memory. In general, GPU usage for DyGIE++ scales with the number of spans in the document, which scales as the *square* of the sentence length. Thus, `collate.py` takes `max_spans_per_doc` as input. We calculate the number of spans per doc as `n_sentences * (longest_sentence_length ** 2)`. We've found that setting `max_spans_per_doc=50000` creates batches that utilize GPU effectively. However, we have not explored this exhaustively and we welcome feedback and PR's.
 
 --------------------

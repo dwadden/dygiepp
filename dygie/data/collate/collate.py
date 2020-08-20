@@ -1,5 +1,4 @@
 import argparse
-import json
 import os
 
 from dygie.data.dataset_readers import document
@@ -34,7 +33,7 @@ class Collator:
             # How many spans will there be if we add this sentence to the batch?
             candidate_n_spans = sent_spans * len(self.sents_batch) + 1
             # How many sentences?
-            candidate_n_sents = len(self.sents_batch)
+            candidate_n_sents = len(self.sents_batch) + 1
             # If adding a sentence makes the document too big, start a new one.
             start_new_doc = ((candidate_n_spans > self.max_spans_per_doc) or
                              (candidate_n_sents > self.max_sentences_per_doc))
