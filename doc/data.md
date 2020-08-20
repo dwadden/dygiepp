@@ -16,7 +16,7 @@ After preprocessing, all the datasets will be formatted like the [SciERC dataset
 ### Mandatory fields
 
 - `doc_key`: A unique string identifier for the document.
-- `dataset`: A string identifier for the dataset this document comes from. For more on this field, see the document on [multi-datset training](multi-dataset.md)
+- `dataset`: A string identifier for the dataset this document comes from. For more on this field, see the document on [multi-datset training](model.md)
 - `sentences`: The senteces in the document, written as a nested list of tokens. For instance,
   ```json
   [
