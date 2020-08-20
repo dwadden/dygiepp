@@ -3,7 +3,7 @@
 We include some notes and common modeling issues here.
 
 ## Table of Contents
-- [Debuggin](#debuggin)
+- [Debugging](#debugging)
 - [Batching and batch size](#batching-and-batch-size)
 - [Multi-dataset training](#multi-dataset-training)
 
