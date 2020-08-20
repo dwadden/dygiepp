@@ -17,7 +17,8 @@ def get_args():
                         help="If given, use the BERT model in the config. Else, use random embeddings.")
     parser.add_argument("--model-archive", type=str, default=None,
                         help="If given, load an archived model instaed of initializing from scratch.")
-    parser.add_argument("--max_instances")
+    parser.add_argument("--max_instances", type=int, default=5,
+                        help="Maximum number of instances to load.")
 
     args = parser.parse_args()
     return args
@@ -46,7 +47,7 @@ def main():
         tok_indexers = {"tokens": token_indexers.SingleIdTokenIndexer()}
 
     # Read input data.
-    reader = DyGIEReader(max_span_width=8, token_indexers=tok_indexers, max_instances=5)
+    reader = DyGIEReader(max_span_width=8, token_indexers=tok_indexers, max_instances=args.max_instances)
     data = reader.read(file_dict["train_data_path"])
     vocab = vocabulary.Vocabulary.from_instances(data)
     data.index_with(vocab)

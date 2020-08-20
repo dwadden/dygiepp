@@ -107,8 +107,9 @@
       },
     },
     data_loader: {
-      type: 'ie_batch',
-      batch_size: 1,
+      sampler: {
+        type: "random",
+      }
     },
     trainer: {
       checkpointer: {

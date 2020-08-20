@@ -10,9 +10,10 @@ from dygie.data.dataset_readers import document
 
 
 class Collator:
-    def __init__(self, corpus, max_spans_per_doc, dataset):
+    def __init__(self, corpus, max_spans_per_doc, max_sentences_per_doc, dataset):
         self.corpus = corpus
         self.max_spans_per_doc = max_spans_per_doc
+        self.max_sentences_per_doc = max_sentences_per_doc
         self.dataset = self._get_dataset(dataset)
         self._remove_clusters()
         self._reset_batch()
@@ -32,8 +33,13 @@ class Collator:
             sent_spans = len(sent) ** 2
             # How many spans will there be if we add this sentence to the batch?
             candidate_n_spans = sent_spans * len(self.sents_batch) + 1
+            # How many sentences?
+            candidate_n_sents = len(self.sents_batch)
+            # If adding a sentence makes the document too big, start a new one.
+            start_new_doc = ((candidate_n_spans > self.max_spans_per_doc) or
+                             (candidate_n_sents > self.max_sentences_per_doc))
             # If it would put us over, finish this document and start a new one.
-            if candidate_n_spans > self.max_spans_per_doc:
+            if start_new_doc:
                 new_doc = document.Document(doc_key=document_counter,
                                             dataset=self.dataset,
                                             sentences=self.sents_batch)
@@ -108,6 +114,8 @@ def get_args():
                         help="Name of the file with the test split.")
     parser.add_argument("--max_spans_per_doc", type=int, default=50000,
                         help="Heuristic for max spans, as square of longest sentence length")
+    parser.add_argument("--max_sentences_per_doc", type=int, default=16,
+                        help="Maximum number of sentences allowed in a document.")
     parser.add_argument("--dataset", type=str, default=None, help="Dataset name.")
     return parser.parse_args()
 
@@ -126,7 +134,8 @@ class CollateRunner:
     def process_fold(self, fold):
         fname = f"{self.input_directory}/{fold}.{self.file_extension}"
         corpus = document.Dataset.from_jsonl(fname)
-        collator = Collator(corpus, max_spans_per_doc=self.max_spans_per_doc, dataset=self.dataset)
+        collator = Collator(
+            corpus, self.max_spans_per_doc, self.max_sentences_per_doc, self.dataset)
         res = collator.collate()
         out_name = f"{self.output_directory}/{fold}.{self.file_extension}"
         res.to_jsonl(out_name)

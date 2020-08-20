@@ -12,6 +12,8 @@ from allennlp.data.batch import Batch
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
+# TODO(dwadden) This is no longer used. Get rid of it, or write a Sampler that does what we want.
+
 
 @DataLoader.register("ie_batch")
 class BatchIterator(PyTorchDataLoader):
