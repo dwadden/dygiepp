@@ -98,10 +98,13 @@ class EventExtractor(Model):
         self._argument_spans_per_word = argument_spans_per_word
 
         # Metrics
-        # TODO(dwadden) Need different metrics for different namespaces.
-        self._metrics = EventMetrics()
+        # Make a metric for each dataset (not each namespace).
+        namespaces = self._trigger_namespaces + self._argument_namespaces
+        datasets = set([x.split("__")[0] for x in namespaces])
+        self._metrics = {dataset: EventMetrics() for dataset in datasets}
 
         self._active_namespaces = {"trigger": None, "argument": None}
+        self._active_dataset = None
 
         # Trigger and argument loss.
         self._trigger_loss = torch.nn.CrossEntropyLoss(reduction="sum")
@@ -125,8 +128,9 @@ class EventExtractor(Model):
         The trigger embeddings are just the contextualized token embeddings, and the trigger mask is
         the text mask. For the arguments, we consider all the spans.
         """
-        self._active_namespaces = {"trigger": f"{metadata.dataset}__trigger_labels",
-                                   "argument": f"{metadata.dataset}__argument_labels"}
+        self._active_dataset = metadata.dataset
+        self._active_namespaces = {"trigger": f"{self._active_dataset}__trigger_labels",
+                                   "argument": f"{self._active_dataset}__argument_labels"}
 
         # Compute trigger scores.
         trigger_scores = self._compute_trigger_scores(
@@ -145,7 +149,6 @@ class EventExtractor(Model):
          top_trig_indices, top_trig_scores, num_trigs_kept) = trigger_pruner(
              trigger_embeddings, trigger_mask, num_trigs_to_keep, trigger_scores)
         top_trig_mask = top_trig_mask.unsqueeze(-1)
-
 
         # Compute the number of argument spans to keep.
         num_arg_spans_to_keep = torch.floor(
@@ -198,7 +201,9 @@ class EventExtractor(Model):
             # Compute F1.
             assert len(prediction_dicts) == len(metadata)  # Make sure length of predictions is right.
 
-            self._metrics(prediction_dicts, metadata)
+            # Compute metrics for this label namespace.
+            metrics = self._metrics[self._active_dataset]
+            metrics(prediction_dicts, metadata)
 
             loss = (self._loss_weights["trigger"] * trigger_loss +
                     self._loss_weights["arguments"] * argument_loss)
@@ -442,7 +447,20 @@ class EventExtractor(Model):
 
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        f1_metrics = self._metrics.get_metric(reset)
         res = {}
-        res.update(f1_metrics)
+        for namespace, metrics in self._metrics.items():
+            f1_metrics = metrics.get_metric(reset)
+            f1_metrics = {f"{namespace}_{k}": v for k, v in f1_metrics.items()}
+            res.update(f1_metrics)
+
+        prod = itertools.product(["trig_id", "trig_class", "arg_id", "arg_class"],
+                                 ["precision", "recall", "f1"])
+        names = [f"{task}_{metric}" for task, metric in prod]
+
+        res_avg = {}
+        for name in names:
+            values = [res[key] for key in res if name in key]
+            res_avg[f"MEAN__{name}"] = sum(values) / len(values) if values else 0
+            res.update(res_avg)
+
         return res
