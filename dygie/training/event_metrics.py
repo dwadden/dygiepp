@@ -22,6 +22,7 @@ def _invert_arguments(arguments, triggers):
     return inverted
 
 
+# TODO(dwadden) Clean this up.
 class EventMetrics(Metric):
     """
     Computes precision, recall, and micro-averaged F1 for triggers and arguments.
@@ -46,7 +47,8 @@ class EventMetrics(Metric):
     def _score_triggers(self, predicted_triggers, gold_triggers):
         self._gold_triggers += len(gold_triggers)
         self._predicted_triggers += len(predicted_triggers)
-        for token_ix, label in predicted_triggers.items():
+        for token_ix, pred in predicted_triggers.items():
+            label = pred[0]
             # Check whether the offsets match, and whether the labels match.
             if token_ix in gold_triggers:
                 self._matched_trigger_ids += 1
@@ -56,7 +58,7 @@ class EventMetrics(Metric):
     def _score_arguments(self, predicted_triggers, gold_triggers, predicted_arguments, gold_arguments):
         # Note that the index of the trigger doesn't actually need to be correct to get full credit;
         # the event type and event role need to be correct (see Sec. 3 of paper).
-        def format(arg_dict, trigger_dict):
+        def format(arg_dict, trigger_dict, prediction=False):
             # Make it a list of [index, event_type, arg_label].
             res = []
             for (trigger_ix, arg_ix), label in arg_dict.items():
@@ -64,11 +66,15 @@ class EventMetrics(Metric):
                 if trigger_ix not in trigger_dict:
                     continue
                 event_type = trigger_dict[trigger_ix]
+                # TODO(dwadden) This is clunky; it's because predictions have confidence scores.
+                if prediction:
+                    event_type = event_type[0]
+                    label = label[0]
                 res.append((arg_ix, event_type, label))
             return res
 
-        formatted_gold_arguments = format(gold_arguments, gold_triggers)
-        formatted_predicted_arguments = format(predicted_arguments, predicted_triggers)
+        formatted_gold_arguments = format(gold_arguments, gold_triggers, prediction=False)
+        formatted_predicted_arguments = format(predicted_arguments, predicted_triggers, prediction=True)
 
         self._gold_arguments += len(formatted_gold_arguments)
         self._predicted_arguments += len(formatted_predicted_arguments)
