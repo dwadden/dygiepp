@@ -15,7 +15,7 @@ def get_args():
     parser.add_argument("training_config", type=str, help="Path to the config file.")
     parser.add_argument("--use_bert", action="store_true",
                         help="If given, use the BERT model in the config. Else, use random embeddings.")
-    parser.add_argument("--model-archive", type=str, default=None,
+    parser.add_argument("--model_archive", type=str, default=None,
                         help="If given, load an archived model instaed of initializing from scratch.")
     parser.add_argument("--max_instances", type=int, default=5,
                         help="Maximum number of instances to load.")
