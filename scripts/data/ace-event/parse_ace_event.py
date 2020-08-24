@@ -13,6 +13,7 @@ from typing import List
 import spacy
 from spacy.symbols import ORTH
 import numpy as np
+from collections import defaultdict
 
 
 class AceException(Exception):
@@ -265,7 +266,7 @@ def get_token_of(doc, char):
 
 class Document:
     def __init__(self, annotation_path, text_path, doc_key, fold, heads_only=True,
-                 real_entities_only=True, include_pronouns=False):
+                 real_entities_only=True, include_pronouns=False, include_entity_coreference=False, include_event_coreference=False):
         '''
         A base class for ACE xml annotation
         :param annotation_path:
@@ -273,6 +274,8 @@ class Document:
         '''
         self._heads_only = heads_only
         self._real_entities_only = real_entities_only
+        self._include_entity_coreference = include_entity_coreference
+        self._include_event_coreference = include_event_coreference
         self._doc_key = doc_key
         self._annotation_path = annotation_path
         self._annotation_xml = ET.parse(self._annotation_path)
@@ -280,6 +283,8 @@ class Document:
         self._text = self._load_text(text_path)
         self.doc = self._make_nlp(self._text)
         assert self.doc.text == self._text
+        self.entity_mention_clusters = defaultdict(list)
+        self.event_mention_clusters = defaultdict(list)
         self.entity_list, self.entity_ids = self._populate_entity_list()
         self.entity_lookup = self._populate_entity_lookup()
         if self._real_entities_only:
@@ -442,7 +447,7 @@ class Document:
                 entry = Entity(start_char, end_char, text_string, mention_id=mention_id,
                                mention_type=mention_type, flavor=flavor)
                 res.append(entry)
-
+                self.entity_mention_clusters[entity_id].append(mention_id)
         # Values. Values don't have heads.
         field_to_find = "extent"
         for one_value in xml_root[0].findall('value'):
@@ -500,6 +505,7 @@ class Document:
         res = []
         xml_root = self._annotation_xml.getroot()
         for one_event in xml_root[0].findall('event'):
+            event_id = one_event.attrib['ID']
             for one_event_mention in one_event.findall('event_mention'):
                 include = True
                 trigger_id = one_event_mention.attrib['ID']
@@ -550,6 +556,7 @@ class Document:
                     argument_list.append(to_append)
                 if include:
                     res.append(Event(event_trigger, argument_list))
+                    self.event_mention_clusters[event_id].append(event_trigger.trigger_id)
         return res
 
     def _populate_relation_list(self):
@@ -722,6 +729,49 @@ class Document:
         doc = Doc(entries, self._doc_key)
         self._check_all_seen()
         js = doc.to_json()
+
+        # create entity coreference clusters.
+        if self._include_entity_coreference:
+            # mapping from mention_id to entity mention for faster computation.
+            mention_id2mention = {entity.mention_id:entity for entry in doc.entries for entity in entry.entities}
+            
+            clusters = []
+            for entity_id, mention_ids in self.entity_mention_clusters.items():
+                assert len(mention_ids) >= 1
+                cur_cluster = []
+                
+                for mention_id in mention_ids:
+                    if mention_id not in mention_id2mention: continue # invalid mention
+                    mention_json = mention_id2mention[mention_id].to_json()
+                    cur_cluster.append(mention_json[:2])
+                    
+                # this is indeed a cluster if cluster size > 2.
+                if len(cur_cluster) >=2 :
+                    clusters.append(cur_cluster)
+            js['clusters'] = clusters
+
+        # create event coreference clusters.
+        if self._include_event_coreference:
+
+            # mapping from trigger id to event mention for faster computation.
+            trigger_id2event_mention = {event.trigger.trigger_id:event for entry in doc.entries for event in entry.events}
+            clusters = []
+            
+            for event_id, mention_ids in self.event_mention_clusters.items():
+                assert len(mention_ids) >= 1
+                cur_cluster = []
+                
+                for mention_id in mention_ids:
+                    if mention_id not in trigger_id2event_mention: continue # invalid mention
+                    trigger_index = trigger_id2event_mention[mention_id].to_json()[0][0] 
+                    # keep the event cluster the same format as entity cluster. Each mention is represented by its trigger span.
+                    cur_cluster.append([trigger_index, trigger_index])
+                            
+                
+                # this is indeed a cluster if cluster size > 2
+                if len(cur_cluster) >=2 :
+                    clusters.append(cur_cluster)
+            js['event_clusters'] = clusters
         return js
 
 
@@ -730,7 +780,7 @@ class Document:
 # Main function.
 
 
-def one_fold(fold, output_dir, heads_only=True, real_entities_only=True, include_pronouns=False):
+def one_fold(fold, output_dir, heads_only=True, real_entities_only=True, include_pronouns=False, include_entity_coreference=False, include_event_coreference=False):
     doc_path = "./data/ace-event/raw-data"
     split_path = "./scripts/data/ace-event/event-split"
 
@@ -744,7 +794,7 @@ def one_fold(fold, output_dir, heads_only=True, real_entities_only=True, include
             annotation_path = path.join(doc_path, doc_key + ".apf.xml")
             text_path = path.join(doc_path, doc_key + ".sgm")
             document = Document(annotation_path, text_path, doc_key, fold, heads_only,
-                                real_entities_only, include_pronouns)
+                                real_entities_only, include_pronouns, include_entity_coreference, include_event_coreference)
             js = document.to_json()
             g.write(json.dumps(js, default=int) + "\n")
 
@@ -758,6 +808,10 @@ def main():
                         help="Treat times and values as entities and include them as event arguments.")
     parser.add_argument("--include_pronouns", action="store_true",
                         help="Include pronouns as entities and include them as event arguments.")
+    parser.add_argument("--include_entity_coreference", action="store_true",
+                        help="Include entity coreference labels stored in 'clusters'.")                        
+    parser.add_argument("--include_event_coreference", action="store_true",
+                        help="Include event coreference labels stored in 'event_clusters'.")                                                
     args = parser.parse_args()
 
     output_dir = f"./data/ace-event/processed-data/{args.output_name}/json"
@@ -770,7 +824,9 @@ def main():
                  output_dir,
                  heads_only=(not args.use_span_extent),
                  real_entities_only=(not args.include_times_and_values),
-                 include_pronouns=args.include_pronouns)
+                 include_pronouns=args.include_pronouns,
+                 include_entity_coreference=args.include_entity_coreference,
+                 include_event_coreference=args.include_event_coreference)
 
 
 if __name__ == "__main__":
