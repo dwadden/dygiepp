@@ -28,6 +28,8 @@ After preprocessing, all the datasets will be formatted like the [SciERC dataset
 
 ### Optional annotation fields
 
+- `weight`: When training, multiply the loss for the document by this weight (a float). This is useful when combining datasets of different sizes, or when combining weakly-labeled data with gold annotations.
+
 - `ner`: The named entities in the document, written as a nested list - one sublist per sentence. Each list entry is of the form `[start_tok, end_tok, label]`. The `start_tok` and `end_tok` token indices are with respect to the _document_, not the sentence. For instance the entities in the sentence above might be:
   ```json
   [
@@ -92,6 +94,7 @@ You can define additional metadata associated with each sentence that will be ig
 {
   "doc_key": "some_document",
   "dataset": "some_dataset",
+  "weight": 0.5,
   "sentences": [["One", "sentence"], ["Another", "sentence"]],
   "_sentence_index": [0, 1]   # User-added metadata field.
 }

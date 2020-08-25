@@ -71,19 +71,21 @@ class Dataset:
 
 
 class Document:
-    def __init__(self, doc_key, dataset, sentences, clusters=None, predicted_clusters=None):
+    def __init__(self, doc_key, dataset, sentences,
+                 clusters=None, predicted_clusters=None, weight=None):
         self.doc_key = doc_key
         self.dataset = dataset
         self.sentences = sentences
         self.clusters = clusters
         self.predicted_clusters = predicted_clusters
+        self.weight = weight
 
     @classmethod
     def from_json(cls, js):
         "Read in from json-loaded dict."
         doc_key = js["doc_key"]
         dataset = js.get("dataset")
-        entries = fields_to_batches(js, ["doc_key", "dataset", "clusters"])
+        entries = fields_to_batches(js, ["doc_key", "dataset", "clusters", "weight"])
         sentence_lengths = [len(entry["sentences"]) for entry in entries]
         sentence_starts = np.cumsum(sentence_lengths)
         sentence_starts = np.roll(sentence_starts, 1)
@@ -109,7 +111,10 @@ class Document:
         # Update the sentences with coreference cluster labels.
         sentences = update_sentences_with_clusters(sentences, clusters)
 
-        return cls(doc_key, dataset, sentences, clusters, predicted_clusters)
+        # Get the loss weight for this document.
+        weight = js.get("weight", None)
+
+        return cls(doc_key, dataset, sentences, clusters, predicted_clusters, weight)
 
     def to_json(self):
         "Write to json dict."
@@ -122,6 +127,8 @@ class Document:
             res["clusters"] = [cluster.to_json() for cluster in self.clusters]
         if self.predicted_clusters is not None:
             res["predicted_clusters"] = [cluster.to_json() for cluster in self.predicted_clusters]
+        if self.weight is not None:
+            res["weight"] = self.weight
 
         return res
 
@@ -129,11 +136,11 @@ class Document:
     def split(self, max_tokens_per_doc):
         """
         Greedily split a long document into smaller documents, each shorter than
-        `max_tokens_per_doc`
+        `max_tokens_per_doc`. Each split document will get the same weight as its parent.
         """
         # TODO(dwadden) Implement splitting when there's coref annotations. This is more difficult
         # because coreference clusters have to be split across documents.
-        if self.clusters is not None:
+        if self.clusters is not None or self.predicted_clusters is not None:
             raise NotImplementedError("Splitting documents with coreference annotations not implemented.")
 
         # If the document is already short enough, return it as a list with a single item.
@@ -174,7 +181,8 @@ class Document:
 
         # Create a separate document for each sentence group.
         doc_keys = [f"{self.doc_key}_SPLIT_{i}" for i in range(len(sentence_groups))]
-        res = [self.__class__(doc_key, self.dataset, sentence_group, self.clusters)
+        res = [self.__class__(doc_key, self.dataset, sentence_group,
+                              self.clusters, self.predicted_clusters, self.weight)
                for doc_key, sentence_group in zip(doc_keys, sentence_groups)]
 
         return res

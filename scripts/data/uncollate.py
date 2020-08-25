@@ -14,6 +14,7 @@ class UnCollator:
         self.corpus = corpus
         self.dataset = self._get_dataset(corpus)
         self.order = self._get_order(order_like)
+        self.weight = self._get_weight(corpus)
 
     def _get_order(self, order_like):
         if order_like is None:
@@ -31,11 +32,21 @@ class UnCollator:
 
             return orig_order
 
+    def _get_weight(self, corpus):
+        """
+        Get document weight. Right now, can only handle corpora where all documents have same
+        weight.
+        """
+        weights = set([x.weight for x in self.corpus])
+        if len(weights) > 1:
+            raise ValueError("Cannot uncollate documents with different instance weights.")
+        return sorted(weights)[0]
+
     @staticmethod
     def _get_dataset(corpus):
         datasets = [x.dataset for x in corpus]
         if len(set(datasets)) > 1:
-            raise ValueError("Can only de-collate documents with the same `dataset` field.")
+            raise ValueError("Can only uncollate documents with the same `dataset` field.")
 
         return datasets[0]
 
@@ -78,7 +89,8 @@ class UnCollator:
 
         new_doc = document.Document(doc_key=doc_key,
                                     dataset=self.dataset,
-                                    sentences=sentences)
+                                    sentences=sentences,
+                                    weight=self.weight)
         return new_doc
 
 

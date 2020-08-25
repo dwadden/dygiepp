@@ -261,6 +261,10 @@ class DyGIE(Model):
                 self._loss_weights['relation'] * output_relation.get("loss", 0) +
                 self._loss_weights['events'] * output_events.get("loss", 0))
 
+        # Multiply the loss by the weight multiplier for this document.
+        weight = metadata.weight if metadata.weight is not None else 1.0
+        loss *= torch.tensor(weight)
+
         output_dict = dict(coref=output_coref,
                            relation=output_relation,
                            ner=output_ner,

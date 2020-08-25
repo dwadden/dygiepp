@@ -14,6 +14,7 @@ class Collator:
         self.max_spans_per_doc = max_spans_per_doc
         self.max_sentences_per_doc = max_sentences_per_doc
         self.dataset = self._get_dataset(dataset)
+        self.weight = self._get_weight(corpus)
         self._remove_clusters()
         self._reset_batch()
 
@@ -57,7 +58,8 @@ class Collator:
         # At the end, get any docs that aren't left.
         new_doc = document.Document(doc_key=document_counter,
                                     dataset=self.dataset,
-                                    sentences=self.sents_batch)
+                                    sentences=self.sents_batch,
+                                    weight=self.weight)
         documents.append(new_doc)
         self._reset_batch()
 
@@ -73,6 +75,16 @@ class Collator:
             raise ValueError("The documents in the corpus must be from a single dataset.")
 
         return datasets[0]
+
+    def _get_weight(self, corpus):
+        """
+        Get document weight. Right now, can only handle corpora where all documents have same
+        weight.
+        """
+        weights = set([x.weight for x in self.corpus])
+        if len(weights) > 1:
+            raise ValueError("Cannot collate documents with different instance weights.")
+        return sorted(weights)[0]
 
     def _remove_clusters(self):
         "Can't collate data with coreference information. Remove it."
