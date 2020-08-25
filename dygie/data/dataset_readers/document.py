@@ -83,6 +83,7 @@ class Document:
     @classmethod
     def from_json(cls, js):
         "Read in from json-loaded dict."
+        cls._check_fields(js)
         doc_key = js["doc_key"]
         dataset = js.get("dataset")
         entries = fields_to_batches(js, ["doc_key", "dataset", "clusters", "weight"])
@@ -115,6 +116,22 @@ class Document:
         weight = js.get("weight", None)
 
         return cls(doc_key, dataset, sentences, clusters, predicted_clusters, weight)
+
+    @staticmethod
+    def _check_fields(js):
+        "Make sure we only have allowed fields."
+        allowed_field_regex = ("doc_key|dataset|sentences|weight|.*ner$|"
+                               ".*relations$|.*clusters$|.*events$|^_.*")
+        allowed_field_regex = re.compile(allowed_field_regex)
+        unexpected = []
+        for field in js.keys():
+            if not allowed_field_regex.match(field):
+                unexpected.append(field)
+
+        if unexpected:
+            msg = f"The following unexpected fields should be prefixed with an underscore: {', '.join(unexpected)}."
+            raise ValueError(msg)
+
 
     def to_json(self):
         "Write to json dict."

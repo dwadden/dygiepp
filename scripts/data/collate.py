@@ -118,11 +118,11 @@ def get_args(args=None):
     parser.add_argument("--file_extension", type=str, default="jsonl",
                         help="File extension for data files.")
     parser.add_argument("--train_name", type=str, default="train",
-                        help="Name of the file with the training split.")
+                        help="Name of the file with the training split. To skip this fold, enter `skip`.")
     parser.add_argument("--dev_name", type=str, default="dev",
-                        help="Name of the file with the dev split. For instance, `validation`.")
+                        help="Name of the file with the dev split. For instance, `validation`. Enter `skip` to skip.")
     parser.add_argument("--test_name", type=str, default="test",
-                        help="Name of the file with the test split.")
+                        help="Name of the file with the test split. Enter `skip` to skip.")
     parser.add_argument("--max_spans_per_doc", type=int, default=50000,
                         help="Heuristic for max spans, as square of longest sentence length")
     parser.add_argument("--max_sentences_per_doc", type=int, default=16,
@@ -145,7 +145,10 @@ class CollateRunner:
         os.makedirs(self.output_directory, exist_ok=True)
         fold_names = [self.train_name, self.dev_name, self.test_name]
         for fold in fold_names:
-            self.process_fold(fold)
+            if fold == "skip":
+                continue
+            else:
+                self.process_fold(fold)
 
     def process_fold(self, fold):
         fname = f"{self.input_directory}/{fold}.{self.file_extension}"
