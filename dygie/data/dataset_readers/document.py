@@ -11,6 +11,14 @@ def format_float(x):
     return round(x, 4)
 
 
+class EmptyStringError(ValueError):
+    pass
+
+
+class SpanCrossesSentencesError(ValueError):
+    pass
+
+
 def get_sentence_of_span(span, sentence_starts, doc_tokens):
     """
     Return the index of the sentence that the span is part of.
@@ -19,7 +27,8 @@ def get_sentence_of_span(span, sentence_starts, doc_tokens):
     sentence_ends = [x - 1 for x in sentence_starts[1:]] + [doc_tokens - 1]
     in_between = [span[0] >= start and span[1] <= end
                   for start, end in zip(sentence_starts, sentence_ends)]
-    assert sum(in_between) == 1
+    if sum(in_between) != 1:
+        raise SpanCrossesSentencesError
     the_sentence = in_between.index(True)
     return the_sentence
 
@@ -55,11 +64,24 @@ class Dataset:
 
     @classmethod
     def from_jsonl(cls, fname):
+        """
+        Load from jsonl file. If documents with empty strings are found, record and keep out of
+        dataset.
+        """
         documents = []
+        docs_with_empty_strings = []
         with open(fname, "r") as f:
             for line in f:
-                doc = Document.from_json(json.loads(line))
-                documents.append(doc)
+                try:
+                    doc = Document.from_json(json.loads(line))
+                    documents.append(doc)
+                except EmptyStringError:
+                    docs_with_empty_strings.append(json.loads(line)["doc_key"])
+
+        if docs_with_empty_strings:
+            missed = ", ".join(docs_with_empty_strings)
+            msg = f"These documents were not loaded in because they contain empty strings: {missed}."
+            print(msg)
 
         return cls(documents)
 
@@ -140,8 +162,7 @@ class Document:
             for word in sent:
                 if word == "":
                     msg = f"Empty string found in document {js['doc_key']}."
-                    raise ValueError(msg)
-
+                    raise EmptyStringError(msg)
 
     def to_json(self):
         "Write to json dict."
@@ -637,15 +658,20 @@ class Cluster:
         n_tokens = sum([len(x) for x in sentences])
 
         members = []
+        members_crossing_sentences = []
+
         for entry in cluster:
-            sentence_ix = get_sentence_of_span(entry, sentence_starts, n_tokens)
-            sentence = sentences[sentence_ix]
-            span = Span(entry[0], entry[1], sentence)
-            ners = [x for x in sentence.ner if x.span == span]
-            assert len(ners) <= 1
-            ner = ners[0] if len(ners) == 1 else None
-            to_append = ClusterMember(span, ner, sentence, cluster_id)
-            members.append(to_append)
+            try:
+                sentence_ix = get_sentence_of_span(entry, sentence_starts, n_tokens)
+                sentence = sentences[sentence_ix]
+                span = Span(entry[0], entry[1], sentence)
+                to_append = ClusterMember(span, sentence, cluster_id)
+                members.append(to_append)
+            except SpanCrossesSentencesError:
+                members_crossing_sentences.append(entry)
+
+        if members_crossing_sentences:
+            print("Found a coreference cluster member that crosses sentence boundaries; skipping.")
 
         self.members = members
         self.cluster_id = cluster_id
@@ -661,9 +687,8 @@ class Cluster:
 
 
 class ClusterMember:
-    def __init__(self, span, ner, sentence, cluster_id):
+    def __init__(self, span, sentence, cluster_id):
         self.span = span
-        self.ner = ner
         self.sentence = sentence
         self.cluster_id = cluster_id
 
