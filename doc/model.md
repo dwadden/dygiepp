@@ -12,6 +12,10 @@ We include some notes and common modeling issues here.
 
 Debugging by running `allennlp train` or `allennlp predict` isn't optimal, because the model takes more than 10 seconds just to initialize. To speed up the debugging loop, there's a script [debug_forward_pass.py](../scripts/debug/debug_forward_pass.py) that will run a forward pass for you without doing all the initialization logic, and without loading in the BERT embeddings. See the script for usage information.
 
+### Common problems encountered during debugging
+
+- `nan`'s in gradients or parameters: This may be due to characters that the tokenizer doesn't recognize. See [this issue](https://github.com/allenai/allennlp/issues/4612) for more details. Before doing any more extensive debugging, check your input documents for weird unicode characters.
+
 
 ## Batching and batch size
 
