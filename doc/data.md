@@ -137,7 +137,7 @@ If you're stuck on preprocessing a dataset, post an issue. Or, if you come up wi
 
 TODO I've made truncating long sentences the new default; update the docs here accordingly.
 
-Most transformer-based encoders have a 512-token limit. Sentences longer than this will cause an error. Unfortunately, you can't just check that each of your `sentences` fields is at most 512 tokens. These tokens are converted to BERT's byte pair encoding, and a single "word token" may be split into multiple "BERT tokens". We have provided a script `scripts/data/check_sentence_length.py`, which you can run on an input file. It will identify sentences whose byte pair encodings exceed the limit of the encoder you're using.
+Most transformer-based encoders have a 512-token limit. Sentences longer than this will cause an error. Unfortunately, you can't just check that each of your `sentences` fields is at most 512 tokens. These tokens are converted to BERT's byte pair encoding, and a single "word token" may be split into multiple "BERT tokens". We have provided a script `scripts/data/shared/check_sentence_length.py`, which you can run on an input file. It will identify sentences whose byte pair encodings exceed the limit of the encoder you're using.
 
 If you have sentences that are too long, you have two options:
 

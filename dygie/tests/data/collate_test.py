@@ -14,7 +14,7 @@ from pathlib import Path
 # it.
 current_dir = Path(os.path.dirname(os.path.realpath(__file__)))
 common_root = current_dir.parent.parent.parent
-collate_dir = f"{common_root}/scripts/data"
+collate_dir = f"{common_root}/scripts/data/shared"
 sys.path.append(collate_dir)
 
 # Now import the code
