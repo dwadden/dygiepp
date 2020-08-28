@@ -25,6 +25,7 @@ After preprocessing, all the datasets will be formatted like the [SciERC dataset
     ["She", "was", "elected", "in", "2017", "."]
   ]
   ```
+  Empty strings (`""`) are not allowed as entries in sentences; the reader will raise an error if it encounters these.
 
 ### Optional annotation fields
 

@@ -84,6 +84,7 @@ class Document:
     def from_json(cls, js):
         "Read in from json-loaded dict."
         cls._check_fields(js)
+        cls._check_empty_strings(js)
         doc_key = js["doc_key"]
         dataset = js.get("dataset")
         entries = fields_to_batches(js, ["doc_key", "dataset", "clusters", "weight"])
@@ -131,6 +132,15 @@ class Document:
         if unexpected:
             msg = f"The following unexpected fields should be prefixed with an underscore: {', '.join(unexpected)}."
             raise ValueError(msg)
+
+    @staticmethod
+    def _check_empty_strings(js):
+        "Check for empty strings in the input sentences, and thow an error if found."
+        for sent in js["sentences"]:
+            for word in sent:
+                if word == "":
+                    msg = f"Empty string found in document {js['doc_key']}."
+                    raise ValueError(msg)
 
 
     def to_json(self):
