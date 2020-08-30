@@ -46,7 +46,7 @@ The choice we have made is to model an `Instance` as a *document*. By default, w
 --------------------
 
 - **Problem**: You're doing coreference resolution, and your documents are too long to fit in memory.
-- **Solution**: Split the documents as a preprocessing step, run the model, and merge in post-processing. We have a script [normalize.py](../scripts/data/normalize.py) that splits long documents into shorter ones, but it doesn't deal with coref annotations. I'd welcome a PR that does this.
+- **Solution**: Split the documents as a preprocessing step, run the model, and merge in post-processing. We have a script [normalize.py](../scripts/data/shared/normalize.py) that splits long documents into shorter ones, but it doesn't deal with coref annotations. I'd welcome a PR that does this.
 
 
 ## Multi-dataset training
