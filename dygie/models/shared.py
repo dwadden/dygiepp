@@ -34,11 +34,18 @@ def fields_to_batches(d, keys_to_ignore=[]):
     Output:
     res = [{"a": [1, 2], "b": 1}, {"a": [3, 4], "b": 2}].
     """
-    # Make sure all input dicts have same length.
     keys = [key for key in d.keys() if key not in keys_to_ignore]
-    lengths = [len(d[k]) for k in keys]
-    assert len(set(lengths)) == 1
-    length = lengths[0]
+
+    # Make sure all input dicts have same length. If they don't, there's a problem.
+    lengths = {k: len(d[k]) for k in keys}
+    if len(set(lengths.values())) != 1:
+        msg = f"fields have different lengths: {lengths}."
+        # If there's a doc key, add it to specify where the error is.
+        if "doc_key" in d:
+            msg = f"For document {d['doc_key']}, " + msg
+        raise ValueError(msg)
+
+    length = list(lengths.values())[0]
     res = [{k: d[k][i] for k in keys} for i in range(length)]
     return res
 

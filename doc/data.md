@@ -25,8 +25,11 @@ After preprocessing, all the datasets will be formatted like the [SciERC dataset
     ["She", "was", "elected", "in", "2017", "."]
   ]
   ```
+  Empty strings (`""`) are not allowed as entries in sentences; the reader will raise an error if it encounters these.
 
 ### Optional annotation fields
+
+- `weight`: When training, multiply the loss for the document by this weight (a float). This is useful when combining datasets of different sizes, or when combining weakly-labeled data with gold annotations.
 
 - `ner`: The named entities in the document, written as a nested list - one sublist per sentence. Each list entry is of the form `[start_tok, end_tok, label]`. The `start_tok` and `end_tok` token indices are with respect to the _document_, not the sentence. For instance the entities in the sentence above might be:
   ```json
@@ -92,6 +95,7 @@ You can define additional metadata associated with each sentence that will be ig
 {
   "doc_key": "some_document",
   "dataset": "some_dataset",
+  "weight": 0.5,
   "sentences": [["One", "sentence"], ["Another", "sentence"]],
   "_sentence_index": [0, 1]   # User-added metadata field.
 }
@@ -133,7 +137,7 @@ If you're stuck on preprocessing a dataset, post an issue. Or, if you come up wi
 
 TODO I've made truncating long sentences the new default; update the docs here accordingly.
 
-Most transformer-based encoders have a 512-token limit. Sentences longer than this will cause an error. Unfortunately, you can't just check that each of your `sentences` fields is at most 512 tokens. These tokens are converted to BERT's byte pair encoding, and a single "word token" may be split into multiple "BERT tokens". We have provided a script `scripts/data/check_sentence_length.py`, which you can run on an input file. It will identify sentences whose byte pair encodings exceed the limit of the encoder you're using.
+Most transformer-based encoders have a 512-token limit. Sentences longer than this will cause an error. Unfortunately, you can't just check that each of your `sentences` fields is at most 512 tokens. These tokens are converted to BERT's byte pair encoding, and a single "word token" may be split into multiple "BERT tokens". We have provided a script `scripts/data/shared/check_sentence_length.py`, which you can run on an input file. It will identify sentences whose byte pair encodings exceed the limit of the encoder you're using.
 
 If you have sentences that are too long, you have two options:
 

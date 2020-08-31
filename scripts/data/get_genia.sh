@@ -107,3 +107,8 @@ python ./scripts/data/genia/align_articles.py > $log_dir/06-align-articles.log
 echo "Merging coreference annotations into NER data."
 python ./scripts/data/genia/merge_coref.py > $log_dir/07-merge-coref-all.log
 python ./scripts/data/genia/merge_coref.py --ident-only > $log_dir/08-merge-coref-ident-only.log
+
+# Normalize the data by adding `dataset` labels, removing docs with empty
+# strings, and collating the non-coref data.
+echo "Normalizing."
+python ./scripts/data/genia/normalize_genia.py > $log_dir/09-normalize.log

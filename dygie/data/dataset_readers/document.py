@@ -11,6 +11,14 @@ def format_float(x):
     return round(x, 4)
 
 
+class EmptyStringError(ValueError):
+    pass
+
+
+class SpanCrossesSentencesError(ValueError):
+    pass
+
+
 def get_sentence_of_span(span, sentence_starts, doc_tokens):
     """
     Return the index of the sentence that the span is part of.
@@ -19,7 +27,8 @@ def get_sentence_of_span(span, sentence_starts, doc_tokens):
     sentence_ends = [x - 1 for x in sentence_starts[1:]] + [doc_tokens - 1]
     in_between = [span[0] >= start and span[1] <= end
                   for start, end in zip(sentence_starts, sentence_ends)]
-    assert sum(in_between) == 1
+    if sum(in_between) != 1:
+        raise SpanCrossesSentencesError
     the_sentence = in_between.index(True)
     return the_sentence
 
@@ -55,11 +64,24 @@ class Dataset:
 
     @classmethod
     def from_jsonl(cls, fname):
+        """
+        Load from jsonl file. If documents with empty strings are found, record and keep out of
+        dataset.
+        """
         documents = []
+        docs_with_empty_strings = []
         with open(fname, "r") as f:
             for line in f:
-                doc = Document.from_json(json.loads(line))
-                documents.append(doc)
+                try:
+                    doc = Document.from_json(json.loads(line))
+                    documents.append(doc)
+                except EmptyStringError:
+                    docs_with_empty_strings.append(json.loads(line)["doc_key"])
+
+        if docs_with_empty_strings:
+            missed = ", ".join(docs_with_empty_strings)
+            msg = f"These documents were not loaded in because they contain empty strings: {missed}."
+            print(msg)
 
         return cls(documents)
 
@@ -71,19 +93,23 @@ class Dataset:
 
 
 class Document:
-    def __init__(self, doc_key, dataset, sentences, clusters=None, predicted_clusters=None):
+    def __init__(self, doc_key, dataset, sentences,
+                 clusters=None, predicted_clusters=None, weight=None):
         self.doc_key = doc_key
         self.dataset = dataset
         self.sentences = sentences
         self.clusters = clusters
         self.predicted_clusters = predicted_clusters
+        self.weight = weight
 
     @classmethod
     def from_json(cls, js):
         "Read in from json-loaded dict."
+        cls._check_fields(js)
+        cls._check_empty_strings(js)
         doc_key = js["doc_key"]
         dataset = js.get("dataset")
-        entries = fields_to_batches(js, ["doc_key", "dataset", "clusters"])
+        entries = fields_to_batches(js, ["doc_key", "dataset", "clusters", "weight"])
         sentence_lengths = [len(entry["sentences"]) for entry in entries]
         sentence_starts = np.cumsum(sentence_lengths)
         sentence_starts = np.roll(sentence_starts, 1)
@@ -109,7 +135,34 @@ class Document:
         # Update the sentences with coreference cluster labels.
         sentences = update_sentences_with_clusters(sentences, clusters)
 
-        return cls(doc_key, dataset, sentences, clusters, predicted_clusters)
+        # Get the loss weight for this document.
+        weight = js.get("weight", None)
+
+        return cls(doc_key, dataset, sentences, clusters, predicted_clusters, weight)
+
+    @staticmethod
+    def _check_fields(js):
+        "Make sure we only have allowed fields."
+        allowed_field_regex = ("doc_key|dataset|sentences|weight|.*ner$|"
+                               ".*relations$|.*clusters$|.*events$|^_.*")
+        allowed_field_regex = re.compile(allowed_field_regex)
+        unexpected = []
+        for field in js.keys():
+            if not allowed_field_regex.match(field):
+                unexpected.append(field)
+
+        if unexpected:
+            msg = f"The following unexpected fields should be prefixed with an underscore: {', '.join(unexpected)}."
+            raise ValueError(msg)
+
+    @staticmethod
+    def _check_empty_strings(js):
+        "Check for empty strings in the input sentences, and thow an error if found."
+        for sent in js["sentences"]:
+            for word in sent:
+                if word == "":
+                    msg = f"Empty string found in document {js['doc_key']}."
+                    raise EmptyStringError(msg)
 
     def to_json(self):
         "Write to json dict."
@@ -122,6 +175,8 @@ class Document:
             res["clusters"] = [cluster.to_json() for cluster in self.clusters]
         if self.predicted_clusters is not None:
             res["predicted_clusters"] = [cluster.to_json() for cluster in self.predicted_clusters]
+        if self.weight is not None:
+            res["weight"] = self.weight
 
         return res
 
@@ -129,11 +184,11 @@ class Document:
     def split(self, max_tokens_per_doc):
         """
         Greedily split a long document into smaller documents, each shorter than
-        `max_tokens_per_doc`
+        `max_tokens_per_doc`. Each split document will get the same weight as its parent.
         """
         # TODO(dwadden) Implement splitting when there's coref annotations. This is more difficult
         # because coreference clusters have to be split across documents.
-        if self.clusters is not None:
+        if self.clusters is not None or self.predicted_clusters is not None:
             raise NotImplementedError("Splitting documents with coreference annotations not implemented.")
 
         # If the document is already short enough, return it as a list with a single item.
@@ -174,7 +229,8 @@ class Document:
 
         # Create a separate document for each sentence group.
         doc_keys = [f"{self.doc_key}_SPLIT_{i}" for i in range(len(sentence_groups))]
-        res = [self.__class__(doc_key, self.dataset, sentence_group, self.clusters)
+        res = [self.__class__(doc_key, self.dataset, sentence_group,
+                              self.clusters, self.predicted_clusters, self.weight)
                for doc_key, sentence_group in zip(doc_keys, sentence_groups)]
 
         return res
@@ -602,15 +658,20 @@ class Cluster:
         n_tokens = sum([len(x) for x in sentences])
 
         members = []
+        members_crossing_sentences = []
+
         for entry in cluster:
-            sentence_ix = get_sentence_of_span(entry, sentence_starts, n_tokens)
-            sentence = sentences[sentence_ix]
-            span = Span(entry[0], entry[1], sentence)
-            ners = [x for x in sentence.ner if x.span == span]
-            assert len(ners) <= 1
-            ner = ners[0] if len(ners) == 1 else None
-            to_append = ClusterMember(span, ner, sentence, cluster_id)
-            members.append(to_append)
+            try:
+                sentence_ix = get_sentence_of_span(entry, sentence_starts, n_tokens)
+                sentence = sentences[sentence_ix]
+                span = Span(entry[0], entry[1], sentence)
+                to_append = ClusterMember(span, sentence, cluster_id)
+                members.append(to_append)
+            except SpanCrossesSentencesError:
+                members_crossing_sentences.append(entry)
+
+        if members_crossing_sentences:
+            print("Found a coreference cluster member that crosses sentence boundaries; skipping.")
 
         self.members = members
         self.cluster_id = cluster_id
@@ -626,9 +687,8 @@ class Cluster:
 
 
 class ClusterMember:
-    def __init__(self, span, ner, sentence, cluster_id):
+    def __init__(self, span, sentence, cluster_id):
         self.span = span
-        self.ner = ner
         self.sentence = sentence
         self.cluster_id = cluster_id
 

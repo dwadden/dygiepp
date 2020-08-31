@@ -12,6 +12,10 @@ We include some notes and common modeling issues here.
 
 Debugging by running `allennlp train` or `allennlp predict` isn't optimal, because the model takes more than 10 seconds just to initialize. To speed up the debugging loop, there's a script [debug_forward_pass.py](../scripts/debug/debug_forward_pass.py) that will run a forward pass for you without doing all the initialization logic, and without loading in the BERT embeddings. See the script for usage information.
 
+### Common problems encountered during debugging
+
+- `nan`'s in gradients or parameters: This may be due to characters that the tokenizer doesn't recognize. See [this issue](https://github.com/allenai/allennlp/issues/4612) for more details. Before doing any more extensive debugging, check your input documents for weird unicode characters.
+
 
 ## Batching and batch size
 
@@ -26,9 +30,9 @@ The choice we have made is to model an `Instance` as a *document*. By default, w
 
 - **Problem**: If you're not doing coreference resolution, then it's wasteful to have minibatches with sentences of widely varying lengths. Instead, you should create minibatches of similar-length sentences from different documents.
 - **Solution**: Our solution is as follows:
-  - "Collate" the dataset into "psuedo-documents" containing sentences of similar length. Keep track of the original document that each sentence came from. Users may write their own script, or use [collate.py](../scripts/data/collate.py) to accomplish this.
+  - "Collate" the dataset into "psuedo-documents" containing sentences of similar length. Keep track of the original document that each sentence came from. Users may write their own script, or use [collate.py](../scripts/data/shared/collate.py) to accomplish this.
   - Run training / prediction / whatever else.
-  - For prediction, "un-collate" the predictions to recover the original documents using [uncollate.py](../scripts/data/uncollate.py)
+  - For prediction, "un-collate" the predictions to recover the original documents using [uncollate.py](../scripts/data/shared/uncollate.py)
 - **Details**: It's up to the user to collate the sentences in a way that makes good use of GPU memory. The `collate` script has two options to help control this.
   - `max_spans_per_doc`: In general, GPU usage for DyGIE++ scales with the number of spans in the document, which scales as the *square* of the sentence length. Thus, `collate.py` takes `max_spans_per_doc` as input. We calculate the number of spans per doc as `n_sentences * (longest_sentence_length ** 2)`. We've found that setting `max_spans_per_doc=50000` creates batches that utilize GPU effectively. However, we have not explored this exhaustively and we welcome feedback and PR's.
   - `max_sentences_per_doc`: Using only `max_spans_per_doc` to constrain the length of pseudo-documents can lead to some documents with hundreds of short sentences, and other documents with only a few long sentences. Having wildly varying numbers of sentences seemed to do weird things during training, though this is anecdotal. So, there is a parameter to limit the maximum number of sentences in a pseudo-document. By default this is set to 16; if you don't care about widely varying batch sizes and want to maximize GPU resources, just set this to a large positive number.
@@ -42,7 +46,7 @@ The choice we have made is to model an `Instance` as a *document*. By default, w
 --------------------
 
 - **Problem**: You're doing coreference resolution, and your documents are too long to fit in memory.
-- **Solution**: Split the documents as a preprocessing step, run the model, and merge in post-processing. We have a script [normalize.py](../scripts/data/normalize.py) that splits long documents into shorter ones, but it doesn't deal with coref annotations. I'd welcome a PR that does this.
+- **Solution**: Split the documents as a preprocessing step, run the model, and merge in post-processing. We have a script [normalize.py](../scripts/data/shared/normalize.py) that splits long documents into shorter ones, but it doesn't deal with coref annotations. I'd welcome a PR that does this.
 
 
 ## Multi-dataset training

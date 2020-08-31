@@ -14,6 +14,7 @@ class UnCollator:
         self.corpus = corpus
         self.dataset = self._get_dataset(corpus)
         self.order = self._get_order(order_like)
+        self.weight = self._get_weight(corpus)
 
     def _get_order(self, order_like):
         if order_like is None:
@@ -31,11 +32,21 @@ class UnCollator:
 
             return orig_order
 
+    def _get_weight(self, corpus):
+        """
+        Get document weight. Right now, can only handle corpora where all documents have same
+        weight.
+        """
+        weights = set([x.weight for x in self.corpus])
+        if len(weights) > 1:
+            raise ValueError("Cannot uncollate documents with different instance weights.")
+        return sorted(weights)[0]
+
     @staticmethod
     def _get_dataset(corpus):
         datasets = [x.dataset for x in corpus]
         if len(set(datasets)) > 1:
-            raise ValueError("Can only de-collate documents with the same `dataset` field.")
+            raise ValueError("Can only uncollate documents with the same `dataset` field.")
 
         return datasets[0]
 
@@ -78,7 +89,8 @@ class UnCollator:
 
         new_doc = document.Document(doc_key=doc_key,
                                     dataset=self.dataset,
-                                    sentences=sentences)
+                                    sentences=sentences,
+                                    weight=self.weight)
         return new_doc
 
 
@@ -97,9 +109,9 @@ def get_args(args=None):
     parser.add_argument("--file_extension", type=str, default="jsonl",
                         help="File extension for data files.")
     parser.add_argument("--train_name", type=str, default="train",
-                        help="Name of the file with the training split.")
+                        help="Name of the file with the training split. Enter `skip` to skip this fold.")
     parser.add_argument("--dev_name", type=str, default="dev",
-                        help="Name of the file with the dev split. For instance, `validation`.")
+                        help="Name of the file with the dev split. For instance, `validation`, of `skip` to skip")
     parser.add_argument("--test_name", type=str, default="test",
                         help="Name of the file with the test split.")
 
@@ -119,7 +131,10 @@ class UnCollateRunner:
         os.makedirs(self.output_directory, exist_ok=True)
         fold_names = [self.train_name, self.dev_name, self.test_name]
         for fold in fold_names:
-            self.process_fold(fold)
+            if fold == "skip":
+                continue
+            else:
+                self.process_fold(fold)
 
     def process_fold(self, fold):
         fname = f"{self.input_directory}/{fold}.{self.file_extension}"

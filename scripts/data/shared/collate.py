@@ -14,6 +14,7 @@ class Collator:
         self.max_spans_per_doc = max_spans_per_doc
         self.max_sentences_per_doc = max_sentences_per_doc
         self.dataset = self._get_dataset(dataset)
+        self.weight = self._get_weight(corpus)
         self._remove_clusters()
         self._reset_batch()
 
@@ -57,7 +58,8 @@ class Collator:
         # At the end, get any docs that aren't left.
         new_doc = document.Document(doc_key=document_counter,
                                     dataset=self.dataset,
-                                    sentences=self.sents_batch)
+                                    sentences=self.sents_batch,
+                                    weight=self.weight)
         documents.append(new_doc)
         self._reset_batch()
 
@@ -73,6 +75,16 @@ class Collator:
             raise ValueError("The documents in the corpus must be from a single dataset.")
 
         return datasets[0]
+
+    def _get_weight(self, corpus):
+        """
+        Get document weight. Right now, can only handle corpora where all documents have same
+        weight.
+        """
+        weights = set([x.weight for x in self.corpus])
+        if len(weights) > 1:
+            raise ValueError("Cannot collate documents with different instance weights.")
+        return sorted(weights)[0]
 
     def _remove_clusters(self):
         "Can't collate data with coreference information. Remove it."
@@ -106,11 +118,11 @@ def get_args(args=None):
     parser.add_argument("--file_extension", type=str, default="jsonl",
                         help="File extension for data files.")
     parser.add_argument("--train_name", type=str, default="train",
-                        help="Name of the file with the training split.")
+                        help="Name of the file with the training split. To skip this fold, enter `skip`.")
     parser.add_argument("--dev_name", type=str, default="dev",
-                        help="Name of the file with the dev split. For instance, `validation`.")
+                        help="Name of the file with the dev split. For instance, `validation`. Enter `skip` to skip.")
     parser.add_argument("--test_name", type=str, default="test",
-                        help="Name of the file with the test split.")
+                        help="Name of the file with the test split. Enter `skip` to skip.")
     parser.add_argument("--max_spans_per_doc", type=int, default=50000,
                         help="Heuristic for max spans, as square of longest sentence length")
     parser.add_argument("--max_sentences_per_doc", type=int, default=16,
@@ -133,7 +145,10 @@ class CollateRunner:
         os.makedirs(self.output_directory, exist_ok=True)
         fold_names = [self.train_name, self.dev_name, self.test_name]
         for fold in fold_names:
-            self.process_fold(fold)
+            if fold == "skip":
+                continue
+            else:
+                self.process_fold(fold)
 
     def process_fold(self, fold):
         fname = f"{self.input_directory}/{fold}.{self.file_extension}"

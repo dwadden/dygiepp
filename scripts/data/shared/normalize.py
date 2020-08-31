@@ -2,7 +2,7 @@ import argparse
 import json
 import os
 
-from dygie.data.dataset_readers.document import Document
+from dygie.data.dataset_readers.document import Document, Dataset
 
 
 def load_jsonl(fname):
@@ -49,16 +49,16 @@ class Normalizer:
 
     def process_fold(self, fold):
         fname = f"{self.input_directory}/{fold}.{self.file_extension}"
-        js = load_jsonl(fname)
+        dataset = Dataset.from_jsonl(fname)
         res = []
-        for entry in js:
-            res.extend(self.process_entry(entry))
+
+        for doc in dataset:
+            res.extend(self.process_entry(doc))
 
         out_name = f"{self.output_directory}/{fold}.{self.file_extension}"
         save_jsonl(res, out_name)
 
-    def process_entry(self, entry):
-        doc = Document.from_json(entry)
+    def process_entry(self, doc):
         doc.dataset = self.dataset
         if self.max_tokens_per_doc > 0:
             splits = doc.split(self.max_tokens_per_doc)
