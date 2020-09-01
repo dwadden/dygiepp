@@ -6,7 +6,7 @@ We provide details on the data preprocessing for each of the datasets available 
 
 - [Data format](#data-format)
 - [Format for predictions](#format-for-predictions)
-- [Code for manipulation](#code-for-data-manipulation)
+- [Code for data manipulation](#code-for-data-manipulation)
 - [Formatting a new dataset](#formatting-a-new-dataset)
 - [Preprocessing details for existing datasets](#preprocesing-details-for-existing-datasets)
 
@@ -115,7 +115,7 @@ When model predictions are saved to file, they are formatted as described above,
 
 ## Code for data manipulation
 
-The module [document.py](../data/dataset_readers/document.py) contains classes and methods to load, save, manipulate, and visualize DyGIE-formatted data. See [document.ipynb](../notebooks/document.ipynb) for usage examples.
+The module [document.py](../dygie/data/dataset_readers/document.py) contains classes and methods to load, save, manipulate, and visualize DyGIE-formatted data. See [document.ipynb](../notebooks/document.ipynb) for usage examples.
 
 
 ## Formatting a new dataset
