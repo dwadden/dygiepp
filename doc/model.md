@@ -35,7 +35,9 @@ The choice we have made is to model an `Instance` as a *document*. By default, w
   - For prediction, "un-collate" the predictions to recover the original documents using [uncollate.py](../scripts/data/shared/uncollate.py)
 - **Details**: It's up to the user to collate the sentences in a way that makes good use of GPU memory. The `collate` script has two options to help control this.
   - `max_spans_per_doc`: In general, GPU usage for DyGIE++ scales with the number of spans in the document, which scales as the *square* of the sentence length. Thus, `collate.py` takes `max_spans_per_doc` as input. We calculate the number of spans per doc as `n_sentences * (longest_sentence_length ** 2)`. We've found that setting `max_spans_per_doc=50000` creates batches that utilize GPU effectively. However, we have not explored this exhaustively and we welcome feedback and PR's.
-  - `max_sentences_per_doc`: Using only `max_spans_per_doc` to constrain the length of pseudo-documents can lead to some documents with hundreds of short sentences, and other documents with only a few long sentences. Having wildly varying numbers of sentences seemed to do weird things during training, though this is anecdotal. So, there is a parameter to limit the maximum number of sentences in a pseudo-document. By default this is set to 16; if you don't care about widely varying batch sizes and want to maximize GPU resources, just set this to a large positive number.
+  - `max_sentences_per_doc`
+    - **If If you're training a model**, you probably want to avoid the creation of pseudo-documents containg hundreds of short sentences - even if they'd fit in GPU. Having wildly varying numbers of sentences per batch seemed to do weird things during training, though this is anecdotal. To avoid this, set `max_sentences_per_doc` to some reasonable value. The default of 16 seems safe, though bigger might be OK too.
+    - **If you're using an existing model to make predictions**: Just set this to a big number to make the best use of your GPU.
 
 
 --------------------
