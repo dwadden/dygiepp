@@ -109,7 +109,7 @@ class Document:
         cls._check_empty_strings(js)
         doc_key = js["doc_key"]
         dataset = js.get("dataset")
-        entries = fields_to_batches(js, ["doc_key", "dataset", "clusters", "weight"])
+        entries = fields_to_batches(js, ["doc_key", "dataset", "clusters", "predicted_clusters", "weight"])
         sentence_lengths = [len(entry["sentences"]) for entry in entries]
         sentence_starts = np.cumsum(sentence_lengths)
         sentence_starts = np.roll(sentence_starts, 1)
