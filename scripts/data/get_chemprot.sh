@@ -25,7 +25,3 @@ python scripts/data/chemprot/01_rename_test.py
 # Run formatting.
 mkdir $out_dir/processed_data
 python scripts/data/chemprot/02_chemprot_to_input.py
-
-# Spot-check output
-echo "Spot-checking."
-python scripts/data/chemprot/03_spot_check.py

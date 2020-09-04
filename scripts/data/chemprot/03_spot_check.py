@@ -7,13 +7,13 @@ Some will be dropped due to tokenization / sentence splitting.
 import pandas as pd
 from collections import Counter
 
-from dygie.data.dataset_readers import data_structures
+from dygie.data.dataset_readers.document import Dataset
 
 
 def spot_check_fold(fold):
     print(f"Checking {fold}.")
     fname = f"data/chemprot/processed_data/{fold}.jsonl"
-    data = data_structures.Dataset(fname)
+    data = Dataset.from_jsonl(fname)
 
     f_entity = f"data/chemprot/raw_data/ChemProt_Corpus/chemprot_{fold}/chemprot_{fold}_entities.tsv"
     entities = pd.read_table(f_entity, header=None)
@@ -27,8 +27,8 @@ def spot_check_fold(fold):
 
     for entry in data:
         counts = Counter()
-        expected_entities = entities.query(f"doc_key == {entry._doc_key}")
-        expected_relations = relations.query(f"doc_key == {entry._doc_key}")
+        expected_entities = entities.query(f"doc_key == {entry.doc_key}")
+        expected_relations = relations.query(f"doc_key == {entry.doc_key}")
         for sent in entry:
             counts["found_entities"] += len(sent.ner)
             counts["found_relations"] += len(sent.relations)
@@ -36,7 +36,7 @@ def spot_check_fold(fold):
         counts["expected_entities"] = len(expected_entities)
         counts["expected_relations"] = len(expected_relations)
 
-        counts["doc_key"] = entry._doc_key
+        counts["doc_key"] = entry.doc_key
         res.append(counts)
 
     res = pd.DataFrame(res).set_index("doc_key")
