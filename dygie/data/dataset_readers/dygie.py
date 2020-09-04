@@ -186,6 +186,13 @@ class DyGIEReader(DatasetReader):
         """
         doc = Document.from_json(doc_text)
 
+        # Make sure there are no single-token sentences; these break things.
+        sent_lengths = [len(x) for x in doc.sentences]
+        if min(sent_lengths) < 2:
+            msg = (f"Documnt {doc.doc_key} has a sentence with a single token or no tokens. "
+                   "Please merge with another sentence or remove.")
+            raise ValueError(msg)
+
         fields = self._process_sentence_fields(doc)
         fields["metadata"] = MetadataField(doc)
 
