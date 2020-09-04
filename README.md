@@ -150,7 +150,7 @@ To train on the data preprocessed with default settings, enter `bash scripts/tra
 To reproduce the results in Table 1 requires training an ensemble model of 4 trigger detectors. The basic process is as follows:
 
 - Merge the ACE event train + dev data, then create 4 new train / dev splits.
-- Train a separate trigger detection model on each split. To do this, modify `training-config/ace05_event.jsonnet` by setting
+- Train a separate trigger detection model on each split. To do this, modify `training_config/ace05_event.jsonnet` by setting
   ```jsonnet
   model +: {
     modules +: {
