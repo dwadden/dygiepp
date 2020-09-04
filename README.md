@@ -131,11 +131,23 @@ You can see the available flags by calling `parse_ace_event.py -h`. For detailed
 ```
 python ./scripts/data/ace-event/parse_ace_event.py default-settings
 ```
-When finished, you should `conda deactivate` the `ace-event-preprocess` environment and re-activate your modeling environment.
+Now `conda deactivate` the `ace-event-preprocess` environment and re-activate your modeling environment.
+
+Finally, collate the version of the dataset you just created. For instance, continuing the example above,
+```
+mkdir -p data/ace-event/collated-data/default-settings/json
+
+python scripts/data/shared/collate.py \
+  data/ace-event/processed-data/default-settings/json \
+  data/ace-event/collated-data/default-settings/json \
+  --file_extension json
+```
 
 #### Training the model
 
-Enter `bash scripts/train ace05_event`. A model trained in this fashion will reproduce (within 0.1 F1 or so) the results in Table 4 of the paper. To reproduce the results in Table 1 requires training an ensemble model of 4 trigger detectors. The basic process is as follows:
+To train on the data preprocessed with default settings, enter `bash scripts/train.sh ace05_event`. A model trained in this fashion will reproduce (within 0.1 F1 or so) the results in Table 4 of the paper. To train on a different version, modify `training_config/ace05_event.jsonnet` to point to the appropriate files.
+
+To reproduce the results in Table 1 requires training an ensemble model of 4 trigger detectors. The basic process is as follows:
 
 - Merge the ACE event train + dev data, then create 4 new train / dev splits.
 - Train a separate trigger detection model on each split. To do this, modify `training-config/ace05_event.jsonnet` by setting
