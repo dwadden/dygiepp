@@ -685,6 +685,9 @@ class Cluster:
     def __getitem__(self, ix):
         return self.members[ix]
 
+    def __len__(self):
+        return len(self.members)
+
 
 class ClusterMember:
     def __init__(self, span, sentence, cluster_id):

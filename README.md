@@ -305,6 +305,15 @@ allennlp predict pretrained/[name-of-pretrained-model].tar.gz \
     --cuda-device [cuda-device]
 ```
 
+A couple tricks to make things run smoothly:
+
+1. If you're predicting on a big dataset, you probably want to load it lazily rather than loading the whole thing in before predicting. To accomplish this, add the following flag to the above command:
+  ```
+  --overrides "{'dataset_reader' +: {'lazy': true}}"
+  ```
+2. If the model runs out of GPU memory on a given prediction, it will warn you and continue with the next example rather than stopping entirely. This is less annoying than the alternative. Examples for which predictions failed will still be written to the specified `jsonl` output, but they will have an additional field `{"_FAILED_PREDICTION": true}` indicating that the model ran out of memory on this example.
+3. The `dataset` field in the dataset to be predicted must match one of the `dataset`s on which the model was trained; otherwise, the model won't know which labels to apply to the predicted data. I'd welcome a PR to allow the user to ask for predictions for multiple different label namespaces.
+
 ### Training a model on a new (labeled) dataset
 
 Follow the process described in [Training a model](#training-a-model), but adjusting the input and output file paths as appropriate.

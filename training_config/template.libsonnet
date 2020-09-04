@@ -48,8 +48,7 @@
           max_length: dygie.max_wordpieces_per_sentence
         },
       },
-      max_span_width: dygie.max_span_width,
-      cache_directory: 'cache',
+      max_span_width: dygie.max_span_width
     },
     train_data_path: dygie.data_paths.train,
     validation_data_path: dygie.data_paths.validation,
