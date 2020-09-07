@@ -92,7 +92,7 @@ class NERTagger(Model):
         ner_scores = scorer(span_embeddings)
         # Give large negative scores to masked-out elements.
         mask = span_mask.unsqueeze(-1)
-        ner_scores = util.replace_masked_values(ner_scores, mask.bool(), -1e20)
+        ner_scores = util.replace_masked_values(ner_scores.float(), mask.bool(), -1e20)
         # The dummy_scores are the score for the null label.
         dummy_dims = [ner_scores.size(0), ner_scores.size(1), 1]
         dummy_scores = ner_scores.new_zeros(*dummy_dims)

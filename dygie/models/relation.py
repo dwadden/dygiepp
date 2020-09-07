@@ -148,8 +148,8 @@ class RelationExtractor(Model):
         top_spans = [tuple(x) for x in top_spans.tolist()]
 
         # Iterate over all span pairs and labels. Record the span if the label isn't null.
-        predicted_scores_raw, predicted_labels = relation_scores.max(dim=-1)
-        softmax_scores = F.softmax(relation_scores, dim=-1)
+        predicted_scores_raw, predicted_labels = relation_scores.float().max(dim=-1)
+        softmax_scores = F.softmax(relation_scores.float(), dim=-1)
         predicted_scores_softmax, _ = softmax_scores.max(dim=-1)
         predicted_labels -= 1  # Subtract 1 so that null labels get -1.
 
