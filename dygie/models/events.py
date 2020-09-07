@@ -274,7 +274,7 @@ class EventExtractor(Model):
         trigger_scores = trigger_scorer(trigger_embeddings)
         # Give large negative scores to masked-out elements.
         mask = trigger_mask.unsqueeze(-1)
-        trigger_scores = util.replace_masked_values(trigger_scores, mask.bool(), -1e20)
+        trigger_scores = util.replace_masked_values(trigger_scores.float(), mask.bool(), -1e20)
         dummy_dims = [trigger_scores.size(0), trigger_scores.size(1), 1]
         dummy_scores = trigger_scores.new_zeros(*dummy_dims)
         trigger_scores = torch.cat((dummy_scores, trigger_scores), -1)
@@ -357,10 +357,10 @@ class EventExtractor(Model):
         # TODO(dwadden) Vectorize.
         argument_dict = {}
         argument_scores = output["argument_scores"]
-        predicted_scores_raw, predicted_arguments = argument_scores.max(dim=-1)
+        predicted_scores_raw, predicted_arguments = argument_scores.float().max(dim=-1)
         # The null argument has label -1.
         predicted_arguments -= 1
-        softmax_scores = F.softmax(argument_scores, dim=-1)
+        softmax_scores = F.softmax(argument_scores.float(), dim=-1)
         predicted_scores_softmax, _ = softmax_scores.max(dim=-1)
 
         for i, j in itertools.product(range(output["num_triggers_kept"]),

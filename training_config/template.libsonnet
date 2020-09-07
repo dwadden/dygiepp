@@ -111,6 +111,7 @@
       }
     },
     trainer: {
+      use_amp: true,
       checkpointer: {
         num_serialized_models_to_keep: 3,
       },

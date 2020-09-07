@@ -144,7 +144,7 @@ class Pruner(torch.nn.Module):
         # Make sure that we don't select any masked items by setting their scores to be very
         # negative.  These are logits, typically, so -1e20 should be plenty negative.
         # NOTE(`mask` needs to be a byte tensor now.)
-        scores = util.replace_masked_values(scores, mask.bool(), -1e20)
+        scores = util.replace_masked_values(scores.float(), mask.bool(), -1e20)
 
         # Shape: (batch_size, max_num_items_to_keep, 1)
         _, top_indices = scores.topk(max_items_to_keep, 1)
