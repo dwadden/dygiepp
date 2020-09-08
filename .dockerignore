@@ -1,0 +1,16 @@
+# Ignore everything
+**
+
+# Allow files and directories for Docker build
+!requirements.txt
+!scripts/data/ace-event/requirements.txt
+!scripts/data/ace05/get_corenlp.sh
+!scripts/data/get_scierc.sh
+!dygie
+!scripts/data/shared
+!scripts/data/get_genia.sh
+!scripts/data/genia
+!scripts/data/get_chemprot.sh
+!scripts/data/chemprot
+!scripts/pretrained/get_dygiepp_pretrained.sh
+!scripts/pretrained/get_scibert.py
