@@ -28,27 +28,27 @@ def count_events(dset):
     return counts
 
 
-base_fp = Path("/home/gilles/repos/dygiepp/data/sentivent/ner_with_subtype_args/")
+base_fp = Path("/home/gilles/repos/dygiepp-dev/data/sentivent/ner_with_subtype_args/")
 train = Dataset(base_fp / "train.jsonl")
 dev = Dataset(base_fp / "dev.jsonl")
 test = Dataset(base_fp / "test.jsonl")
+data_sentivent = train.documents + dev.documents + test.documents
 
-base_fp = Path("/home/gilles/repos/dygiepp/data/ace-event/processed-data/default-settings/json")
-train_ace = Dataset(base_fp / "train.json")
-dev_ace = Dataset(base_fp / "dev.json")
-test_ace = Dataset(base_fp / "test.json")
-
-train_c = count_events(train)
-dev_c = count_events(dev)
-test_c = count_events(test)
-train_ace_c = count_events(train_ace)
-dev_ace_c = count_events(dev_ace)
-test_ace_c = count_events(test_ace)
+# base_fp_ace = Path("/home/gilles/repos/dygiepp-dev/data/ace-event/collated-data/default-settings/json")
+# train_ace = Dataset(base_fp_ace / "train.json")
+# dev_ace = Dataset(base_fp_ace / "dev.json")
+# test_ace = Dataset(base_fp_ace / "test.json")
+#
+# train_c = count_events(train)
+# dev_c = count_events(dev)
+# test_c = count_events(test)
+# train_ace_c = count_events(train_ace)
+# dev_ace_c = count_events(dev_ace)
+# test_ace_c = count_events(test_ace)
+# data_ace = train_ace.documents + dev_ace.documents + test_ace.documents
 
 # data = Dataset("/home/gilles/repos/dygiepp/data/sentivent/ner/all.jsonl")
-data_sentivent = train.documents + dev.documents + test.documents
-data_ace = train_ace.documents + dev_ace.documents + test_ace.documents
-data = data_ace
+data = data_sentivent
 # print(data[0])  # Print the first document.
 # print(data[0][1].ner)  # Print the named entities in the second sentence of the first document.
 all_argument_roles = set()
@@ -60,6 +60,8 @@ for doc in data:
         events.update(sen.events)
         for ev in sen.events:
             roles = [arg.role for arg in ev.arguments]
+            if 'Buyer' in roles:
+                print(ev)
             all_argument_roles.update(roles)
             all_event_arg.setdefault(ev.trigger.label, Counter()).update(roles)
             for role in roles:
