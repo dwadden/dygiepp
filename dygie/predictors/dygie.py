@@ -1,5 +1,6 @@
 from typing import List
 import numpy as np
+import warnings
 
 from overrides import overrides
 import numpy
@@ -47,9 +48,22 @@ class DyGIEPredictor(Predictor):
         model = self._model
         cuda_device = model._get_prediction_device()
 
-        dataset = Batch([instance])
-        dataset.index_instances(model.vocab)
-        model_input = util.move_to_device(dataset.as_tensor_dict(), cuda_device)
-        prediction = model.make_output_human_readable(model(**model_input))
+        # Try to predict this batch.
+        try:
+            dataset = Batch([instance])
+            dataset.index_instances(model.vocab)
+            model_input = util.move_to_device(dataset.as_tensor_dict(), cuda_device)
+            prediction = model.make_output_human_readable(model(**model_input)).to_json()
+        # If we run out of GPU memory, warn user and indicate that this document failed.
+        # This way, prediction doesn't grind to a halt every time we run out of GPU.
+        except RuntimeError as err:
+            # doc_key, dataset, sentences, message
+            metadata = instance["metadata"].metadata
+            doc_key = metadata.doc_key
+            msg = (f"Encountered a RunTimeError on document {doc_key}. Skipping this example."
+                   f" Error message:\n{err.args[0]}.")
+            warnings.warn(msg)
+            prediction = metadata.to_json()
+            prediction["_FAILED_PREDICTION"] = True
 
-        return prediction.to_json()
+        return prediction

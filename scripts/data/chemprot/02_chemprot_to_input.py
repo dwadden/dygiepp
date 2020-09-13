@@ -103,7 +103,8 @@ def one_abstract(row, df_entities, df_relations):
     entities_no_alignment = set()
     relations_found = set()
 
-    scierc_format = {"doc_key": doc_key, "sentences": [], "ner": [], "relations": []}
+    scierc_format = {"doc_key": doc_key, "dataset": "chemprot", "sentences": [], "ner": [],
+                     "relations": []}
 
     for sent in processed.sents:
         # Get the tokens.

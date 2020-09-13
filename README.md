@@ -74,9 +74,25 @@ pip install -r scripts/data/chemprot/requirements.txt
 
 Then, follow these steps:
 
-- **Get the data**. Run `bash ./scripts/data/get_chemprot.sh`. This will download the data and process it into the DyGIE input format.
-  - NOTE: This is a quick-and-dirty script that skips entities whose character offsets don't align exactly with the tokenization produced by SciSpacy. We lose about 10% of the named entities and 20% of the relations in the dataset as a result.
-- **Train the model**. Enter `bash scripts/train chemprot`.
+- **Get the data**.
+  - Run `bash ./scripts/data/get_chemprot.sh`. This will download the data and process it into the DyGIE input format.
+    - NOTE: This is a quick-and-dirty script that skips entities whose character offsets don't align exactly with the tokenization produced by SciSpacy. We lose about 10% of the named entities and 20% of the relations in the dataset as a result.
+  - Switch back to your DyGIE environment.
+  - For a quick spot-check to see how much of the data was lost:
+    ```
+    python scripts/data/chemprot/03_spot_check.py
+    ```
+  - Collate the data:
+    ```
+    mkdir -p data/chemprot/collated_data
+
+    python scripts/data/shared/collate.py \
+      data/chemprot/processed_data \
+      data/chemprot/collated_data \
+      --train_name=training \
+      --dev_name=development
+    ```
+- **Train the model**. TODO need to add this. Enter `bash scripts/train chemprot`.
 
 
 ### ACE05 (ACE for entities and relations)
@@ -131,14 +147,26 @@ You can see the available flags by calling `parse_ace_event.py -h`. For detailed
 ```
 python ./scripts/data/ace-event/parse_ace_event.py default-settings
 ```
-When finished, you should `conda deactivate` the `ace-event-preprocess` environment and re-activate your modeling environment.
+Now `conda deactivate` the `ace-event-preprocess` environment and re-activate your modeling environment.
+
+Finally, collate the version of the dataset you just created. For instance, continuing the example above,
+```
+mkdir -p data/ace-event/collated-data/default-settings/json
+
+python scripts/data/shared/collate.py \
+  data/ace-event/processed-data/default-settings/json \
+  data/ace-event/collated-data/default-settings/json \
+  --file_extension json
+```
 
 #### Training the model
 
-Enter `bash scripts/train ace05_event`. A model trained in this fashion will reproduce (within 0.1 F1 or so) the results in Table 4 of the paper. To reproduce the results in Table 1 requires training an ensemble model of 4 trigger detectors. The basic process is as follows:
+To train on the data preprocessed with default settings, enter `bash scripts/train.sh ace05_event`. A model trained in this fashion will reproduce (within 0.1 F1 or so) the results in Table 4 of the paper. To train on a different version, modify `training_config/ace05_event.jsonnet` to point to the appropriate files.
+
+To reproduce the results in Table 1 requires training an ensemble model of 4 trigger detectors. The basic process is as follows:
 
 - Merge the ACE event train + dev data, then create 4 new train / dev splits.
-- Train a separate trigger detection model on each split. To do this, modify `training-config/ace05_event.jsonnet` by setting
+- Train a separate trigger detection model on each split. To do this, modify `training_config/ace05_event.jsonnet` by setting
   ```jsonnet
   model +: {
     modules +: {
@@ -304,6 +332,15 @@ allennlp predict pretrained/[name-of-pretrained-model].tar.gz \
     --output-file [output-path] \
     --cuda-device [cuda-device]
 ```
+
+A couple tricks to make things run smoothly:
+
+1. If you're predicting on a big dataset, you probably want to load it lazily rather than loading the whole thing in before predicting. To accomplish this, add the following flag to the above command:
+  ```
+  --overrides "{'dataset_reader' +: {'lazy': true}}"
+  ```
+2. If the model runs out of GPU memory on a given prediction, it will warn you and continue with the next example rather than stopping entirely. This is less annoying than the alternative. Examples for which predictions failed will still be written to the specified `jsonl` output, but they will have an additional field `{"_FAILED_PREDICTION": true}` indicating that the model ran out of memory on this example.
+3. The `dataset` field in the dataset to be predicted must match one of the `dataset`s on which the model was trained; otherwise, the model won't know which labels to apply to the predicted data. I'd welcome a PR to allow the user to ask for predictions for multiple different label namespaces.
 
 ### Training a model on a new (labeled) dataset
 

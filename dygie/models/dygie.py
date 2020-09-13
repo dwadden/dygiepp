@@ -147,10 +147,8 @@ class DyGIE(Model):
             "ner": [f"MEAN__{name}" for name in
                     ["ner_precision", "ner_recall", "ner_f1"]],
             "relation": [f"MEAN__{name}" for name in
-                    ["relation_precision", "relation_recall", "relation_f1"]],
-            "coref": [f"MEAN__{name}" for name in
-                      ["coref_precision", "coref_recall", "coref_f1", "coref_mention_recall"]],
-            # TODO(dwadden) Need to fix this to get different metrics for different datasets.
+                         ["relation_precision", "relation_recall", "relation_f1"]],
+            "coref": ["coref_precision", "coref_recall", "coref_f1", "coref_mention_recall"],
             "events": [f"MEAN__{name}" for name in
                        ["trig_class_f1", "arg_class_f1"]]}
         if target_task not in lookup:

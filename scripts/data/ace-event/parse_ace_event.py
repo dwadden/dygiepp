@@ -14,6 +14,7 @@ import spacy
 from spacy.symbols import ORTH
 import numpy as np
 from collections import defaultdict
+import subprocess
 
 
 class AceException(Exception):
@@ -190,8 +191,8 @@ class Entry:
         relations = sorted([relation.to_json() for relation in self.relations])
         events = sorted([event.to_json() for event in self.events])
         sentences = [tok.text for tok in self.final_toks]
-        return dict(sentences=sentences, ner=ner, relations=relations, events=events,
-                    sentence_start=self.adjusted_start, ner_flavor=ner_flavors)
+        return dict(sentences=sentences, ner=ner, relations=relations,
+                    events=events, _sentence_start=self.adjusted_start, ner_flavor=ner_flavors)
 
     def is_real(self):
         # If no tokens, make sure it's got no entities or anything.
@@ -231,9 +232,10 @@ class Doc:
         self.adjust_spans_doc()
         by_entry = [entry.to_json() for entry in self.entries]
         res = {}
-        for field in ["sentences", "ner", "relations", "events", "sentence_start"]:
+        for field in ["sentences", "ner", "relations", "events", "_sentence_start"]:
             res[field] = [entry[field] for entry in by_entry]
         res["doc_key"] = self.doc_key
+        res["dataset"] = "ace-event"
         return res
 
 
@@ -817,6 +819,7 @@ def main():
     output_dir = f"./data/ace-event/processed-data/{args.output_name}/json"
     os.makedirs(output_dir, exist_ok=True)
 
+    # Process the documents.
     for fold in ["train", "dev", "test"]:
         msg = f"Parsing {fold} set."
         print(msg)

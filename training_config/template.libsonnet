@@ -6,7 +6,7 @@
     local validation_metrics = {
       'ner': '+MEAN__ner_f1',
       'relation': '+MEAN__relation_f1',
-      'coref': '+MEAN__coref_f1',
+      'coref': '+coref_f1',
       'events': '+MEAN__arg_class_f1'
     },
 
@@ -48,8 +48,7 @@
           max_length: dygie.max_wordpieces_per_sentence
         },
       },
-      max_span_width: dygie.max_span_width,
-      cache_directory: 'cache',
+      max_span_width: dygie.max_span_width
     },
     train_data_path: dygie.data_paths.train,
     validation_data_path: dygie.data_paths.validation,

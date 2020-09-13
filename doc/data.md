@@ -6,6 +6,7 @@ We provide details on the data preprocessing for each of the datasets available 
 
 - [Data format](#data-format)
 - [Format for predictions](#format-for-predictions)
+- [Code for data manipulation](#code-for-data-manipulation)
 - [Formatting a new dataset](#formatting-a-new-dataset)
 - [Preprocessing details for existing datasets](#preprocesing-details-for-existing-datasets)
 
@@ -110,6 +111,11 @@ When model predictions are saved to file, they are formatted as described above,
   - A single predicted relation prediction has the form `[start_tok_1, end_tok_1, start_tok_2, end_tok_2, predicted_label, label_logit, label_softmax]`.
   - A single predicted event has the form `[[trigger_tok, predited_event_type, event_type_logit, event_type_softmax], [start_tok_arg1, end_tok_arg1, predicted_arg1_type, arg1_type_logit, arg1_type_softmax], ...]`.
   - TODO: This hasn't been implemented yet for coreference.
+
+
+## Code for data manipulation
+
+The module [document.py](../dygie/data/dataset_readers/document.py) contains classes and methods to load, save, manipulate, and visualize DyGIE-formatted data. See [document.ipynb](../notebooks/document.ipynb) for usage examples.
 
 
 ## Formatting a new dataset

@@ -184,10 +184,14 @@ class CorefResolver(Model):
             indices[key] = ix_list
             doc_metadata = metadata
             ix = torch.tensor(ix_list, dtype=torch.bool)
+            # If we don't have coref labels, leave as None; else get the right batch.
+            coref_labels = (coref_labels_batched[ix]
+                            if coref_labels_batched is not None
+                            else coref_labels_batched)
             if sentence_lengths[ix].sum().item() > 1:
                 output_docs[key] = self._compute_representations_doc(
                     spans_batched[ix], span_mask_batched[ix], span_embeddings_batched[ix],
-                    sentence_lengths[ix], ix, coref_labels_batched[ix], doc_metadata)
+                    sentence_lengths[ix], ix, coref_labels, doc_metadata)
         return output_docs, indices
 
     def predict_labels(self, output_docs, metadata):
@@ -197,20 +201,33 @@ class CorefResolver(Model):
 
     def collect_losses(self, output_docs):
         uniq_keys = [el for el in output_docs]
-        losses = torch.cat([entry["loss"].unsqueeze(0) for entry in output_docs.values()])
-        loss = torch.sum(losses)
+        losses = [entry.get("loss") for entry in output_docs.values()]
+        # If we're predicting, there won't be a loss.
+        no_loss = [loss is None for loss in losses]
+        if any(no_loss) and not all(no_loss):
+            raise ValueError("All docs in batch should either have a loss, or not have one.")
+        no_loss = no_loss[0]
+
+        if no_loss:
+            loss = None
+        else:
+            losses = torch.cat([entry["loss"].unsqueeze(0) for entry in output_docs.values()])
+            loss = torch.sum(losses)
 
         # At train time, return a separate output dict for each document.
         if self.training:
-            output = {"loss": loss,
-                      "doc": output_docs}
+            output = {"doc": output_docs}
         # At test time, we evaluate a whole document at a time. Just return the results for that
         # document.
         else:
             assert len(uniq_keys) == 1
             key = uniq_keys[0]
             output = output_docs[key]
+
+        # Add the loss if we have one.
+        if loss is not None:
             output["loss"] = loss
+
         return output
 
     def _compute_representations_doc(
@@ -674,6 +691,10 @@ class CorefResolver(Model):
     @staticmethod
     def _flatten_coref_labels(coref_labels_batched, span_ix):
         "Flatten the coref labels."
+        # If we don't have labels, return None.
+        if coref_labels_batched is None:
+            return coref_labels_batched
+
         labels_flat = coref_labels_batched.view(-1)[span_ix]
         labels_flat = labels_flat.unsqueeze(0)
         return labels_flat
