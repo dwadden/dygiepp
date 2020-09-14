@@ -17,7 +17,7 @@ tar -xf $out_dir/sciERC_processed.tar.gz -C $out_dir
 rm $out_dir/*.tar.gz
 
 # Normalize by adding dataset name..
-python scripts/data/normalize.py \
+python scripts/data/shared/normalize.py \
     $out_dir/processed_data/json \
     $out_dir/normalized_data/json \
     --file_extension=json \

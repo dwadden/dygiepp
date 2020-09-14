@@ -24,6 +24,16 @@ The necessary dependencies can be installed with `pip install -r requirements.tx
 
 This library relies on [AllenNLP](https://allennlp.org) and uses AllenNLP shell [commands](https://docs.allennlp.org/master/#package-overview) to kick off training, evaluation, and testing.
 
+### Docker build
+A `Dockerfile` is provided with the Pytorch + CUDA + CUDNN base image for a full-stack GPU install.
+It will create conda environments `dygiepp` for modeling & `ace-event-preprocess` for ACE05-Event preprocessing.
+
+By default the build downloads datasets and dependencies for all tasks. 
+This takes a long time and produces a large image, so you will want to comment out unneeded datasets/tasks in the Dockerfile.
+
+- Comment out unneeded task sections in `Dockerfile`.
+- Build container: `docker build --tag dygiepp:dev <dygiepp-repo-dirpath>`
+- Run the container interactively, mount this project dir to /dygiepp/: `docker run --gpus all -it --ipc=host -v <dygiepp-repo-dirpath>:/dygiepp/ --name dygiepp dygiep:dev`
 
 ## Training a model
 
