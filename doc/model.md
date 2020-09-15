@@ -42,8 +42,8 @@ The choice we have made is to model an `Instance` as a *document*. By default, w
 --------------------
 
 - **Problem**: Your documents are too long to fit in memory. You're getting errors like `RuntimeError: CUDA out of memory. Tried to allocate 1.97 GiB (GPU 0; 10.92 GiB total capacity; 7.63 GiB already allocated; 1.46 GiB free; 1.12 GiB cached)`.
-- **Solution** (datasets *without* coreference annotations): If you don't have coreference annotations in your dataset, you can use [collate.py](../scripts/data/shared/collate.py) as described above. If for some reason you don't want to do this, you can use [normalize.py](../scripts/data/shared/normalize.py) to split long documents without shuffling sentences from different documents.
-- **Solution** (dataset *with* coreference annotations): If you do have coreference annotations, you'll have to write your own script to split long documents. I'd welcome a PR that does this.
+- **Solution (datasets *without* coreference annotations)**: If you don't have coreference annotations in your dataset, you can use [collate.py](../scripts/data/shared/collate.py) as described above. If for some reason you don't want to do this, you can use [normalize.py](../scripts/data/shared/normalize.py) to split long documents without shuffling sentences from different documents.
+- **Solution (dataset *with* coreference annotations)**: If you have coreference annotations, you can't create minibatches composed of sentences from different documents. The [normalize.py](../scripts/data/shared/normalize.py) should be able split long documents with coref annotations, but I haven't implemented this yet (I'd welcome a PR that accomplishes this). So, unfortunately, you'll have to write your own script to split long documents.
 
 --------------------
 
