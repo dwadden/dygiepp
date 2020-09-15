@@ -4,7 +4,6 @@
 
 Implements the model described in the paper [Entity, Relation, and Event Extraction with Contextualized Span Representations](https://www.semanticscholar.org/paper/Entity%2C-Relation%2C-and-Event-Extraction-with-Span-Wadden-Wennberg/fac2368c2ec81ef82fd168d49a0def2f8d1ec7d8).
 
-This repository is under construction and we're in the process of adding support for more datasets.
 
 ## Table of Contents
 - [Dependencies](#dependencies)
