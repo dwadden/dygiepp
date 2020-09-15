@@ -28,11 +28,6 @@ The choice we have made is to model an `Instance` as a *document*. By default, w
 
 --------------------
 
-- **Problem**: Your documents are too long to fit in memory. You're getting errors like `RuntimeError: CUDA out of memory. Tried to allocate 1.97 GiB (GPU 0; 10.92 GiB total capacity; 7.63 GiB already allocated; 1.46 GiB free; 1.12 GiB cached)`.
-- **Solution**: If you don't have coreference annotation in your dataset, use [normalize.py](../scripts/data/shared/normalize.py) to split long documents. Run the model, then merge the long documents as a post-processing step (I'd welcome a PR for this). This script does not work for data with coreference clusters. You'll hve to write your own script to split long documents. I'd welcome a PR that does this.
-
---------------------
-
 - **Problem**: If you're not doing coreference resolution, then it's wasteful to have minibatches with sentences of widely varying lengths. Instead, you should create minibatches of similar-length sentences from different documents.
 - **Solution**: Our solution is as follows:
   - "Collate" the dataset into "psuedo-documents" containing sentences of similar length. Keep track of the original document that each sentence came from. Users may write their own script, or use [collate.py](../scripts/data/shared/collate.py) to accomplish this.
@@ -43,6 +38,12 @@ The choice we have made is to model an `Instance` as a *document*. By default, w
   - `max_sentences_per_doc`
     - **If If you're training a model**, you probably want to avoid the creation of pseudo-documents containg hundreds of short sentences - even if they'd fit in GPU. Having wildly varying numbers of sentences per batch seemed to do weird things during training, though this is anecdotal. To avoid this, set `max_sentences_per_doc` to some reasonable value. The default of 16 seems safe, though bigger might be OK too.
     - **If you're using an existing model to make predictions**: Just set this to a big number to make the best use of your GPU.
+
+--------------------
+
+- **Problem**: Your documents are too long to fit in memory. You're getting errors like `RuntimeError: CUDA out of memory. Tried to allocate 1.97 GiB (GPU 0; 10.92 GiB total capacity; 7.63 GiB already allocated; 1.46 GiB free; 1.12 GiB cached)`.
+- **Solution** (datasets *without* coreference annotations): If you don't have coreference annotations in your dataset, you can use [collate.py](../scripts/data/shared/collate.py) as described above. If for some reason you don't want to do this, you can use [normalize.py](../scripts/data/shared/normalize.py) to split long documents without shuffling sentences from different documents.
+- **Solution** (dataset *with* coreference annotations): If you do have coreference annotations, you'll have to write your own script to split long documents. I'd welcome a PR that does this.
 
 --------------------
 
