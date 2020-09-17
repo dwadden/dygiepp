@@ -23,7 +23,7 @@ The necessary dependencies can be installed with `pip install -r requirements.tx
 
 This library relies on [AllenNLP](https://allennlp.org) and uses AllenNLP shell [commands](https://docs.allennlp.org/master/#package-overview) to kick off training, evaluation, and testing.
 
-Unfortunately, I can't offer support with issues getting dependencies installed - unless you suspect it's due to a mistake in the DyGIE++ code base. I've seen people encounter issues installing `jsonnet`; [this issue](https://github.com/allenai/allennlp/issues/2779) may prove helpful.
+If you run into an issue installing `jsonnet`, [this issue](https://github.com/allenai/allennlp/issues/2779) may prove helpful.
 
 ### Docker build
 A `Dockerfile` is provided with the Pytorch + CUDA + CUDNN base image for a full-stack GPU install.
