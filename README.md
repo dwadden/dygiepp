@@ -23,6 +23,8 @@ The necessary dependencies can be installed with `pip install -r requirements.tx
 
 This library relies on [AllenNLP](https://allennlp.org) and uses AllenNLP shell [commands](https://docs.allennlp.org/master/#package-overview) to kick off training, evaluation, and testing.
 
+If you run into an issue installing `jsonnet`, [this issue](https://github.com/allenai/allennlp/issues/2779) may prove helpful.
+
 ### Docker build
 A `Dockerfile` is provided with the Pytorch + CUDA + CUDNN base image for a full-stack GPU install.
 It will create conda environments `dygiepp` for modeling & `ace-event-preprocess` for ACE05-Event preprocessing.
