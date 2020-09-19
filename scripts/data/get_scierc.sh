@@ -16,10 +16,17 @@ tar -xf $out_dir/sciERC_processed.tar.gz -C $out_dir
 # Clean up.
 rm $out_dir/*.tar.gz
 
-# Normalize by adding dataset name..
+# Normalize by adding dataset name.
 python scripts/data/shared/normalize.py \
     $out_dir/processed_data/json \
     $out_dir/normalized_data/json \
     --file_extension=json \
     --max_tokens_per_doc=0 \
+    --dataset=scierc
+
+# Collate for more efficient non-coref training.
+python scripts/data/shared/collate.py \
+    $out_dir/processed_data/json \
+    $out_dir/collated_data/json \
+    --file_extension=json \
     --dataset=scierc

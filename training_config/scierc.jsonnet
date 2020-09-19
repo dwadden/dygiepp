@@ -9,7 +9,7 @@ template.DyGIE {
     test: "data/scierc/normalized_data/json/test.json",
   },
   loss_weights: {
-    ner: 1.0,
+    ner: 0.2,
     relation: 1.0,
     coref: 1.0,
     events: 0.0

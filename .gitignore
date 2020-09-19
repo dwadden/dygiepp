@@ -2,6 +2,7 @@
 .mypy_cache/*
 *.pyc
 data/*
+data-old/*
 models/*
 models-old/*
 cache/*
