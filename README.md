@@ -245,10 +245,11 @@ Run `scripts/pretrained/get_dygiepp_pretrained.sh` to download all the available
 
 - [SciERC](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/master/scierc.tar.gz)
 - [SciERC lightweight](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/master/scierc-lightweight.tar.gz)
-- [GENIA](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/genia.tar.gz)
-- [GENIA lightweight](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/genia-lightweight.tar.gz)
-- [ChemProt (lightweight only)](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/chemprot.tar.gz)
-- [ACE05 event (uses BERT large)](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/ace05-event.tar.gz)
+- [GENIA](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/master/genia.tar.gz)
+- [GENIA lightweight](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/genia-lightweight.tar.gz)
+- [ChemProt (lightweight only)](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/chemprot.tar.gz)
+<!-- - [ACE05 relation]()
+- [ACE05 event](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/ace05-event.tar.gz) -->
 
 #### Performance of downloaded models
 
@@ -266,19 +267,19 @@ Run `scripts/pretrained/get_dygiepp_pretrained.sh` to download all the available
 
 - GENIA
   ```
-  2019-11-21 14:45:44,505 - INFO - allennlp.commands.evaluate - ner_f1: 0.7818707451272466
+  "_genia__ner_f1": 0.7713070807912737,
   ```
 
 - GENIA lightweight
   And the lightweight version:
   ```
-  2020-05-08 11:18:59,761 - INFO - allennlp.commands.evaluate - ner_f1: 0.7671077504725398
+  "_genia__ner_f1": 0.7690401296349251,
   ```
 
 - ChemProt
   ```
-  2020-05-08 23:20:59,648 - INFO - allennlp.commands.evaluate - _ner_f1: 0.8850947021684925
-  2020-05-08 23:20:59,648 - INFO - allennlp.commands.evaluate - rel_f1: 0.35027598896044154
+  "_chemprot__ner_f1": 0.9059113300492612,
+  "_chemprot__relation_f1": 0.5404867256637169,
   ```
   Note that we're doing span-level evaluation using predicted entities. We're also evaluating on all ChemProt relation classes, while the official task only evaluates on a subset (see [Liu et al.](https://www.semanticscholar.org/paper/Attention-based-Neural-Networks-for-Chemical-Liu-Shen/a6261b278d1c2155e8eab7ac12d924fc2207bd04) for details). Thus, our relation extraction performance is lower than, for instance, [Verga et al.](https://www.semanticscholar.org/paper/Simultaneously-Self-Attending-to-All-Mentions-for-Verga-Strubell/48f786f66eb846012ceee822598a335d0388f034), where they use gold entities as inputs for relation prediction.
 
