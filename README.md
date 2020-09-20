@@ -1,6 +1,6 @@
 # DyGIE++
 
-**ONGOING CODE UPGRADES**: I'm in the process of updating the DyGIE code to work with AllenNLP V1 on the new [allennlp-v1 branch](https://github.com/dwadden/dygiepp/tree/allennlp-v1). I've also substantially simplified model configuration. If you want to train your own models for NER or relation extraction, you should be able to use the new branch. If you want to use pretrained models or do event extraction, stay on this branch for now. I'll post updates here as they happen.
+  **This branch**: This branch used to be `master`. It is now outdated and does not work with new versions of AllenNLP. I recommend you use the `master` branch instead. No more updates will be made to this branch.
 
 Implements the model described in the paper [Entity, Relation, and Event Extraction with Contextualized Span Representations](https://www.semanticscholar.org/paper/Entity%2C-Relation%2C-and-Event-Extraction-with-Span-Wadden-Wennberg/fac2368c2ec81ef82fd168d49a0def2f8d1ec7d8).
 
