@@ -127,7 +127,7 @@ Then, run the driver script to preprocess the data:
 bash scripts/data/get_ace05.sh [path-to-ACE-data]
 ```
 
-The results will go in `./data/ace05/processed-data`. The intermediate files will go in `./data/ace05/raw-data`.
+The results will go in `./data/ace05/collated-data`. The intermediate files will go in `./data/ace05/raw-data`.
 
 #### Training a model
 

@@ -19,3 +19,12 @@ for folder in corpus English fixed result text
 do
     mv $process_path/$folder $out_path/raw-data
 done
+
+# Collate the data.
+mkdir -p $out_path/collated-data/json
+
+python scripts/data/shared/collate.py \
+    $out_path/processed-data/json \
+    $out_path/collated-data/json \
+    --file_extension json \
+    --dataset "ace05"

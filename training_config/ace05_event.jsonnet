@@ -14,8 +14,5 @@ template.DyGIE {
     coref: 0.0,
     events: 1.0
   },
-  target_task: "events",
-  trainer +: {
-    num_epochs: 25
-  },
+  target_task: "events"
 }
