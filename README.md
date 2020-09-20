@@ -245,8 +245,8 @@ We have versions of DyGIE++ trained on SciERC and GENIA available. There are two
 
 Run `scripts/pretrained/get_dygiepp_pretrained.sh` to download all the available pretrained models to the `pretrained` directory. If you only want one model, here are the download links.
 
-- [SciERC](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/scierc.tar.gz)
-- [SciERC lightweight](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/scierc-lightweight.tar.gz)
+- [SciERC](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/master/scierc.tar.gz)
+- [SciERC lightweight](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/master/scierc-lightweight.tar.gz)
 - [GENIA](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/genia.tar.gz)
 - [GENIA lightweight](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/genia-lightweight.tar.gz)
 - [ChemProt (lightweight only)](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/chemprot.tar.gz)
@@ -256,16 +256,14 @@ Run `scripts/pretrained/get_dygiepp_pretrained.sh` to download all the available
 
 - SciERC
   ```
-  2019-11-20 16:03:12,692 - INFO - allennlp.commands.evaluate - Finished evaluating.
-  2019-11-20 16:03:12,693 - INFO - allennlp.commands.evaluate - _ner_f1: 0.6855290303565666
-  2019-11-20 16:03:12,693 - INFO - allennlp.commands.evaluate - rel_f1: 0.4867781975175391
+  "_scierc__ner_f1": 0.6846741045214326,
+  "_scierc__relation_f1": 0.46236559139784944
   ```
 
 - SciERC lightweight
   ```
-  2020-03-31 21:23:34,708 - INFO - allennlp.commands.evaluate - Finished evaluating.
-  2020-03-31 21:23:34,709 - INFO - allennlp.commands.evaluate - _ner_f1: 0.6778959810874204
-  2020-03-31 21:23:34,709 - INFO - allennlp.commands.evaluate - rel_f1: 0.4638157894736842
+  "_scierc__ner_f1": 0.6717245404143566,
+  "_scierc__relation_f1": 0.4670588235294118,
   ```
 
 - GENIA
