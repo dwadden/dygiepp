@@ -5,8 +5,7 @@
 
 
 
-# for name in scierc scierc-lightweight genia genia-lightweight chemprot ace05 ace05-event
-for name in scierc scierc-lightweight genia genia-lightweight chemprot
+for name in scierc scierc-lightweight genia genia-lightweight chemprot ace05-relation ace05-event
 do
     if [ ! -f pretrained/$name.tar.gz ]
     then

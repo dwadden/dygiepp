@@ -248,8 +248,8 @@ Run `scripts/pretrained/get_dygiepp_pretrained.sh` to download all the available
 - [GENIA](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/master/genia.tar.gz)
 - [GENIA lightweight](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/genia-lightweight.tar.gz)
 - [ChemProt (lightweight only)](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/chemprot.tar.gz)
-<!-- - [ACE05 relation]()
-- [ACE05 event](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/ace05-event.tar.gz) -->
+- [ACE05 relation](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/ace05-relation.tar.gz)
+- [ACE05 event](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/ace05-event.tar.gz)
 
 #### Performance of downloaded models
 
@@ -262,34 +262,39 @@ Run `scripts/pretrained/get_dygiepp_pretrained.sh` to download all the available
 - SciERC lightweight
   ```
   "_scierc__ner_f1": 0.6717245404143566,
-  "_scierc__relation_f1": 0.4670588235294118,
+  "_scierc__relation_f1": 0.4670588235294118
   ```
 
 - GENIA
   ```
-  "_genia__ner_f1": 0.7713070807912737,
+  "_genia__ner_f1": 0.7713070807912737
   ```
 
 - GENIA lightweight
   And the lightweight version:
   ```
-  "_genia__ner_f1": 0.7690401296349251,
+  "_genia__ner_f1": 0.7690401296349251
   ```
 
 - ChemProt
   ```
   "_chemprot__ner_f1": 0.9059113300492612,
-  "_chemprot__relation_f1": 0.5404867256637169,
+  "_chemprot__relation_f1": 0.5404867256637169
   ```
   Note that we're doing span-level evaluation using predicted entities. We're also evaluating on all ChemProt relation classes, while the official task only evaluates on a subset (see [Liu et al.](https://www.semanticscholar.org/paper/Attention-based-Neural-Networks-for-Chemical-Liu-Shen/a6261b278d1c2155e8eab7ac12d924fc2207bd04) for details). Thus, our relation extraction performance is lower than, for instance, [Verga et al.](https://www.semanticscholar.org/paper/Simultaneously-Self-Attending-to-All-Mentions-for-Verga-Strubell/48f786f66eb846012ceee822598a335d0388f034), where they use gold entities as inputs for relation prediction.
 
+- ACE05-Relation
+  ```
+  "_ace05__ner_f1": 0.8634611855386309,
+  "_ace05__relation_f1": 0.6484907497565725,
+  ```
+
 - ACE05-Event
   ```
-  2020-05-25 17:05:14,044 - INFO - allennlp.commands.evaluate - _ner_f1: 0.906369532679145
-  2020-05-25 17:05:14,044 - INFO - allennlp.commands.evaluate - _trig_id_f1: 0.735042735042735
-  2020-05-25 17:05:14,044 - INFO - allennlp.commands.evaluate - trig_class_f1: 0.7029914529914529
-  2020-05-25 17:05:14,044 - INFO - allennlp.commands.evaluate - _arg_id_f1: 0.5414364640883979
-  2020-05-25 17:05:14,044 - INFO - allennlp.commands.evaluate - arg_class_f1: 0.5130228887134964
+  "_ace-event__ner_f1": 0.8927209418006965,
+  "_ace-event_trig_class_f1": 0.6998813760379595,
+  "_ace-event_arg_class_f1": 0.5,
+  "_ace-event__relation_f1": 0.5514950166112956
   ```
 
 ## Making predictions on existing datasets
