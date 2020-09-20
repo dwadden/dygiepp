@@ -91,10 +91,6 @@ Then, follow these steps:
   - Run `bash ./scripts/data/get_chemprot.sh`. This will download the data and process it into the DyGIE input format.
     - NOTE: This is a quick-and-dirty script that skips entities whose character offsets don't align exactly with the tokenization produced by SciSpacy. We lose about 10% of the named entities and 20% of the relations in the dataset as a result.
   - Switch back to your DyGIE environment.
-  - For a quick spot-check to see how much of the data was lost:
-    ```
-    python scripts/data/chemprot/03_spot_check.py
-    ```
   - Collate the data:
     ```
     mkdir -p data/chemprot/collated_data
@@ -104,8 +100,11 @@ Then, follow these steps:
       data/chemprot/collated_data \
       --train_name=training \
       --dev_name=development
+   - For a quick spot-check to see how much of the data was lost, you can run:
     ```
-- **Train the model**. TODO need to add this. Enter `bash scripts/train chemprot`.
+    python scripts/data/chemprot/03_spot_check.py
+    ```   ```
+- **Train the model**. Enter `bash scripts/train chemprot`.
 
 
 ### ACE05 (ACE for entities and relations)
