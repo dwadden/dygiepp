@@ -70,7 +70,6 @@ To train a model for named entity recognition, relation extraction, and corefere
 The steps are similar to SciERC.
 
 - **Download the data**. From the top-level folder for this repo, enter `bash ./scripts/data/get_genia.sh`.
-  - **NOTE**: A few of the documents get thrown out because they have sentences containing empty strings, which breaks things (see [data.md](doc/data.md)). I'd welcome a PR that fixes these!
 - **Train the model**. Enter `bash scripts/train genia`.
 - As with SciERC, we also offer a "lightweight" version with a context width of 1 and no coreference propagation.
 

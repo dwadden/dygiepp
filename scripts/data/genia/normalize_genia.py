@@ -10,7 +10,7 @@ out_dir = "data/genia/normalized-data"
 
 
 # For the coref data, normalize by adding datset name and getting rid of empty strings.
-for name in ["json-coref-all", "json-coref-ident-only"]:
+for name in ["json-coref-all", "json-coref-ident-only", "json-ner"]:
     os.makedirs(f"{out_dir}/{name}", exist_ok=True)
     cmd = ["python",
            "scripts/data/shared/normalize.py",
@@ -22,13 +22,14 @@ for name in ["json-coref-all", "json-coref-ident-only"]:
     subprocess.run(cmd)
 
 
-# For ner-only data, collate.
+# For ner-only data, collate as well.
 name = "json-ner"
-os.makedirs(f"{out_dir}/{name}", exist_ok=True)
+collate_dir = "data/genia/collated-data"
+os.makedirs(f"{collate_dir}/{name}", exist_ok=True)
 cmd = ["python",
        "scripts/data/shared/collate.py",
        f"{in_dir}/{name}",
-       f"{out_dir}/{name}",
+       f"{collate_dir}/{name}",
        "--file_extension=json",
        "--dataset=genia"]
 subprocess.run(cmd)
