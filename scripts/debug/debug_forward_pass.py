@@ -4,9 +4,9 @@ from _jsonnet import evaluate_file
 
 from allennlp.data import token_indexers, vocabulary
 from allennlp.modules import token_embedders, text_field_embedders
+from allennlp.data.dataloader import PyTorchDataLoader
 
 from dygie.data.dataset_readers.dygie import DyGIEReader
-from dygie.data.iterators import batch_iterator
 from dygie.models import dygie
 
 
@@ -63,7 +63,7 @@ def main():
         embedder = text_field_embedders.BasicTextFieldEmbedder({"tokens": token_embedder})
 
     # Create iterator and model.
-    iterator = batch_iterator.BatchIterator(batch_size=1, dataset=data)
+    iterator = PyTorchDataLoader(batch_size=1, dataset=data)
     if args.model_archive is None:
         model = dygie.DyGIE(vocab=vocab,
                             embedder=embedder,

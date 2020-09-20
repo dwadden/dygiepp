@@ -78,15 +78,6 @@ The SciERC dataset does not have any event data. To see an example of event data
   ```
 There may also be a `sentence_start` field indicating the token index of the start of each sentence with respect to the document. This can be ignored.
 
-The `Dataset` class in `dygie/data/dataset_readers/data_structures.py` provides some convenience functions to view the annotations. This class isn't "officially supported", but here's an example.
-
-```python
-from dygie.data.dataset_readers.data_structures import Dataset
-
-data = Dataset("data/scierc/processed_data/json/train.json")
-print(data[0])  # Print the first document.
-print(data[0][1].ner)  # Print the named entities in the second sentence of the first document.
-```
 
 ### User-defined sentence metadata
 
