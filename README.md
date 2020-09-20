@@ -2,7 +2,7 @@
 
 Implements the model described in the paper [Entity, Relation, and Event Extraction with Contextualized Span Representations](https://www.semanticscholar.org/paper/Entity%2C-Relation%2C-and-Event-Extraction-with-Span-Wadden-Wennberg/fac2368c2ec81ef82fd168d49a0def2f8d1ec7d8).
 
-**Updates**: This branch used to be named `allennlp-v1`. It's compatible with new version of AllenNLP, and the model configuration process has been simplified. I'd recommend using this branch for all future work. If for some reason you need the older version of the code, it's on the branch [emnlp-2019](https://github.com/dwadden/dygiepp/tree/emnlp-2019).
+**Updates**: This branch used to be named `allennlp-v1`, and it has been made the new `master`. It's compatible with new version of AllenNLP, and the model configuration process has been simplified. I'd recommend using this branch for all future work. If for some reason you need the older version of the code, it's on the branch [emnlp-2019](https://github.com/dwadden/dygiepp/tree/emnlp-2019).
 
 
 
