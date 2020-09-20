@@ -1,10 +1,8 @@
-*__pycache__
+  *__pycache__
 .mypy_cache/*
 *.pyc
 data/*
-data-old/*
 models/*
-models-old/*
 cache/*
 pretrained/*
 predictions/*
