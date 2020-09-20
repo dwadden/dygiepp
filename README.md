@@ -1,8 +1,9 @@
 # DyGIE++
 
-**USABILITY**: This branch is an ongoing update of the DyGIE++ code to play nicely with AllenNLP V1 (and by extension, Huggingface Transformers). The relation, named entity, and coreference modules should work, but event extraction will break. The performance may be a point or two lower on relation extraction due to tuning issues. I will update this status as changes are made.
-
 Implements the model described in the paper [Entity, Relation, and Event Extraction with Contextualized Span Representations](https://www.semanticscholar.org/paper/Entity%2C-Relation%2C-and-Event-Extraction-with-Span-Wadden-Wennberg/fac2368c2ec81ef82fd168d49a0def2f8d1ec7d8).
+
+**Updates**: This branch used to be named `allennlp-v1`. It's compatible with new version of AllenNLP, and the model configuration process has been simplified. I'd recommend using this branch for all future work. If for some reason you need the older version of the code, it's on the branch [emnlp-2019](https://github.com/dwadden/dygiepp/tree/emnlp-2019).
+
 
 
 ## Table of Contents
