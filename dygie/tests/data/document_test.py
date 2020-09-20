@@ -52,7 +52,7 @@ class TestDocument(unittest.TestCase):
 
     def test_document(self):
         "Make sure that our Document class can read and write data without changing it."
-        for document_name in ["ace_event_article", "scierc_article"]:
+        for document_name in ["ace_event_article", "scierc_article","ace_event_coref_article"]:
             self.check_document(document_name)
 
 

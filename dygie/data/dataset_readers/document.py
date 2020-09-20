@@ -226,6 +226,8 @@ class Document:
         # because coreference clusters have to be split across documents.
         if self.clusters is not None or self.predicted_clusters is not None:
             raise NotImplementedError("Splitting documents with coreference annotations not implemented.")
+        if self.event_clusters is not None or self.predicted_event_clusters is not None:
+            raise NotImplementedError("Splitting documents with event coreference annotations not implemented.")
 
         # If the document is already short enough, return it as a list with a single item.
         if self.n_tokens <= max_tokens_per_doc:

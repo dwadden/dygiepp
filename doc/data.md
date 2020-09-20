@@ -76,6 +76,18 @@ The SciERC dataset does not have any event data. To see an example of event data
     ]
   ]
   ```
+
+- `event_clusters`: The event coreference clusters. The structure is the same as `clusters`, but each cluster corresponds to an event, rather than an entity. Each span corresponds to the span of the trigger. While event triggers can only be a single token in ACE, we keep the ending token for consistency with `clusters`.
+  ```json
+  [
+    [
+      [517, 517], [711, 711], [723, 723]
+    ],
+    [
+      [603, 603], [741, 741]
+    ]
+  ]
+  ```
 There may also be a `sentence_start` field indicating the token index of the start of each sentence with respect to the document. This can be ignored.
 
 The `Dataset` class in `dygie/data/dataset_readers/data_structures.py` provides some convenience functions to view the annotations. This class isn't "officially supported", but here's an example.
