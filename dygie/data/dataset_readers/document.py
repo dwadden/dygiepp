@@ -11,10 +11,6 @@ def format_float(x):
     return round(x, 4)
 
 
-class EmptyStringError(ValueError):
-    pass
-
-
 class SpanCrossesSentencesError(ValueError):
     pass
 
@@ -64,24 +60,11 @@ class Dataset:
 
     @classmethod
     def from_jsonl(cls, fname):
-        """
-        Load from jsonl file. If documents with empty strings are found, record and keep out of
-        dataset.
-        """
         documents = []
-        docs_with_empty_strings = []
         with open(fname, "r") as f:
             for line in f:
-                try:
-                    doc = Document.from_json(json.loads(line))
-                    documents.append(doc)
-                except EmptyStringError:
-                    docs_with_empty_strings.append(json.loads(line)["doc_key"])
-
-        if docs_with_empty_strings:
-            missed = ", ".join(docs_with_empty_strings)
-            msg = f"These documents were not loaded in because they contain empty strings: {missed}."
-            print(msg)
+                doc = Document.from_json(json.loads(line))
+                documents.append(doc)
 
         return cls(documents)
 
@@ -106,7 +89,6 @@ class Document:
     def from_json(cls, js):
         "Read in from json-loaded dict."
         cls._check_fields(js)
-        cls._check_empty_strings(js)
         doc_key = js["doc_key"]
         dataset = js.get("dataset")
         entries = fields_to_batches(js, ["doc_key", "dataset", "clusters", "predicted_clusters", "weight"])
@@ -154,15 +136,6 @@ class Document:
         if unexpected:
             msg = f"The following unexpected fields should be prefixed with an underscore: {', '.join(unexpected)}."
             raise ValueError(msg)
-
-    @staticmethod
-    def _check_empty_strings(js):
-        "Check for empty strings in the input sentences, and thow an error if found."
-        for sent in js["sentences"]:
-            for word in sent:
-                if word == "":
-                    msg = f"Empty string found in document {js['doc_key']}."
-                    raise EmptyStringError(msg)
 
     def to_json(self):
         "Write to json dict."
