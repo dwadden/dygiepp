@@ -22,7 +22,7 @@ Unfortunately, I don't have the bandwidth at this point to add additional featur
 - Making predictions on a new dataset using pre-trained models.
 - Training your own model on a new dataset.
 
-There are a number of ways this code could be improved, and I'd definitely welcome pull requests. If you're interested [contributions.md](doc/contributions.md) for a list of ieas.
+There are a number of ways this code could be improved, and I'd definitely welcome pull requests. If you're interested, see [contributions.md](doc/contributions.md) for a list of ieas.
 
 ### Submit a model!
 
