@@ -24,6 +24,10 @@ Unfortunately, I don't have the bandwidth at this point to add additional featur
 
 There are a number of ways this code could be improved, and I'd definitely welcome pull requests. If you're interested [contributions.md](doc/contributions.md) for a list of ieas.
 
+### Submit a model!
+
+If you have a DyGIE model that you've trained on a new dataset, feel free to upload it [here](https://docs.google.com/forms/d/e/1FAIpQLSdwws7zVAqF15-kBqkKBupymWe0ASkXhODH8yomYkRDy5DvCw/viewform?usp=sf_link) and I'll add it to the collection of pre-trained models.
+
 
 ## Dependencies
 
