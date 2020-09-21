@@ -111,6 +111,8 @@ The module [document.py](../dygie/data/dataset_readers/document.py) contains cla
 
 ## Formatting a new dataset
 
+If you'd like to use a pretrained DyGIE++ model to make predictions on a new dataset, the `dataset` field in your new dataset must match the `dataset` that the original model was trained on; this indicates to the model which label namespace it should use for predictions. See the section on [available pretrained models](../README.md#pretrained-models) for the dataset names that go with each model. For more on label namespaces, see the section on [multi-dataset training](model.md/#multi-dataset-training).
+
 ### Unlabled data
 
 In the case where your unlabeled data are stored as a directory of `.txt` files (one file per document), you can run `python scripts/data/new-dataset/format_new_dataset.py [input-directory] [output-file]` to format the documents into a `jsonl` file, with one line per document. If your dataset is scientific text, add the `--use-scispacy` flag to have [SciSpacy](https://allenai.github.io/scispacy/) do the tokenization.

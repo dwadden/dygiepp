@@ -244,23 +244,25 @@ allennlp evaluate \
 
 ## Pretrained models
 
-We have versions of DyGIE++ trained on SciERC and GENIA available. There are two versions:
-- The "lightweight" versions don't use coreference propagation, and use a context window of 1. If you've got a new dataset and you just want to get some reasonable predictions, use these.
-- The "full" versions use coreference propagatation and a context window of 3. Use these if you need to squeeze out another F1 point or two. These models take longer to run, and they may break if they're given inputs that are too long.
+A number of models are available for download. They are named for the dataset they are trained on. "Lightweight" models are models trained on datasets for which coreference resolution annotations were available, but we didn't use them. This is "lightweight" because coreference resolution is expensive, since it requires predicting cross-sentence relationships between spans.
 
-### Downloads
+If you want to use one of these pretrained models to make predictions on a new dataset, you need to set the `dataset` field for the instance in your new dataset to match the name of the `dataset` the model was trained on. For instance, to make predictions using the pretrained SciERC model, set the `dataset` field in your new instances to `scierc`.
 
-Run `scripts/pretrained/get_dygiepp_pretrained.sh` to download all the available pretrained models to the `pretrained` directory. If you only want one model, here are the download links.
+To download all available models, run `scripts/pretrained/get_dygiepp_pretrained.sh`. Or, click on the links below to download only a single model.
 
-- [SciERC](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/master/scierc.tar.gz)
-- [SciERC lightweight](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/master/scierc-lightweight.tar.gz)
-- [GENIA](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/master/genia.tar.gz)
-- [GENIA lightweight](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/genia-lightweight.tar.gz)
-- [ChemProt (lightweight only)](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/chemprot.tar.gz)
-- [ACE05 relation](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/ace05-relation.tar.gz)
-- [ACE05 event](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/ace05-event.tar.gz)
+### Available models
 
-#### Performance of downloaded models
+Below are links to the available models, followed by the name of the `dataset` the model was trained on.
+
+- [SciERC](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/master/scierc.tar.gz): `scierc`
+- [SciERC lightweight](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/master/scierc-lightweight.tar.gz): `scierc`
+- [GENIA](https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/master/genia.tar.gz): `genia`
+- [GENIA lightweight](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/genia-lightweight.tar.gz): `genia`
+- [ChemProt (lightweight only)](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/chemprot.tar.gz): `chemprot`
+- [ACE05 relation](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/ace05-relation.tar.gz): `ace05`
+- [ACE05 event](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/ace05-event.tar.gz): `ace-event`
+
+### Performance of pretrained models
 
 - SciERC
   ```
@@ -342,7 +344,7 @@ In particular, we do *not* require the types of the entity mention arguments to 
 
 Follow the instructions as described in [Formatting a new dataset](doc/data.md#formatting-a-new-dataset).
 
-### Making predicitons on a new dataset
+### Making predictions on a new dataset
 
 To make predictions on a new, unlabeled dataset:
 

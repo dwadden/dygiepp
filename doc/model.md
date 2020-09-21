@@ -96,4 +96,4 @@ For each task, it will also compute average performance by averaging over the na
 - `MEAN__ner_recall`
 - `MEAN__ner_f1`
 
-At prediction time, you may request that the model output predictions for all available label namespaces, or only a subset of them (TODO I still need to implement this).
+When making predictions, the `dataset` field of the inputs to be predicted must match the `dataset` field of one of the input datasets the model was trained on.
