@@ -31,9 +31,13 @@ If you have a DyGIE model that you've trained on a new dataset, feel free to upl
 
 ## Dependencies
 
-This code was developed using Python 3.7. To create a new Conda environment using Python 3.7, do `conda create --name dygiepp python=3.7`.
+Clone this repository and navigate the the root of the repo on your system. Then execute:
 
-The necessary dependencies can be installed with `pip install -r requirements.txt`.
+```
+conda create --name dygiepp python=3.7
+pip install -r requirements.txt
+conda develop .   # Adds DyGIE to your PYTHONPATH
+```
 
 This library relies on [AllenNLP](https://allennlp.org) and uses AllenNLP shell [commands](https://docs.allennlp.org/master/#package-overview) to kick off training, evaluation, and testing.
 
