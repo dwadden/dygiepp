@@ -74,7 +74,6 @@ def main():
     # Run forward pass over a single entry.
     for batch in iterator:
         output_dict = model(**batch)
-        prediction = model.make_output_human_readable(output_dict)
 
 
 if __name__ == "__main__":
