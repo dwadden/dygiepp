@@ -17,10 +17,10 @@ Implements the model described in the paper [Entity, Relation, and Event Extract
 
 This branch used to be named `allennlp-v1`, and it has been made the new `master`. It's compatible with new version of AllenNLP, and the model configuration process has been simplified. I'd recommend using this branch for all future work. If for some reason you need the older version of the code, it's on the branch [emnlp-2019](https://github.com/dwadden/dygiepp/tree/emnlp-2019).
 
-Unfortunately, I don't have the bandwidth at this point to add additional features. But, I'm happy to assist with issues related to:
+Unfortunately, I don't have the bandwidth at this point to add additional features. But please create a new issue if you have problems with:
 - Reproducing the results reported in the README.
 - Making predictions on a new dataset using pre-trained models.
-- Training your own models on a new dataset.
+- Training your own model on a new dataset.
 
 There are a number of ways this code could be improved, and I'd definitely welcome pull requests. If you're interested [contributions.md](doc/contributions.md) for a list of ieas.
 
