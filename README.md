@@ -19,8 +19,9 @@ This branch used to be named `allennlp-v1`, and it has been made the new `master
 
 Unfortunately, I don't have the bandwidth at this point to add additional features. But, I'm happy to assist with issues related to:
 - Reproducing the results reported in the README.
-- Making predictions using pre-trained models.
+- Making predictions on a new dataset using pre-trained models.
 - Training your own models on a new dataset.
+
 There are a number of ways this code could be improved, and I'd definitely welcome pull requests. If you're interested [contributions.md](doc/contributions.md) for a list of ieas.
 
 
