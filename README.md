@@ -246,7 +246,7 @@ allennlp evaluate \
 
 A number of models are available for download. They are named for the dataset they are trained on. "Lightweight" models are models trained on datasets for which coreference resolution annotations were available, but we didn't use them. This is "lightweight" because coreference resolution is expensive, since it requires predicting cross-sentence relationships between spans.
 
-If you want to use one of these pretrained models to make predictions on a new dataset, you need to set the `dataset` field for the instance in your new dataset to match the name of the `dataset` the model was trained on. For instance, to make predictions using the pretrained SciERC model, set the `dataset` field in your new instances to `scierc`.
+If you want to use one of these pretrained models to make predictions on a new dataset, you need to set the `dataset` field for the instances in your new dataset to match the name of the `dataset` the model was trained on. For example, to make predictions using the pretrained SciERC model, set the `dataset` field in your new instances to `scierc`.
 
 To download all available models, run `scripts/pretrained/get_dygiepp_pretrained.sh`. Or, click on the links below to download only a single model.
 
