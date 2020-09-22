@@ -358,7 +358,8 @@ Follow the instructions as described in [Formatting a new dataset](doc/data.md#f
 To make predictions on a new, unlabeled dataset:
 
 1. Download the [pretrained model](#pretrained-models) that most closely matches your text domain.
-2. Make predictions the same way as with the [existing datasets](#making-predictions-on-existing-datasets):
+2. Make sure that the `dataset` field for your new dataset matches the label namespaces for the pretrained model. See [here](doc/model.my#multi-dataset-training) for more on label namespaces. To view the available label namespaces for a pretrained model, use [print_label_namespaces.py](scripts/debug/print_label_namespaces.py).
+3. Make predictions the same way as with the [existing datasets](#making-predictions-on-existing-datasets):
 ```
 allennlp predict pretrained/[name-of-pretrained-model].tar.gz \
     [input-path] \
