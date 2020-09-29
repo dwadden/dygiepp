@@ -6,6 +6,7 @@ We include some notes and common modeling issues here.
 - [Debugging](#debugging)
 - [Batching and batch size](#batching-and-batch-size)
 - [Multi-dataset training](#multi-dataset-training)
+- [Reproducibility and nondeterminism](#reproducibility-and-nondeterminism)
 
 
 ## Debugging
@@ -97,3 +98,7 @@ For each task, it will also compute average performance by averaging over the na
 - `MEAN__ner_f1`
 
 When making predictions, the `dataset` field of the inputs to be predicted must match the `dataset` field of one of the input datasets the model was trained on.
+
+## Reproducibility and nondeterminism
+
+Some users have observed that results across multiple DyGIE training runs are not reproducible, even though the relevant random seeds are set in the [config template](../training_config/template.libsonnet). This is an underlying issue with [PyTorch](https://pytorch.org/docs/stable/notes/randomness.html). In particular, the Torch `index_select()` function is nondeterministic. As a result so is AllenNLP's `batched_index_select()`, which DyGIE uses in a number of places. I'd welcome a PR to address this, though it's not obvious how this could be done. Thanks to @khuangaf for pointing this out.

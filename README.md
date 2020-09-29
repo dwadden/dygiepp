@@ -12,6 +12,8 @@ Implements the model described in the paper [Entity, Relation, and Event Extract
 - [Working with new datasets](#working-with-new-datasets)
 - [Contact](#contact)
 
+See the `doc` folder for documentation with more details on the [data](doc/data.md), [model implementation and debugging](doc/model.md), and [model configuration](doc/config.md).
+
 
 ## Project status
 
