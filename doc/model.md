@@ -6,8 +6,8 @@ We include some notes and common modeling issues here.
 - [Debugging](#debugging)
 - [Batching and batch size](#batching-and-batch-size)
 - [Multi-dataset training](#multi-dataset-training)
+- [Hyperparameter optimization](#hyperparameter-optimization)
 - [Reproducibility and nondeterminism](#reproducibility-and-nondeterminism)
-
 
 ## Debugging
 
@@ -98,6 +98,28 @@ For each task, it will also compute average performance by averaging over the na
 - `MEAN__ner_f1`
 
 When making predictions, the `dataset` field of the inputs to be predicted must match the `dataset` field of one of the input datasets the model was trained on.
+
+
+## Hyperparameter optimization
+
+Tune hyperparameters with [Optuna](https://optuna.org), see example `./scripts/tuning/train_optuna.py`.
+
+Requirements:
+- `sqlite3` for storage of trials.
+If do not install `sqlite3`, you can use in-memory storage: change `storage` to `None` in `optuna.create_study` (not recommended).
+
+Usage:
+- Place Jsonnet configuration file in `./training_config/` dir, see example `./training_config/ace05_event_optuna.jsonnet`:
+  - Mask values of hyperparameters with Jsonnet method calling `std.extVar('{param_name}')` with `std.parseInt` for integer or `std.parseJson` for floating-point and other types.
+  - Override nested default template values with `+:`, see [config.md](`./doc/config.md`).
+- Edit the `objective`-function in `./scripts/tuning/optuna_train.py`:
+  - Add [trial suggestions with `suggest` functions](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.trial.Trial.html).
+  - Change `metrics`-argument off `executor` to the relevant optimization goal.
+- With the `dygiepp` modeling env activated, run: `python optuna_train.py <CONFIG_NAME>`
+- The best config will be dumped at `./training_config/best_<CONFIG_NAME>.json`.
+
+For more details see [Optuna blog](https://medium.com/optuna/hyperparameter-optimization-for-allennlp-using-optuna-54b4bfecd78b).
+
 
 ## Reproducibility and nondeterminism
 
