@@ -6,9 +6,9 @@ FROM pytorch/pytorch:1.6.0-cuda10.1-cudnn7-devel
 RUN mkdir /dygiepp
 
 # Required-base: set-up shared DYGIE++ modeling environment.
-# GCC and make needed to compile python deps.
+# GCC and make needed to compile python deps. SQLite3 for Optuna hyperparameter optimization.
 RUN apt-get update && \
-    apt-get -y install gcc make
+    apt-get -y install gcc make sqlite3
 RUN conda create --name dygiepp python=3.7 -y
 SHELL ["conda", "run", "-n", "dygiepp", "/bin/bash", "-c"]
 # jsonnet has a conflict when installed with pip for now, install from conda.
@@ -66,3 +66,11 @@ RUN cd /dygiepp && python /tmp/get_scibert.py
 
 # Required-base: cleanup.
 RUN rm -rf /tmp /dygiepp/{scripts,dygie}
+
+# Required-base: on run, ensure conda env is activated and /dygiepp is workdir.
+WORKDIR /dygiepp/
+SHELL ["/bin/bash", "-c"]
+RUN conda init bash
+RUN echo "conda activate dygiepp" >> ~/.bashrc
+ENV PATH /opt/conda/envs/dygiepp/bin:$PATH
+ENV CONDA_DEFAULT_ENV dygiepp
