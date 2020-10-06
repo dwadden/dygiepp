@@ -77,7 +77,7 @@ The SciERC dataset does not have any event data. To see an example of event data
   ]
   ```
 
-- `event_clusters`: The event coreference clusters. The structure is the same as `clusters`, but each cluster corresponds to an event, rather than an entity. Each span corresponds to the span of the trigger. While event triggers can only be a single token in ACE, we keep the ending token for consistency with `clusters`.
+- `event_clusters`: The event coreference clusters. The structure is the same as `clusters`, but each cluster corresponds to an event, rather than an entity. Each span corresponds to the span of the trigger. While event triggers can only be a single token in ACE, we keep the ending token for consistency with `clusters`. NOTE: Event clusters were added by a contributor and are not "officially supported".
   ```json
   [
     [
@@ -269,6 +269,10 @@ Unfortunately, different papers have used different conventions and therefore ou
   </entity_mention>
   ```
   To include pronouns as entity mentions, use the flag `--include_pronouns`.
+
+- **include_entity_coreference**: Added by PR, not "officially supported". Include entity coreference clusters.
+
+- **include_event_coreference**: Added by PR, not "officially supported". Include event coreference clusters.
 
 
 ### WLPC

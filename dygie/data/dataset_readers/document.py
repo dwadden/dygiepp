@@ -44,6 +44,7 @@ def update_sentences_with_clusters(sentences, clusters):
 
     return sentences
 
+
 def update_sentences_with_event_clusters(sentences, event_clusters):
     "Add event cluster dictionary to each sentence, if there are event coreference clusters."
     for sent in sentences:
@@ -58,6 +59,7 @@ def update_sentences_with_event_clusters(sentences, event_clusters):
             sent.event_cluster_dict[member.span.span_sent] = member.cluster_id
 
     return sentences
+
 
 class Dataset:
     def __init__(self, documents):
@@ -107,7 +109,8 @@ class Document:
         cls._check_fields(js)
         doc_key = js["doc_key"]
         dataset = js.get("dataset")
-        entries = fields_to_batches(js, ["doc_key", "dataset", "clusters", "predicted_clusters", "weight", "event_clusters","predicted_event_clusters"])
+        entries = fields_to_batches(js, ["doc_key", "dataset", "clusters", "predicted_clusters",
+                                         "weight", "event_clusters","predicted_event_clusters"])
         sentence_lengths = [len(entry["sentences"]) for entry in entries]
         sentence_starts = np.cumsum(sentence_lengths)
         sentence_starts = np.roll(sentence_starts, 1)
@@ -124,24 +127,24 @@ class Document:
             clusters = None
         # TODO(dwadden) Need to treat predicted clusters differently and update sentences
         # appropriately.
-        
+
         if "predicted_clusters" in js:
             predicted_clusters = [Cluster(entry, i, sentences, sentence_starts)
                                   for i, entry in enumerate(js["predicted_clusters"])]
         else:
             predicted_clusters = None
-        
+
         # adapt from entity clusters
         if "event_clusters" in js:
             event_clusters = [Cluster(entry, i, sentences, sentence_starts)
-                        for i, entry in enumerate(js["event_clusters"])]
+                              for i, entry in enumerate(js["event_clusters"])]
         else:
             event_clusters = None
         # TODO(dwadden) Need to treat predicted clusters differently and update sentences
         # appropriately.
         if "predicted_event_clusters" in js:
             predicted_event_clusters = [Cluster(entry, i, sentences, sentence_starts)
-                                  for i, entry in enumerate(js["predicted_event_clusters"])]
+                                        for i, entry in enumerate(js["predicted_event_clusters"])]
         else:
             predicted_event_clusters = None
 
@@ -151,7 +154,8 @@ class Document:
         # Get the loss weight for this document.
         weight = js.get("weight", None)
 
-        return cls(doc_key, dataset, sentences, clusters, predicted_clusters, event_clusters, predicted_event_clusters, weight)
+        return cls(doc_key, dataset, sentences, clusters, predicted_clusters, event_clusters,
+                   predicted_event_clusters, weight)
 
     @staticmethod
     def _check_fields(js):
@@ -183,7 +187,7 @@ class Document:
             res["event_clusters"] = [cluster.to_json() for cluster in self.event_clusters]
         if self.predicted_event_clusters is not None:
             res["predicted_event_clusters"] = [cluster.to_json() for cluster in self.predicted_event_clusters]
-        
+
         if self.weight is not None:
             res["weight"] = self.weight
 

@@ -8,6 +8,7 @@ from os import path
 import os
 import re
 import argparse
+import textwrap
 from dataclasses import dataclass
 from typing import List
 import spacy
@@ -736,17 +737,17 @@ class Document:
         if self._include_entity_coreference:
             # mapping from mention_id to entity mention for faster computation.
             mention_id2mention = {entity.mention_id:entity for entry in doc.entries for entity in entry.entities}
-            
+
             clusters = []
             for entity_id, mention_ids in self.entity_mention_clusters.items():
                 assert len(mention_ids) >= 1
                 cur_cluster = []
-                
+
                 for mention_id in mention_ids:
                     if mention_id not in mention_id2mention: continue # invalid mention
                     mention_json = mention_id2mention[mention_id].to_json()
                     cur_cluster.append(mention_json[:2])
-                    
+
                 # this is indeed a cluster if cluster size > 2.
                 if len(cur_cluster) >=2 :
                     clusters.append(cur_cluster)
@@ -758,18 +759,17 @@ class Document:
             # mapping from trigger id to event mention for faster computation.
             trigger_id2event_mention = {event.trigger.trigger_id:event for entry in doc.entries for event in entry.events}
             clusters = []
-            
+
             for event_id, mention_ids in self.event_mention_clusters.items():
                 assert len(mention_ids) >= 1
                 cur_cluster = []
-                
+
                 for mention_id in mention_ids:
                     if mention_id not in trigger_id2event_mention: continue # invalid mention
-                    trigger_index = trigger_id2event_mention[mention_id].to_json()[0][0] 
+                    trigger_index = trigger_id2event_mention[mention_id].to_json()[0][0]
                     # keep the event cluster the same format as entity cluster. Each mention is represented by its trigger span.
                     cur_cluster.append([trigger_index, trigger_index])
-                            
-                
+
                 # this is indeed a cluster if cluster size > 2
                 if len(cur_cluster) >=2 :
                     clusters.append(cur_cluster)
@@ -782,7 +782,8 @@ class Document:
 # Main function.
 
 
-def one_fold(fold, output_dir, heads_only=True, real_entities_only=True, include_pronouns=False, include_entity_coreference=False, include_event_coreference=False):
+def one_fold(fold, output_dir, heads_only=True, real_entities_only=True, include_pronouns=False,
+             include_entity_coreference=False, include_event_coreference=False):
     doc_path = "./data/ace-event/raw-data"
     split_path = "./scripts/data/ace-event/event-split"
 
@@ -796,13 +797,20 @@ def one_fold(fold, output_dir, heads_only=True, real_entities_only=True, include
             annotation_path = path.join(doc_path, doc_key + ".apf.xml")
             text_path = path.join(doc_path, doc_key + ".sgm")
             document = Document(annotation_path, text_path, doc_key, fold, heads_only,
-                                real_entities_only, include_pronouns, include_entity_coreference, include_event_coreference)
+                                real_entities_only, include_pronouns, include_entity_coreference,
+                                include_event_coreference)
             js = document.to_json()
             g.write(json.dumps(js, default=int) + "\n")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Preprocess ACE event data.")
+    desc = """
+    Preprocess ACE event data.
+
+    NOTE: Arguments marked with a '*' were added by a contributor and are not "officially supported".
+    """
+    parser = argparse.ArgumentParser(description=textwrap.dedent(desc),
+                                     formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("output_name", help="Name for output directory.")
     parser.add_argument("--use_span_extent", action="store_true",
                         help="Use full extent of entity mentions instead of just heads.")
@@ -811,9 +819,9 @@ def main():
     parser.add_argument("--include_pronouns", action="store_true",
                         help="Include pronouns as entities and include them as event arguments.")
     parser.add_argument("--include_entity_coreference", action="store_true",
-                        help="Include entity coreference labels stored in 'clusters'.")                        
+                        help="*Include entity coreference labels stored in 'clusters'.")
     parser.add_argument("--include_event_coreference", action="store_true",
-                        help="Include event coreference labels stored in 'event_clusters'.")                                                
+                        help="*Include event coreference labels stored in 'event_clusters'.")
     args = parser.parse_args()
 
     output_dir = f"./data/ace-event/processed-data/{args.output_name}/json"
