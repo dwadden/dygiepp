@@ -102,7 +102,7 @@ When making predictions, the `dataset` field of the inputs to be predicted must 
 
 ## Hyperparameter optimization
 
-Tune hyperparameters with [Optuna](https://optuna.org), see example `./scripts/tuning/train_optuna.py`.
+Tune hyperparameters with [Optuna](https://optuna.org), see example `./scripts/tuning/train_optuna.py`. This feature was contributed in a PR and is not "officially supported", but looks very useful.
 
 Requirements:
 - `sqlite3` for storage of trials.
