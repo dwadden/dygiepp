@@ -44,6 +44,20 @@ def update_sentences_with_clusters(sentences, clusters):
 
     return sentences
 
+def update_sentences_with_event_clusters(sentences, event_clusters):
+    "Add event cluster dictionary to each sentence, if there are event coreference clusters."
+    for sent in sentences:
+        sent.event_cluster_dict = {} if event_clusters is not None else None
+
+    if event_clusters is None:
+        return sentences
+
+    for event_clust in event_clusters:
+        for member in event_clust.members:
+            sent = member.sentence
+            sent.event_cluster_dict[member.span.span_sent] = member.cluster_id
+
+    return sentences
 
 class Dataset:
     def __init__(self, documents):
@@ -77,12 +91,14 @@ class Dataset:
 
 class Document:
     def __init__(self, doc_key, dataset, sentences,
-                 clusters=None, predicted_clusters=None, weight=None):
+                 clusters=None, predicted_clusters=None, event_clusters=None, predicted_event_clusters=None, weight=None):
         self.doc_key = doc_key
         self.dataset = dataset
         self.sentences = sentences
         self.clusters = clusters
         self.predicted_clusters = predicted_clusters
+        self.event_clusters = event_clusters
+        self.predicted_event_clusters = predicted_event_clusters
         self.weight = weight
 
     @classmethod
@@ -91,7 +107,7 @@ class Document:
         cls._check_fields(js)
         doc_key = js["doc_key"]
         dataset = js.get("dataset")
-        entries = fields_to_batches(js, ["doc_key", "dataset", "clusters", "predicted_clusters", "weight"])
+        entries = fields_to_batches(js, ["doc_key", "dataset", "clusters", "predicted_clusters", "weight", "event_clusters","predicted_event_clusters"])
         sentence_lengths = [len(entry["sentences"]) for entry in entries]
         sentence_starts = np.cumsum(sentence_lengths)
         sentence_starts = np.roll(sentence_starts, 1)
@@ -108,19 +124,34 @@ class Document:
             clusters = None
         # TODO(dwadden) Need to treat predicted clusters differently and update sentences
         # appropriately.
+        
         if "predicted_clusters" in js:
             predicted_clusters = [Cluster(entry, i, sentences, sentence_starts)
                                   for i, entry in enumerate(js["predicted_clusters"])]
         else:
             predicted_clusters = None
+        
+        # adapt from entity clusters
+        if "event_clusters" in js:
+            event_clusters = [Cluster(entry, i, sentences, sentence_starts)
+                        for i, entry in enumerate(js["event_clusters"])]
+        else:
+            event_clusters = None
+        # TODO(dwadden) Need to treat predicted clusters differently and update sentences
+        # appropriately.
+        if "predicted_event_clusters" in js:
+            predicted_event_clusters = [Cluster(entry, i, sentences, sentence_starts)
+                                  for i, entry in enumerate(js["predicted_event_clusters"])]
+        else:
+            predicted_event_clusters = None
 
         # Update the sentences with coreference cluster labels.
         sentences = update_sentences_with_clusters(sentences, clusters)
-
+        sentences = update_sentences_with_event_clusters(sentences, event_clusters)
         # Get the loss weight for this document.
         weight = js.get("weight", None)
 
-        return cls(doc_key, dataset, sentences, clusters, predicted_clusters, weight)
+        return cls(doc_key, dataset, sentences, clusters, predicted_clusters, event_clusters, predicted_event_clusters, weight)
 
     @staticmethod
     def _check_fields(js):
@@ -148,6 +179,11 @@ class Document:
             res["clusters"] = [cluster.to_json() for cluster in self.clusters]
         if self.predicted_clusters is not None:
             res["predicted_clusters"] = [cluster.to_json() for cluster in self.predicted_clusters]
+        if self.event_clusters is not None:
+            res["event_clusters"] = [cluster.to_json() for cluster in self.event_clusters]
+        if self.predicted_event_clusters is not None:
+            res["predicted_event_clusters"] = [cluster.to_json() for cluster in self.predicted_event_clusters]
+        
         if self.weight is not None:
             res["weight"] = self.weight
 
@@ -163,6 +199,8 @@ class Document:
         # because coreference clusters have to be split across documents.
         if self.clusters is not None or self.predicted_clusters is not None:
             raise NotImplementedError("Splitting documents with coreference annotations not implemented.")
+        if self.event_clusters is not None or self.predicted_event_clusters is not None:
+            raise NotImplementedError("Splitting documents with event coreference annotations not implemented.")
 
         # If the document is already short enough, return it as a list with a single item.
         if self.n_tokens <= max_tokens_per_doc:
