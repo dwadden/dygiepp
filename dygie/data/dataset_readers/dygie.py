@@ -98,8 +98,14 @@ class DyGIEReader(DatasetReader):
         n_tokens = len(sent.text)
 
         trigger_labels = [""] * n_tokens
-        for tok_ix, trig_label in sent.events.trigger_dict.items():
-            trigger_labels[tok_ix] = trig_label
+        # for tok_ix, trig_label in sent.events.trigger_dict.items():
+        #     trigger_labels[tok_ix] = trig_label
+
+        for trig_span, trig_label in sent.events.trigger_dict.items():
+            if self._too_long(trig_span):
+                continue
+            ix = span_tuples.index(trig_span)
+            trigger_labels[ix] = trig_label
 
         arguments = []
         argument_indices = []
@@ -154,9 +160,13 @@ class DyGIEReader(DatasetReader):
             trigger_labels, argument_labels, argument_indices = self._process_events(span_tuples, sent)
             fields["trigger_labels"] = SequenceLabelField(
                 trigger_labels, text_field, label_namespace=f"{dataset}__trigger_labels")
-            fields["argument_labels"] = AdjacencyFieldAssym(
-                indices=argument_indices, row_field=text_field, col_field=span_field,
-                labels=argument_labels, label_namespace=f"{dataset}__argument_labels")
+            # fields["argument_labels"] = AdjacencyFieldAssym(
+            #     indices=argument_indices, row_field=text_field, col_field=span_field,
+            #     labels=argument_labels, label_namespace=f"{dataset}__argument_labels")
+            field["argument_labels"] = AdjacencyField(
+                indices=argument_indices, sequence_field=span_field, labels=argument_labels,
+                label_namespace=f"{dataset}__argument_labels"
+            )
 
         return fields
 
