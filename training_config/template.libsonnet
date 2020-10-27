@@ -30,6 +30,7 @@
     // appropriate value.
     max_wordpieces_per_sentence :: 512,
     max_span_width :: 8,
+    max_trigger_span_width :: 1,
     cuda_device :: -1,
 
     ////////////////////
@@ -48,7 +49,8 @@
           max_length: dygie.max_wordpieces_per_sentence
         },
       },
-      max_span_width: dygie.max_span_width
+      max_span_width: dygie.max_span_width,
+      max_trigger_span_width: dygie.max_trigger_span_width,
     },
     train_data_path: dygie.data_paths.train,
     validation_data_path: dygie.data_paths.validation,
@@ -79,6 +81,7 @@
       loss_weights: dygie.loss_weights,
       feature_size: 20,
       max_span_width: dygie.max_span_width,
+      max_trigger_span_width: dygie.max_trigger_span_width,
       target_task: dygie.target_task,
       feedforward_params: {
         num_layers: 2,
