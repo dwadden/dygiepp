@@ -30,8 +30,8 @@ class EventExtractor(Model):
     def __init__(self,
                  vocab: Vocabulary,
                  make_feedforward: Callable,
-                 token_emb_dim: int,   # Triggers are represented via token embeddings.
-                 span_emb_dim: int,    # Arguments are represented via span embeddings.
+                 trigger_emb_dim: int,  # Triggers are represented via span embeddings (but can have different width than arg spans).
+                 span_emb_dim: int,  # Arguments are represented via span embeddings.
                  feature_size: int,
                  trigger_spans_per_word: float,
                  argument_spans_per_word: float,
@@ -59,16 +59,16 @@ class EventExtractor(Model):
         self._trigger_pruners = torch.nn.ModuleDict()
         for trigger_namespace in self._trigger_namespaces:
             # The trigger pruner.
-            trigger_candidate_feedforward = make_feedforward(input_dim=token_emb_dim)
+            trigger_candidate_feedforward = make_feedforward(input_dim=trigger_emb_dim)
             self._trigger_pruners[trigger_namespace] = make_pruner(trigger_candidate_feedforward)
             # The trigger scorer.
-            trigger_feedforward = make_feedforward(input_dim=token_emb_dim)
+            trigger_feedforward = make_feedforward(input_dim=trigger_emb_dim)
             self._trigger_scorers[namespace] = torch.nn.Sequential(
                 TimeDistributed(trigger_feedforward),
                 TimeDistributed(torch.nn.Linear(trigger_feedforward.get_output_dim(),
                                                 self._n_trigger_labels[trigger_namespace] - 1)))
 
-        # Creater argument scorers and pruners.
+        # Create argument scorers and pruners.
         self._mention_pruners = torch.nn.ModuleDict()
         self._argument_feedforwards = torch.nn.ModuleDict()
         self._argument_scorers = torch.nn.ModuleDict()
@@ -80,7 +80,7 @@ class EventExtractor(Model):
             # whether the trigger is before or inside the arg span.
 
             # TODO(dwadden) Here
-            argument_feedforward_dim = token_emb_dim + span_emb_dim + feature_size + 2
+            argument_feedforward_dim = trigger_emb_dim + span_emb_dim + feature_size + 2
             argument_feedforward = make_feedforward(input_dim=argument_feedforward_dim)
             self._argument_feedforwards[argument_namespace] = argument_feedforward
             self._argument_scorers[argument_namespace] = torch.nn.Linear(
@@ -114,6 +114,7 @@ class EventExtractor(Model):
 
     @overrides
     def forward(self,  # type: ignore
+                trigger_spans,
                 trigger_mask,
                 trigger_embeddings,
                 spans,
