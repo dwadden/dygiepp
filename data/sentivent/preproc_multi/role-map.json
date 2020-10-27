@@ -1,0 +1,13 @@
+{
+    "MONEX": ["Amount", "HistoricalAmount", "CAPITAL", "HistoricalPrice", "TargetPrice",
+              "CapitalInvested", "DecreaseAmount", "IncreaseAmount", "YieldRatio",
+              "HistoricalYieldRatio", "Price", "Cost"],
+    "MainCompany": ["Security", "Reportee", "Seller", "Company", "Investor", "Partner",
+                    "Financer", "Producer", "AffectedCompany", "Employer", "Trialer", "Defendant",
+                     "Profiteer", "Acquirer"],
+    "SecondaryCompany": ["Investee", "Target", "Financee", "Complainant"],
+    "EmployeeCombo": ["Employee", "Replacer", "Replacing"],
+    "Marketplace": ["PLACE", "Sector"],
+    "Rating": ["HistoricalRating", "Rating"],
+    "ProductServiceCombo": ["GoodsService", "ProductService"]
+}
