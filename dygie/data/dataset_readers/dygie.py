@@ -33,10 +33,12 @@ class DyGIEReader(DatasetReader):
     """
     def __init__(self,
                  max_span_width: int,
+                 max_trigger_span_width: int,
                  token_indexers: Dict[str, TokenIndexer] = None,
                  **kwargs) -> None:
         super().__init__(**kwargs)
         self._max_span_width = max_span_width
+        self._max_trigger_span_width = max_trigger_span_width
         self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
 
     @overrides
@@ -53,8 +55,10 @@ class DyGIEReader(DatasetReader):
             instance = self.text_to_instance(doc_text)
             yield instance
 
-    def _too_long(self, span):
-        return span[1] - span[0] + 1 > self._max_span_width
+    def _too_long(self, span, max_width=None):
+        if max_width is None:
+            max_width = self._max_span_width
+        return span[1] - span[0] + 1 > max_width
 
     def _process_ner(self, span_tuples, sent):
         ner_labels = [""] * len(span_tuples)
@@ -94,23 +98,23 @@ class DyGIEReader(DatasetReader):
 
         return relations, relation_indices
 
-    def _process_events(self, span_tuples, sent):
-        n_tokens = len(sent.text)
+    def _process_events(self, trigger_span_tuples, span_tuples, sent):
 
-        trigger_labels = [""] * n_tokens
-        # for tok_ix, trig_label in sent.events.trigger_dict.items():
-        #     trigger_labels[tok_ix] = trig_label
+        trigger_labels = [""] * len(trigger_span_tuples)
 
         for trig_span, trig_label in sent.events.trigger_dict.items():
-            if self._too_long(trig_span):
+            if self._too_long(trig_span, max_width=self._max_trigger_span_width):
                 continue
-            ix = span_tuples.index(trig_span)
+            ix = trigger_span_tuples.index(trig_span)
             trigger_labels[ix] = trig_label
 
         arguments = []
         argument_indices = []
 
-        for (trig_ix, arg_span), arg_label in sent.events.argument_dict.items():
+        for (trig_span, arg_span), arg_label in sent.events.argument_dict.items():
+            if self._too_long(trig_span, max_width=self._max_trigger_span_width): # skip event argument parsing because trigger too long
+                continue
+            trig_ix = trigger_span_tuples.index(trig_span)
             if self._too_long(arg_span):
                 continue
             arg_span_ix = span_tuples.index(arg_span)
@@ -123,6 +127,13 @@ class DyGIEReader(DatasetReader):
         # Get the sentence text and define the `text_field`.
         sentence_text = [self._normalize_word(word) for word in sent.text]
         text_field = TextField([Token(word) for word in sentence_text], self._token_indexers)
+
+        # Enumerate trigger spans.
+        trigger_spans = []
+        for start, end in enumerate_spans(sentence_text, max_span_width=self._max_trigger_span_width):
+            trigger_spans.append(SpanField(start, end, text_field))
+        trigger_span_field = ListField(trigger_spans)
+        trigger_span_tuples = [(span.span_start, span.span_end) for span in trigger_spans]
 
         # Enumerate spans.
         spans = []
@@ -139,7 +150,9 @@ class DyGIEReader(DatasetReader):
         # `ListField[ListField[LabelField]]` instead.
         fields = {}
         fields["text"] = text_field
+        fields["trigger_spans"] = trigger_span_field
         fields["spans"] = span_field
+
         if sent.ner is not None:
             ner_labels = self._process_ner(span_tuples, sent)
             fields["ner_labels"] = ListField(
@@ -157,14 +170,12 @@ class DyGIEReader(DatasetReader):
                 indices=relation_indices, sequence_field=span_field, labels=relation_labels,
                 label_namespace=f"{dataset}__relation_labels")
         if sent.events is not None:
-            trigger_labels, argument_labels, argument_indices = self._process_events(span_tuples, sent)
-            fields["trigger_labels"] = SequenceLabelField(
-                trigger_labels, text_field, label_namespace=f"{dataset}__trigger_labels")
-            # fields["argument_labels"] = AdjacencyFieldAssym(
-            #     indices=argument_indices, row_field=text_field, col_field=span_field,
-            #     labels=argument_labels, label_namespace=f"{dataset}__argument_labels")
-            field["argument_labels"] = AdjacencyField(
-                indices=argument_indices, sequence_field=span_field, labels=argument_labels,
+            trigger_labels, argument_labels, argument_indices = self._process_events(trigger_span_tuples, span_tuples, sent)
+            fields["trigger_labels"] = ListField(
+                [LabelField(entry, label_namespace=f"{dataset}__trigger_labels")
+                for entry in trigger_labels])
+            fields["argument_labels"] = AdjacencyFieldAssym(
+                indices=argument_indices, row_field=trigger_span_field, col_field=span_field, labels=argument_labels,
                 label_namespace=f"{dataset}__argument_labels"
             )
 
