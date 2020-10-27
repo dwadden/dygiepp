@@ -1,3 +1,12 @@
+'''
+Script for debugging the model without calling allennlp train/predict and thus avoiding costly init.
+This script will run a forward pass without all the initialization logic and without loading pretrained embeddings.
+
+Usage:
+With `dygiepp` modeling env. active, run: `python debug_forward_pass.py <training_conf_filepath>`
+See `python debug_forward_pass.py --help` for optional args.
+'''
+
 import argparse
 import json
 from _jsonnet import evaluate_file
@@ -27,11 +36,12 @@ def get_args():
 def main():
     args = get_args()
     # Read config.
-    file_dict = json.loads(evaluate_file(args.training_config))
-    model_dict = file_dict["model"]
+    conf_dict = json.loads(evaluate_file(args.training_config))
+    model_dict = conf_dict["model"]
 
     if args.use_bert:
         bert_name = model_dict["embedder"]["token_embedders"]["bert"]["model_name"]
+        bert_max_length = model_dict["embedder"]["token_embedders"]["bert"]["max_length"]
     else:
         bert_name = None
 
@@ -42,20 +52,21 @@ def main():
     # Create indexer.
     if args.use_bert:
         tok_indexers = {"bert": token_indexers.PretrainedTransformerMismatchedIndexer(
-            bert_name, max_length=512)}
+            bert_name, max_length=bert_max_length)}
     else:
         tok_indexers = {"tokens": token_indexers.SingleIdTokenIndexer()}
 
     # Read input data.
-    reader = DyGIEReader(max_span_width=8, token_indexers=tok_indexers, max_instances=args.max_instances)
-    data = reader.read(file_dict["train_data_path"])
+    reader_dict = conf_dict["dataset_reader"]
+    reader = DyGIEReader(reader_dict["max_span_width"], max_trigger_span_width=reader_dict["max_trigger_span_width"], token_indexers=tok_indexers, max_instances=args.max_instances)
+    data = reader.read(conf_dict["train_data_path"])
     vocab = vocabulary.Vocabulary.from_instances(data)
     data.index_with(vocab)
 
     # Create embedder.
     if args.use_bert:
         token_embedder = token_embedders.PretrainedTransformerMismatchedEmbedder(
-            bert_name, max_length=512)
+            bert_name, max_length=bert_max_length)
         embedder = text_field_embedders.BasicTextFieldEmbedder({"bert": token_embedder})
     else:
         token_embedder = token_embedders.Embedding(
@@ -74,6 +85,7 @@ def main():
     # Run forward pass over a single entry.
     for batch in iterator:
         output_dict = model(**batch)
+        print(output_dict)
 
 
 if __name__ == "__main__":
