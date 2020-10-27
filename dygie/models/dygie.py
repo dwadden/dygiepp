@@ -41,6 +41,8 @@ class DyGIE(Model):
         A nested dictionary specifying parameters to be passed on to initialize submodules.
     max_span_width: ``int``
         The maximum width of candidate spans.
+    max_trigger_span_width: ``int``
+        The maximum width of candidate trigger spans.
     target_task: ``str``:
         The task used to make early stopping decisions.
     initializer : ``InitializerApplicator``, optional (default=``InitializerApplicator()``)
@@ -59,6 +61,7 @@ class DyGIE(Model):
                  modules,  # TODO(dwadden) Add type.
                  feature_size: int,
                  max_span_width: int,
+                 max_trigger_span_width: int,
                  target_task: str,
                  feedforward_params: Dict[str, Union[int, float]],
                  loss_weights: Dict[str, float],
@@ -77,6 +80,13 @@ class DyGIE(Model):
             num_width_embeddings=max_span_width,
             span_width_embedding_dim=feature_size,
             bucket_widths=False)
+        self._endpoint_trigger_span_extractor = EndpointSpanExtractor(
+            embedder.get_output_dim(),
+            combination="x,y",
+            num_width_embeddings=max_trigger_span_width,
+            span_width_embedding_dim=feature_size,
+            bucket_widths=False
+        )
 
         ####################
 
@@ -84,8 +94,9 @@ class DyGIE(Model):
         self._embedder = embedder
         self._loss_weights = loss_weights
         self._max_span_width = max_span_width
+        self._max_trigger_span_width = max_trigger_span_width
         self._display_metrics = self._get_display_metrics(target_task)
-        token_emb_dim = self._embedder.get_output_dim()
+        trigger_emb_dim = self._endpoint_trigger_span_extractor.get_output_dim()
         span_emb_dim = self._endpoint_span_extractor.get_output_dim()
 
         ####################
@@ -124,7 +135,7 @@ class DyGIE(Model):
 
         self._events = EventExtractor.from_params(vocab=vocab,
                                                   make_feedforward=make_feedforward,
-                                                  token_emb_dim=token_emb_dim,
+                                                  trigger_emb_dim=trigger_emb_dim,
                                                   span_emb_dim=span_emb_dim,
                                                   feature_size=feature_size,
                                                   params=modules.pop("events"))
@@ -163,6 +174,7 @@ class DyGIE(Model):
     @overrides
     def forward(self,
                 text,
+                trigger_spans,
                 spans,
                 metadata,
                 ner_labels=None,
@@ -186,6 +198,7 @@ class DyGIE(Model):
 
         metadata = metadata[0]
         spans = self._debatch(spans)  # (n_sents, max_n_spans, 2)
+        trigger_spans = self._debatch(trigger_spans) # (n_sents, max_n_spans, 2)
         ner_labels = self._debatch(ner_labels)  # (n_sents, max_n_spans)
         coref_labels = self._debatch(coref_labels)  #  (n_sents, max_n_spans)
         relation_labels = self._debatch(relation_labels)  # (n_sents, max_n_spans, max_n_spans)
@@ -215,6 +228,10 @@ class DyGIE(Model):
 
         # Shape: (batch_size, num_spans, 2 * encoding_dim + feature_size)
         span_embeddings = self._endpoint_span_extractor(text_embeddings, spans)
+
+        trigger_mask = (trigger_spans[:, :, 0] >= 0).float()
+        trigger_spans = F.relu(trigger_spans.float()).long()
+        trigger_embeddings = self._endpoint_trigger_span_extractor(text_embeddings, trigger_spans)
 
         # Make calls out to the modules to get results.
         output_coref = {'loss': 0}
@@ -248,7 +265,8 @@ class DyGIE(Model):
         if self._loss_weights['events'] > 0:
             # The `text_embeddings` serve as representations for event triggers.
             output_events = self._events(
-                text_mask, text_embeddings, spans, span_mask, span_embeddings,
+                trigger_spans, trigger_mask, trigger_embeddings,
+                spans, span_mask, span_embeddings,
                 sentence_lengths, trigger_labels, argument_labels,
                 ner_labels, metadata)
 
