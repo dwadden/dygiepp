@@ -404,6 +404,7 @@ class Span:
 
     @property
     def text(self):
+        print(self.end_sent)
         return self.sentence.text[self.start_sent:self.end_sent + 1]
 
     def __repr__(self):
@@ -439,7 +440,7 @@ class Token:
 class Trigger:
     def __init__(self, trig, sentence, sentence_offsets):
         # token = Token(trig[0], sentence, sentence_offsets)
-        label = trig[-1]
+        label = trig[2]
         span = Span(trig[0], trig[1], sentence, sentence_offsets)
         # self.token = token
         self.label = label
@@ -462,8 +463,8 @@ class Trigger:
 class PredictedTrigger(Trigger):
     def __init__(self, trig, sentence, sentence_offsets):
         super().__init__(trig, sentence, sentence_offsets)
-        self.raw_score = trig[2]
-        self.softmax_score = trig[3]
+        self.raw_score = trig[3]
+        self.softmax_score = trig[4]
 
     def __repr__(self):
         return super().__repr__() + f" with confidence {self.softmax_score:0.4f}"
