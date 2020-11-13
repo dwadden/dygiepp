@@ -1,6 +1,7 @@
 import logging
 import itertools
 from typing import Any, Dict, List, Optional, Callable
+import functools
 
 import torch
 from torch.nn import functional as F
@@ -81,7 +82,7 @@ class EventExtractor(Model):
 
             # TODO(dwadden) Here
             # argument_feedforward_dim = trigger_emb_dim + span_emb_dim + feature_size + 2
-            argument_feedforward_dim = 3 * span_emb_dim
+            argument_feedforward_dim = trigger_emb_dim + span_emb_dim + feature_size + 2
             argument_feedforward = make_feedforward(input_dim=argument_feedforward_dim)
             self._argument_feedforwards[argument_namespace] = argument_feedforward
             self._argument_scorers[argument_namespace] = torch.nn.Linear(
@@ -243,33 +244,56 @@ class EventExtractor(Model):
         arg_emb_expanded = top_arg_embeddings.unsqueeze(1)
         arg_emb_tiled = arg_emb_expanded.repeat(1, num_trigs, 1, 1)
 
-        # distance_embeddings = self._compute_distance_embeddings(top_trig_spans, top_arg_spans)
-        similarity_embeddings = trig_emb_expanded * arg_emb_expanded
+        distance_embeddings = self._compute_distance_embeddings(top_trig_spans, top_arg_spans)
+        # similarity_embeddings = trig_emb_expanded * arg_emb_expanded
 
         # pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled, distance_embeddings]
-        pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled, similarity_embeddings]
+        pair_embeddings_list = [trig_emb_tiled, arg_emb_tiled, distance_embeddings]
         pair_embeddings = torch.cat(pair_embeddings_list, dim=3)
 
         return pair_embeddings
 
+
     def _compute_distance_embeddings(self, top_trig_spans, top_arg_spans):
-        # top_trig_ixs = top_trig_indices.unsqueeze(2)
-        trig_span_starts = top_trig_spans[:, :, 0].unsqueeze(1)
-        trig_span_ends = top_trig_spans[:, :, 1].unsqueeze(1)
-        arg_span_starts = top_arg_spans[:, :, 0].unsqueeze(1)
-        arg_span_ends = top_arg_spans[:, :, 1].unsqueeze(1)
-        dist_from_start = trig_span_starts - arg_span_starts
-        dist_from_end = trig_span_starts - arg_span_ends
-        # Distance from trigger to arg.
-        dist = torch.min(dist_from_start.abs(), dist_from_end.abs())
-        # When the trigger is inside the arg span, also set the distance to zero.
-        trigger_inside = (trig_span_starts >= arg_span_starts) & (trig_span_starts <= arg_span_ends)
-        dist[trigger_inside] = 0
+        """
+        Compute integer distance and positional features of two tensors of span interval indices
+        of different size. Embeds the bucketed distance values.
+        :param top_trigger_spans: Size (batch_size, num_trig_spans, 2), 2 for (trigger_start_index, trigger_end_index)
+        :param top_arg_spans: Size (batch_size, num_arg_spans, 2), 2 for (arg_start_index, arg_end_index)
+        return res: Tensor of size (batch_size, num_args consists of concat of:
+                - dist: size (batch_size, num_trig_spans, num_arg_spans) containing the integer distance values.
+                - trigger_before_feature: size idem size, boolean feature indicating that trigger comes before argument.
+                - trigger_overlap_feature: size idem, boolean feature indicating that trigger overlaps with argument.
+        """
+        # tile the span matrices
+        num_trigs = top_trig_spans.size(1)
+        num_spans = top_arg_spans.size(1)
+        trig_span_tiled = top_trig_spans.unsqueeze(2).repeat(1, 1, num_spans, 1)
+        arg_span_tiled = top_arg_spans.unsqueeze(1).repeat(1, num_trigs, 1, 1)
+
+        # get start_idc and end_idc
+        trig_span_starts = trig_span_tiled[:, :, :, 0]
+        trig_span_ends = trig_span_tiled[:, :, :, 1]
+        arg_span_starts = arg_span_tiled[:, :, :, 0]
+        arg_span_ends = arg_span_tiled[:, :, :, 1]
+
+        # compute all distances, abs().min is the correct dist value
+        dist_start2end = trig_span_starts - arg_span_ends
+        dist_end2start = trig_span_ends - arg_span_starts
+        dist = torch.min(dist_start2end.abs(), dist_end2start.abs())
+        # When the trigger overlaps with the arg span, also set the distance to zero.
+        # Overlap happens when the trigger is not outside before or after the span.
+        trigger_before = (trig_span_starts <= trig_span_ends) & (trig_span_ends < arg_span_starts)
+        trigger_after = (arg_span_starts <= arg_span_ends) & (arg_span_ends < trig_span_starts)
+        trigger_overlap = ~(trigger_before | trigger_after)
+        dist[trigger_overlap] = 0
+
+        # compute bucketed embeddings and add before, overlap boolean feature
         dist_buckets = util.bucket_values(dist, self._num_distance_buckets)
         dist_emb = self._distance_embedding(dist_buckets)
-        trigger_before_feature = (top_trig_ixs < arg_span_starts).float().unsqueeze(-1)
-        trigger_inside_feature = trigger_inside.float().unsqueeze(-1)
-        res = torch.cat([dist_emb, trigger_before_feature, trigger_inside_feature], dim=-1)
+        trigger_before_feature = trigger_before.float().unsqueeze(-1)
+        trigger_overlap_feature = trigger_overlap.float().unsqueeze(-1)
+        res = torch.cat([dist_emb, trigger_before_feature, trigger_overlap_feature], dim=-1)
 
         return res
 
