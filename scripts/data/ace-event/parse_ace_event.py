@@ -132,8 +132,6 @@ class Event:
 
     def to_json(self):
         trigger_span = self.trigger.adjusted_span_doc
-        if trigger_span[0] != trigger_span[1]:
-            pass
         trigger = [[trigger_span[0], trigger_span[1], self.trigger.trigger_type]]
         args = []
         for arg in self.arguments:
@@ -242,9 +240,8 @@ class Doc:
 
 
 def debug_if(cond):
-    pass
-    # if cond:
-    #     import ipdb; ipdb.set_trace()
+    if cond:
+        import ipdb; ipdb.set_trace()
 
 
 def get_token_indices(entity, sent):
