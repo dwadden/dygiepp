@@ -26,7 +26,7 @@ class CrossSentenceException(AceException):
     pass
 
 
-class MultiTokenTrigerException(AceException):
+class MultiTokenTriggerException(AceException):
     pass
 
 
@@ -132,8 +132,9 @@ class Event:
 
     def to_json(self):
         trigger_span = self.trigger.adjusted_span_doc
-        assert trigger_span[0] == trigger_span[1]
-        trigger = [[trigger_span[0], self.trigger.trigger_type]]
+        if trigger_span[0] != trigger_span[1]:
+            pass
+        trigger = [[trigger_span[0], trigger_span[1], self.trigger.trigger_type]]
         args = []
         for arg in self.arguments:
             # Collapse time argument roles following Bishan.
@@ -241,8 +242,9 @@ class Doc:
 
 
 def debug_if(cond):
-    if cond:
-        import ipdb; ipdb.set_trace()
+    pass
+    # if cond:
+    #     import ipdb; ipdb.set_trace()
 
 
 def get_token_indices(entity, sent):
@@ -269,7 +271,7 @@ def get_token_of(doc, char):
 
 class Document:
     def __init__(self, annotation_path, text_path, doc_key, fold, heads_only=True,
-                 real_entities_only=True, include_pronouns=False, include_entity_coreference=False, include_event_coreference=False):
+                 real_entities_only=True, include_pronouns=False, include_entity_coreference=False, include_event_coreference=False, multitoken_triggers=False):
         '''
         A base class for ACE xml annotation
         :param annotation_path:
@@ -279,6 +281,7 @@ class Document:
         self._real_entities_only = real_entities_only
         self._include_entity_coreference = include_entity_coreference
         self._include_event_coreference = include_event_coreference
+        self._multitoken_triggers = multitoken_triggers
         self._doc_key = doc_key
         self._annotation_path = annotation_path
         self._annotation_xml = ET.parse(self._annotation_path)
@@ -407,15 +410,15 @@ class Document:
         the_text = self.doc.char_span(start_char, end_char + 1)
         start_tok = get_token_of(self.doc, start_char)
         end_tok = get_token_of(self.doc, end_char)
-        if trigger and start_tok != end_tok:
-            raise MultiTokenTrigerException()
+        if trigger and not self._multitoken_triggers and start_tok != end_tok:
+            raise MultiTokenTriggerException()
             # # If the trigger is multiple words, get the highest token in the dependency parse.
             # the_root = self.doc[start_tok.i:end_tok.i + 1].root
             # start_char = the_root.idx
             # end_char = start_char + len(the_root) - 1
             # the_text = the_root.text
         elif the_text is None:
-            # Otherwise, just take all spans containing the entity.
+            # take all spans containing the entity.
             start_char = start_tok.idx
             end_char = end_tok.idx + len(end_tok) - 1
             the_text = self.doc.char_span(start_char, end_char + 1)
@@ -519,8 +522,8 @@ class Document:
                         int(trigger_tag[0].attrib['START']),
                         int(trigger_tag[0].attrib['END']),
                         trigger=True)
-                # If we hit a multi-token trigger, skip the event mention.
-                except MultiTokenTrigerException:
+                # If we hit a multi-token trigger when set to False, skip the event mention.
+                except MultiTokenTriggerException:
                     continue
                 # Buggy event. Crosses sentence. Skip it.
                 if self._doc_key == "APW_ENG_20030308.0314" and start_char == 3263 and end_char == 3270:
@@ -783,7 +786,7 @@ class Document:
 
 
 def one_fold(fold, output_dir, heads_only=True, real_entities_only=True, include_pronouns=False,
-             include_entity_coreference=False, include_event_coreference=False):
+             include_entity_coreference=False, include_event_coreference=False, multitoken_triggers=False):
     doc_path = "./data/ace-event/raw-data"
     split_path = "./scripts/data/ace-event/event-split"
 
@@ -798,7 +801,7 @@ def one_fold(fold, output_dir, heads_only=True, real_entities_only=True, include
             text_path = path.join(doc_path, doc_key + ".sgm")
             document = Document(annotation_path, text_path, doc_key, fold, heads_only,
                                 real_entities_only, include_pronouns, include_entity_coreference,
-                                include_event_coreference)
+                                include_event_coreference, multitoken_triggers)
             js = document.to_json()
             g.write(json.dumps(js, default=int) + "\n")
 
@@ -822,6 +825,8 @@ def main():
                         help="*Include entity coreference labels stored in 'clusters'.")
     parser.add_argument("--include_event_coreference", action="store_true",
                         help="*Include event coreference labels stored in 'event_clusters'.")
+    parser.add_argument("--use_multitoken_triggers", action="store_true",
+                    help="Parse (rare) multitoken triggers instead of skipping them.")
     args = parser.parse_args()
 
     output_dir = f"./data/ace-event/processed-data/{args.output_name}/json"
@@ -837,7 +842,9 @@ def main():
                  real_entities_only=(not args.include_times_and_values),
                  include_pronouns=args.include_pronouns,
                  include_entity_coreference=args.include_entity_coreference,
-                 include_event_coreference=args.include_event_coreference)
+                 include_event_coreference=args.include_event_coreference,
+                 multitoken_triggers=args.use_multitoken_triggers
+                 )
 
 
 if __name__ == "__main__":
