@@ -3,7 +3,7 @@
 # Modeling
 
 allennlp==1.1.0
-allennlp_models==1.0
+allennlp_models==1.1.0
 
 # Data munging
 
