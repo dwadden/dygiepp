@@ -304,8 +304,8 @@ Below are links to the available models, followed by the name of the `dataset` t
 - [ChemProt (lightweight only)](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/chemprot.tar.gz): `chemprot`
 - [ACE05 relation](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/ace05-relation.tar.gz): `ace05`
 - [ACE05 event](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/ace05-event.tar.gz): `ace-event`
-- [MECHANIC "coarse"](https://ai2-s2-mechanic.s3-us-west-2.amazonaws.com/models/mechanic-coarse.tar.gz) `mechanic`
-- [MECHANIC "granular"](https://ai2-s2-mechanic.s3-us-west-2.amazonaws.com/models/mechanic-granular.tar.gz) `mechanic`
+- [MECHANIC "coarse"](https://ai2-s2-mechanic.s3-us-west-2.amazonaws.com/models/mechanic-coarse.tar.gz) `None`
+- [MECHANIC "granular"](https://ai2-s2-mechanic.s3-us-west-2.amazonaws.com/models/mechanic-granular.tar.gz) `covid-event`
 
 ### Performance of pretrained models
 
