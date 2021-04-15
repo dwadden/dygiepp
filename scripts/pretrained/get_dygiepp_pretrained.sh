@@ -13,3 +13,14 @@ do
             "https://s3-us-west-2.amazonaws.com/ai2-s2-research/dygiepp/master/${name}.tar.gz"
     fi
 done
+
+
+# Grab the MECHANIC models as well; they're in a different bucket.
+for name in mechanic-coarse mechanic-granular
+do
+    if [ ! -f pretrained/mechanic-${name}.tar.gz ]
+    then
+        wget --directory-prefix=./pretrained \
+            "https://s3-us-west-2.amazonaws.com/ai2-s2-mechanic/models/${name}.tar.gz"
+    fi
+done
