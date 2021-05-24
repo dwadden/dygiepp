@@ -60,10 +60,6 @@ RUN apt-get install wget -y
 COPY scripts/pretrained/get_dygiepp_pretrained.sh /tmp/get_dygiepp_pretrained.sh
 RUN cd /dygiepp && bash /tmp/get_dygiepp_pretrained.sh
 
-# SciBERT: Download fine-tuned pretrained SciBERT model.
-COPY scripts/pretrained/get_scibert.py /tmp/get_scibert.py
-RUN cd /dygiepp && python /tmp/get_scibert.py
-
 # Required-base: cleanup.
 RUN rm -rf /tmp /dygiepp/{scripts,dygie}
 
