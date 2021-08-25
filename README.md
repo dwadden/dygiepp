@@ -3,6 +3,7 @@
 Implements the model described in the paper [Entity, Relation, and Event Extraction with Contextualized Span Representations](https://www.semanticscholar.org/paper/Entity%2C-Relation%2C-and-Event-Extraction-with-Span-Wadden-Wennberg/fac2368c2ec81ef82fd168d49a0def2f8d1ec7d8).
 
 ## Table of Contents
+- [Updates](#updates)
 - [Project status](#project-status)
 - [Dependencies](#dependencies)
 - [Model training](#training-a-model)
@@ -13,6 +14,31 @@ Implements the model described in the paper [Entity, Relation, and Event Extract
 - [Contact](#contact)
 
 See the `doc` folder for documentation with more details on the [data](doc/data.md), [model implementation and debugging](doc/model.md), and [model configuration](doc/config.md).
+
+
+## Updates
+
+**April 2021**: We've added data and models for the MECHANIC dataset, presented in the NAACL 2021 paper [Extracting a Knowledge Base of Mechanisms from COVID-19 Papers](https://www.semanticscholar.org/paper/c4ce6aca9aed41d57d588674484932e0c2cd3547).
+
+- [Download the dataset](https://ai2-s2-mechanic.s3-us-west-2.amazonaws.com/data/data.zip)
+- [Download the "coarse" model](https://ai2-s2-mechanic.s3-us-west-2.amazonaws.com/models/mechanic-coarse.tar.gz)
+- [Download the "granular" model](https://ai2-s2-mechanic.s3-us-west-2.amazonaws.com/models/mechanic-granular.tar.gz)
+
+You can also get the data by running `bash scripts/data/get_mechanic.sh`, which will put the data in `data/mechanic`.
+
+After moving the models to the `pretrained` folder, you can make predictions like this:
+
+```bash
+allennlp predict \
+  pretrained/mechanic-coarse.tar.gz \
+  data/mechanic/coarse/test.json \
+  --predictor dygie \
+  --include-package dygie \
+  --use-dataset-reader \
+  --output-file predictions/covid-coarse.jsonl \
+  --cuda-device 0 \
+  --silent
+```
 
 
 ## Project status
@@ -216,6 +242,12 @@ To reproduce the results in Table 1 requires training an ensemble model of 4 tri
 
 If you need more details, email me.
 
+
+### MECHANIC
+
+You can get the dataset by running `bash scripts/data/get_mechanic.sh`. For detailed training instructions, see the [DyGIE-COFIE](https://github.com/AidaAmini/DyGIE-COFIE) repo.
+
+
 ## Evaluating a model
 
 To check the performance of one of your models or a pretrained model, you can use the `allennlp evaluate` command.
@@ -272,6 +304,8 @@ Below are links to the available models, followed by the name of the `dataset` t
 - [ChemProt (lightweight only)](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/chemprot.tar.gz): `chemprot`
 - [ACE05 relation](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/ace05-relation.tar.gz): `ace05`
 - [ACE05 event](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/ace05-event.tar.gz): `ace-event`
+- [MECHANIC "coarse"](https://ai2-s2-mechanic.s3-us-west-2.amazonaws.com/models/mechanic-coarse.tar.gz) `None`
+- [MECHANIC "granular"](https://ai2-s2-mechanic.s3-us-west-2.amazonaws.com/models/mechanic-granular.tar.gz) `covid-event`
 
 ### Performance of pretrained models
 
