@@ -31,11 +31,15 @@ def format_annotated_document(fname_pair, dataset_name, nlp):
         res, json dict: formatted data
     """
     # Make annotated doc object
-    annotated_doc = AnnotatedDoc.parse_ann(fname_pair[0], fname_pair[1], nlp)
+    annotated_doc = AnnotatedDoc.parse_ann(fname_pair[0], fname_pair[1], nlp, dataset_name)
 
     # Do the character to token conversion
-    annotated_doc.char_to_token() # Probably make a function that directly makes a 
-    # json object for the doc and calls this within
+    annotated_doc.char_to_token() 
+    
+    # Do the dygiepp conversion 
+    res = annotated_doc.format_dygiepp()
+
+    return res 
 
 
 def get_paired_files(all_files):
@@ -85,9 +89,14 @@ def format_labeled_dataset(data_directory, output_file, dataset_name, use_scispa
     all_files = [f"{data_directory}/{name}" for name in os.listdir(data_directory)]
     paired_files = get_paired_files(all_files) 
 
-    # Format pairs 
+    # Format doc file pairs
     res = [format_annotated_document(fname_pair, dataset_name, nlp) 
             for fname_pair in paired_files]
+    
+    # Write out doc dictionaries
+    with open(output_file, "w") as f:
+        for doc in res:
+        print(json.dumps(doc), file=f)
 
 
 def get_args():
