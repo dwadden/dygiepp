@@ -9,7 +9,7 @@ import operator
 
 class AnnotatedDoc:
 
-    def __init__(self, text, sents, ents, bin_rels, events, equiv_rels, doc_key, 
+    def __init__(self, text, sents, ents, bin_rels, events, doc_key, 
             dataset):
         """
         Provides dual functionality for class construction. If this funciton is
@@ -21,7 +21,7 @@ class AnnotatedDoc:
         self.ents = ents 
         self.bin_rels = bin_rels
         self.events = events
-        self.equiv_rels = equiv_rels
+        # self.equiv_rels = equiv_rels # Put back arg if needed 
         self.doc_key = doc_key
         self.dataset = dataset
 
@@ -60,7 +60,7 @@ class AnnotatedDoc:
         ents = []
         bin_rels = []
         events = []
-        equiv_rels = []
+        # equiv_rels = []
         for line in split_lines:
             
             # The first character of the first element in the annotation
@@ -75,11 +75,11 @@ class AnnotatedDoc:
             elif line[0][0] == 'E':
                 events.append(Event(line))
 
-            elif line[0][0] == '*':
-                equiv_rels.append(EquivRel(line))
+          #  elif line[0][0] == '*':
+          #      equiv_rels.append(EquivRel(line))
 
         annotated_doc = AnnotatedDoc(text, sents, ents, bin_rels, events, 
-                equiv_rels, doc_key, dataset)
+                doc_key, dataset)
         annotated_doc.set_annotation_objects()
         
         return annotated_doc
@@ -92,7 +92,7 @@ class AnnotatedDoc:
         """
         self.bin_rels = [bin_rel.set_arg_objects(self.ents) for bin_rel in self.bin_rels]
         self.events = [event.set_arg_objects(self.ents) for event in self.events]
-        self.equiv_rels = [equiv_rel.set_arg_objs(self.ents) for equiv_rel in self.equiv_rels]
+        # self.equiv_rels = [equiv_rel.set_arg_objs(self.ents) for equiv_rel in self.equiv_rels]
 
 
     def char_to_token(self):
@@ -166,45 +166,45 @@ class AnnotatedDoc:
                         'be aligned to the tokenization, and will be dropped.')    
 
 
-        def format_dygiepp(self):
-            """
-            Creates a dygiepp-formatted json for the doc, using each class' 
-            formatting method.
-            """
-            # Get the token start and end indices for each sentence 
-            sent_idx_tups = []
-            last_end_tok = 0
-            for sent in self.sents:
-                
-                start_tok = last_end_tok_plus_one
-                last_end_tok = start_tok + len(sent) # End index of sentence is non-inclusive 
+    def format_dygiepp(self):
+        """
+        Creates a dygiepp-formatted json for the doc, using each class' 
+        formatting method.
+        """
+        # Get the token start and end indices for each sentence 
+        sent_idx_tups = []
+        last_end_tok = 0
+        for sent in self.sents:
+            
+            start_tok = last_end_tok_plus_one
+            last_end_tok = start_tok + len(sent) # End index of sentence is non-inclusive 
 
-                sent_idx_tups.append((start_tok, last_end_tok))
+            sent_idx_tups.append((start_tok, last_end_tok))
 
-            # Format data 
-            ner = Ent.format_ner_dygiepp(self, sent_idx_tups)
-            bin_rels = BinRel.format_bin_rels_dygiepp(self, sent_idx_tups)
-            ## TODO: EquivRels?
-            if len(self.events) > 0: # Some datasets don't have events
-                events = Event.format_events_dygiepp(self, sent_idx_tups)
+        # Format data 
+        ner = Ent.format_ner_dygiepp(self, sent_idx_tups)
+        bin_rels = BinRel.format_bin_rels_dygiepp(self, sent_idx_tups)
+        ## TODO: EquivRels?
+        if len(self.events) > 0: # Some datasets don't have events, TODO probably want a better way to deal with this 
+            events = Event.format_events_dygiepp(self, sent_idx_tups)
 
-                # Make dict
-                res = {"doc_key": self.doc_key,
-                       "dataset": self.dataset,
-                       "sentences": self.sents,
-                       "ner": ner,
-                       "relations": bin_rels,
-                       "events": events}
-            else:
+            # Make dict
+            res = {"doc_key": self.doc_key,
+                   "dataset": self.dataset,
+                   "sentences": self.sents,
+                   "ner": ner,
+                   "relations": bin_rels,
+                   "events": events}
+        else:
 
-                # Make dict
-                res = {"doc_key": self.doc_key,
-                       "dataset": self.dataset,
-                       "sentences": self.sents,
-                       "ner": ner,
-                       "relations": bin_rels}
+            # Make dict
+            res = {"doc_key": self.doc_key,
+                   "dataset": self.dataset,
+                   "sentences": self.sents,
+                   "ner": ner,
+                   "relations": bin_rels}
 
-            return res 
+        return res 
 
 
 class Ent:
@@ -218,8 +218,10 @@ class Ent:
         self.ID = line[0]
         self.label = line[1]
         
-        ent_# str = ' '.join(line)
-        self.start_end_tups = find_start_end_tups(ent_str, [])
+        ent_str = ' '.join(line)        ## TODO: the recursive function requires
+                                        ## the line to have its original tabs, 
+                                        ## need to fix this 
+        self.start_end_tups = find_start_end_tups(ent_str, []) 
         self.first_start = self.start_end_tups[0][0] # Use to sort ents easily 
 
         num_start_end = len(self.start_end_tups)
@@ -274,9 +276,8 @@ class Ent:
     def format_ner_dygiepp(annotated_doc, sent_idx_tups):
         """
         Take a list of start and end tokens for entities and format them for 
-        dygiepp. Assumes all entitiesa re annotated within sentence boundaries.
-
-        Would also appreciate here, to see if there's a way to do fewer loops!
+        dygiepp. Assumes all entities are annotated within sentence boundaries
+        and that entity indices have been converted to tokens.
 
         parameters:
             annotated_doc, AnnotataedDoc instance: the doc to be formatted 
@@ -285,6 +286,8 @@ class Ent:
         returns:
             ner, list of list: dygiepp formatted ner 
         """
+        ## TODO: check if/how disjoint entities are formatted for dygiepp
+        
         ner = []
         # Go through each sentence to get the entities belonging to that sentence 
         for sent_start, sent_end in sent_idx_tups:
@@ -292,10 +295,17 @@ class Ent:
             # Check all entities to see if they're in this sentence 
             sent_ents = []
             for ent in annotated_doc.ents:
-                ent_start = ent.start_end_tups[0][0]
-                if sent_start <= ent_start < sent_end: # Because the end idx is non-inclusive 
-                    ## TODO: check if/how disjoint entities are formatted for dygiepp
-                    sent_ents.append([ent_start, ent_end, ent.label])
+
+                if len(ent.start_end_tups) == 1:
+                    ent_start = ent.start_end_tups[0][0]
+                    ent_end = ent.start_end_tups[0][1]
+                    if sent_start <= ent_start < sent_end: # Because the end idx is non-inclusive 
+                        sent_ents.append([ent_start, ent_end, ent.label])
+
+                else: # This is a stopgap until I figure out if disjoint entities are accepted,
+                      # If they aren't, drop them when making the Ent objects instead of here 
+                    print(f'Warning: Entity "{ent.text}" (ID: {ent.ID}) is disjoint, '
+                            'and not supported by dygiepp, and is being dropped.')
 
             ner.append(sent_ents)
 
@@ -335,7 +345,8 @@ class BinRel:
     def format_bin_rels_dygiepp(annotated_doc, sent_idx_tups):
         """
         Take a list of relations and format them for dygiepp. Assumes all 
-        realtions are annotated within sentence boundaries.
+        realtions are annotated within sentence boundaries and that entity
+        indices have been converted to tokens.
 
         parameters:
             annotated_doc, AnnotataedDoc instance: the doc to be formatted 
@@ -360,7 +371,7 @@ class BinRel:
                                         rel.arg2.start_end_tups[0][2],
                                         rel.label])
                     
-            bin_rels.append(sent_ents)
+            bin_rels.append(sent_rels)
 
         return bin_rels
 
@@ -369,14 +380,15 @@ class Event:
 
     __init__(self, line):
 
-        ## TODO: fix this to account for the fact that there can be more than two triggers 
         self.ID = line[0]
         self.trigger = line[1][line[1].index(':')+1:] # ID of arg is after semicolon
         self.trigger_type = line[1][:line[1].index(':')] # Type of trigger is before semicolon
-        self.arg1 = line[2][line[2].index(':')+1:]
-        self.arg1_role = line[2][:line[2].index(':')] # Role of arg is before semicolon
-        self.arg2 = line[3][line[3].index(':')+1:]
-        self.arg2_role = line[3][:line[3].index(':')]
+        
+        self.args = [] # List of tuples (arg_ID, role)
+        for arg in line[2:]:
+            role = arg[arg.index(':')+1:]
+            arg_ID = arg[:arg.index(':')]
+            self.args.append((arg_ID, role))
 
 
     def set_arg_objects(self, arg_list):
@@ -390,53 +402,126 @@ class Event:
 
         returns: None
         """
-        for ent in arg_list:
+        # Format a dict with arg ID as key, Ent obj as value
+        # for more efficient lookup
+        ent_dict = {ent.ID : ent for ent in arg_list}
 
-            if ent.ID == self.arg1:
-                self.arg1 = ent
+        # Replace trigger 
+        self.trigger = ent_dict[self.trigger]
+        
+        # Replace args 
+        arg_objs = []
+        for arg_ID, role in self.args:
 
-            elif ent.ID == self.arg2:
-                self.arg2 = ent
+            # Get the arg from the ent list by ID 
+            arg_obj = ent_dict[arg_ID]
 
+            # Add back to list with object in place of ID 
+            arg_objs.append((arg_obj, role))
+        
+        self.args = arg_objs
+        
 
     def format_events_dygiepp(annotated_doc, sent_idx_tups):
         """
         Take a list of events and format them for dygiepp. Assumes all 
-        events are annotated within sentence boundaries.
+        events are annotated within sentence boundaries and that entity
+        indices have been converted to tokens.
+
+        NOTE: In ACE, triggers can only be one token long. As the specified
+        format in data.md only includes events with single token triggers, 
+        this function will use only the first token (with a warning) if there 
+        are multiple-token triggers in the dataset.
 
         parameters:
-            annotated_doc, AnnotataedDoc instance: the doc to be formatted 
+            annotated_doc, AnnotatedDoc instance: the doc to be formatted 
             sent_idx_tups, list of tuple: start and end indices for each sentence 
 
         returns:
             events, list of list: dygiepp formatted events
         """
-        ## TODO
-        pass 
+        events = []
+        # Go through each sentence to get the relations belonging to that sentence 
+        for sent_start, sent_end in sent_idx_tups:
+            
+            # Check trigger to see if event is in this sentence and format
+            sent_events = []
+            for event in annotated_doc.events:
+                
+                # Check if event is in sentence 
+                trigger_start = event.trigger.start_end_tups[0][0] 
+                
+                if sent_start <= trigger_start < sent_end:
+                    
+                    formatted_event = []
+                    # Format trigger 
+                    ## TODO: Change if disjoint entities not valid 
+                    ## TODO: Check if triggers can be more than one token for not ACE
+                    trigger_end = event.trigger.start_end_tups[0][1]
+                    if trigger_start != trigger_end or len(event.trigger.start_end_tups) > 1:
+
+                        print(f'Warning! Trigger "{event.trigger.text}" (ID: '
+                                f'{event.trigger.ID}) is disjoint or has '
+                                'multiple tokens. Only the first token will be '
+                                'used.')
+                        
+                        trigger = [trigger_start, event.trigger_type]
+                        formatted_event.append(trigger)
+
+                    else: 
+                        trigger = [trigger_start, event.trigger_type]
+                        formatted_event.append(trigger)
+
+                    # Format args
+                    for arg_obj, role in event.args:
+                        
+                        if len(arg_obj.start_end_tups) > 1:
+
+                            print(f'Warning! Event arg "{arg_obj.text}" (ID: '
+                                    f'{arg_obj.text} is disjoint, and will be '
+                                    'dropped.')
+
+                        else:
+                            arg_start = arg_obj.start_end_tups[0][0]
+                            arg_end = arg_obj.start_end_tups[0][1]
+
+                            # Turns out I don't actually need the "role" at all 
+                            ## TODO: decide whether to just totally disregard
+                            # that from the start 
+
+                            arg = [arg_start, arg_end, arg.label]
+                            formatted_event.append(arg)
+
+                sent_events.append(formatted_events)
+
+            events.append(sent_events)
+
+        return events
+            
 
 
 ## TODO: check if you need this, may not 
-class EquivRel:
-    
-    __init__(self, line):
-
-        self.label = line[1]
-        self.equivalent_ents = line[2:]
-
-
-    def set_arg_objects(self, arg_list):
-        """
-        Given a list of entity objects, replaces the string ID for all args 
-        taken from the original annotation with the Ent object 
-        instance that represents that entity.
-
-        parameters:
-            arg_list, list of Ent instances: entities from the same .ann file
-
-        returns: None
-        """
-        ent_objs = []
-        for ent in arg_list:
-            if ent.ID in self.equivalent_ents:
-                ent_objs.append(ent)
-
+#class EquivRel:
+#    
+#    __init__(self, line):
+#
+#        self.label = line[1]
+#        self.equivalent_ents = line[2:]
+#
+#
+#    def set_arg_objects(self, arg_list):
+#        """
+#        Given a list of entity objects, replaces the string ID for all args 
+#        taken from the original annotation with the Ent object 
+#        instance that represents that entity.
+#
+#        parameters:
+#            arg_list, list of Ent instances: entities from the same .ann file
+#
+#        returns: None
+#        """
+#        ent_objs = []
+#        for ent in arg_list:
+#            if ent.ID in self.equivalent_ents:
+#                ent_objs.append(ent)
+#
