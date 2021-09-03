@@ -25,6 +25,7 @@ class AnnotatedDoc:
         self.doc_key = doc_key
         self.dataset = dataset
 
+
     @classmethod
     def parse_ann(cls, txt, ann, nlp, dataset):
         """
@@ -53,8 +54,20 @@ class AnnotatedDoc:
         with open(ann) as myf:
             lines = myf.readlines()
 
+        # Drop discontinuous entities by looking for semicolons before second \t
+        lines_continuous = []
+        for line in lines:
+            if line[0] == 'E':
+                second_tab = line.rfind('\t')
+                if ';' in line[:second_tab]: 
+                    print(f'Warning! Entity "{line[second_tab:]}" (ID: '
+                            f'{line[:line.index("\t")]}) is disjoint, and '
+                            'will be dropped.')
+                else: lines_continuous.append(line)
+            else: lines_continuous.append(line)
+
         # Split on whitespace to get the separate elements of the annotation
-        split_lines = [line.split() for line in lines]
+        split_lines = [line.split() for line in lines_continuous]
 
         # Make class instances for the different annotation types 
         ents = []
@@ -128,7 +141,7 @@ class AnnotatedDoc:
         tokenized_doc = [tok for sent in sents for tok in sent]
 
         # Order the entities by their start indices 
-        sorted_ents = sorted(x, key=operator.attrgetter('first_start'))
+        sorted_ents = sorted(x, key=operator.attrgetter('start'))
 
         # Get alignment for each entity
         last_tok = 0  # Index of the first token of the last entity 
@@ -136,27 +149,21 @@ class AnnotatedDoc:
             
             # Search for the text of the entity 
             try:
+               
+                # Get character indices
+                start_char = ent.start
+                end_char = ent.end 
+
+                # Start seach at the start token index of the last entity 
+                start_tok = tokenized_doc.index(ent.text, last_tok)
+                last_tok = start_tok
+
+                # Start search for end tok at the start token
+                words = ent.text.split()
+                end_tok = tokenized_doc.index(words[-1], start_tok)
                 
-                ent_tok_tups = []
-                for part in ent.start_end_tups:
-
-                    # Get character indices 
-                    start_char = part[0]
-                    end_char = part[1]
-
-                    # Start search at the start token index of the last entity
-                    start_tok = tokenized_doc.index(ent.text, last_tok)
-                    last_tok = start_tok # Update counter 
-
-                    # Start search for end tok at the start token
-                    words = ent.text.split()
-                    end_tok = tokenized_doc.index(words[-1], start_tok)
-
-                    # Add to this entity's list of start and end token indices
-                    ent_tok_tups.append((start_tok, end_tok))
-
                 # Update this entity's index list with token indices 
-                ent.start_ent_tups = ent_tok_tups
+                ent.set_start_end(start_tok, end_tok)
 
             except ValueError:
                 
@@ -173,13 +180,13 @@ class AnnotatedDoc:
         """
         # Get the token start and end indices for each sentence 
         sent_idx_tups = []
-        last_end_tok = 0
+        last_end_tok_plus_one = 0
         for sent in self.sents:
             
             start_tok = last_end_tok_plus_one
-            last_end_tok = start_tok + len(sent) # End index of sentence is non-inclusive 
+            last_end_tok_plus_one = start_tok + len(sent) # End index of sentence is non-inclusive 
 
-            sent_idx_tups.append((start_tok, last_end_tok))
+            sent_idx_tups.append((start_tok, last_end_tok_plus_one))
 
         # Format data 
         ner = Ent.format_ner_dygiepp(self, sent_idx_tups)
@@ -211,55 +218,21 @@ class Ent:
 
     __init__(self, line):
         """
-        Accounts for discontinuous annotations.
-        Discontinuous annotation indices are split by semicolon, e.g.
-        'T1 label start1 end1;start2 end2 text'
+        Does not account for discontinuous annotations, these should have
+        been removed before creating entity objects.
         """
         self.ID = line[0]
         self.label = line[1]
         
-        ent_str = ' '.join(line)        ## TODO: the recursive function requires
-                                        ## the line to have its original tabs, 
-                                        ## need to fix this 
-        self.start_end_tups = find_start_end_tups(ent_str, []) 
-        self.first_start = self.start_end_tups[0][0] # Use to sort ents easily 
+        # Since disjoint entities have been dropped, start and end indices will
+        # always be at the same indices in the list 
 
-        num_start_end = len(self.start_end_tups)
-        self.text = line[1+(num_start_end*2):]
+        self.start = line[2]
+        self.end = line[3]
+        self.text = " ".join(line[4:])
 
 
-    @staticmethod
-    def find_start_end_tups(ent_str, start_end_tups):
-        """
-        Finds the start and end tuples for a string from a brat .ann file 
-        representing an entity. Accounts for disjoint annotations that have
-        an arbitrary number of start and end tuples.
-
-        parameters:
-            ent_str, str: string with character offsets, where first character is 
-                the start of the first offset (e.g. no tab or space beginning)
-            start_end_tups, list: list of two-tuples, where each tuple is 
-                (start, end). On the first call this will be empty.
-        
-        returns: 
-            start_end_tups, list of two-tuples: list of (start, end)
-        """
-        # Base case 
-        if ';' not in ent_str:
-            start_offset = ent_str[:ent_str.index(' ')]
-            end_offset = ent_str[ent_str.index(' ')+1:ent_str.index('\t')]
-            offsets.append((start_offset, end_offset))
-            return offsets
-        
-        # Recursive case 
-        else:
-            start_offset = ent_str[:ent_str.index(' ')]
-            end_offset = ent_str[ent_str.index(' ')+1:ent_str.index(';')]
-            offsets.append((start_offset, end_offset))
-            return get_offsets(ent_str[ent_str.index(';')+1:], offsets)
-
-
-    def set_start_end_tups(self, start_end_tups):
+    def set_start_end(self, start, end):
         """
         Set the start_end_tups attribute. To be used to change out character
         indices for token indices.
@@ -269,7 +242,8 @@ class Ent:
         
         returns: None
         """
-        self.start_end_tups = start_end_tups
+        self.start = start
+        self.end = end 
         
 
     @staticmethod
@@ -280,14 +254,12 @@ class Ent:
         and that entity indices have been converted to tokens.
 
         parameters:
-            annotated_doc, AnnotataedDoc instance: the doc to be formatted 
+            annotated_doc, AnnotatedDoc instance: the doc to be formatted 
             sent_idx_tups, list of tuple: start and end indices for each sentence 
 
         returns:
             ner, list of list: dygiepp formatted ner 
         """
-        ## TODO: check if/how disjoint entities are formatted for dygiepp
-        
         ner = []
         # Go through each sentence to get the entities belonging to that sentence 
         for sent_start, sent_end in sent_idx_tups:
@@ -296,16 +268,8 @@ class Ent:
             sent_ents = []
             for ent in annotated_doc.ents:
 
-                if len(ent.start_end_tups) == 1:
-                    ent_start = ent.start_end_tups[0][0]
-                    ent_end = ent.start_end_tups[0][1]
-                    if sent_start <= ent_start < sent_end: # Because the end idx is non-inclusive 
-                        sent_ents.append([ent_start, ent_end, ent.label])
-
-                else: # This is a stopgap until I figure out if disjoint entities are accepted,
-                      # If they aren't, drop them when making the Ent objects instead of here 
-                    print(f'Warning: Entity "{ent.text}" (ID: {ent.ID}) is disjoint, '
-                            'and not supported by dygiepp, and is being dropped.')
+                if sent_start <= ent.start < sent_end: # Because the end idx is non-inclusive 
+                    sent_ents.append([ent.start, ent.end, ent.label])
 
             ner.append(sent_ents)
 
@@ -359,16 +323,15 @@ class BinRel:
         # Go through each sentence to get the relations belonging to that sentence 
         for sent_start, sent_end in sent_idx_tups:
             
-            # Check all entities to see if they're in this sentence 
+            # Check first entity to see if relation is in this sentence 
             sent_rels = []
             for rel in annotated_doc.bin_rels:
-                rel_start = rel.arg1.start_end_tups[0][0]
+                rel_start = rel.arg1.start
                 if sent_start <= rel_start < sent_end:
-                    ## TODO: check if dygiepp supports disjoint ents, if so, how to format relations?
-                    sent_rels.append([rel.arg1.start_end_tups[0][0], 
-                                        rel.arg1.start_end_tups[0][1],
-                                        rel.arg2.start_end_tups[0][0], 
-                                        rel.arg2.start_end_tups[0][2],
+                    sent_rels.append([rel.arg1.start, 
+                                        rel.arg1.end,
+                                        rel.arg2.start, 
+                                        rel.arg2.end,
                                         rel.label])
                     
             bin_rels.append(sent_rels)
@@ -384,11 +347,10 @@ class Event:
         self.trigger = line[1][line[1].index(':')+1:] # ID of arg is after semicolon
         self.trigger_type = line[1][:line[1].index(':')] # Type of trigger is before semicolon
         
-        self.args = [] # List of tuples (arg_ID, role)
+        self.args = [] 
         for arg in line[2:]:
-            role = arg[arg.index(':')+1:]
             arg_ID = arg[:arg.index(':')]
-            self.args.append((arg_ID, role))
+            self.args.append(arg_ID)
 
 
     def set_arg_objects(self, arg_list):
@@ -411,13 +373,13 @@ class Event:
         
         # Replace args 
         arg_objs = []
-        for arg_ID, role in self.args:
+        for arg_ID in self.args:
 
             # Get the arg from the ent list by ID 
             arg_obj = ent_dict[arg_ID]
 
             # Add back to list with object in place of ID 
-            arg_objs.append((arg_obj, role))
+            arg_objs.append(arg_obj)
         
         self.args = arg_objs
         
@@ -449,21 +411,19 @@ class Event:
             for event in annotated_doc.events:
                 
                 # Check if event is in sentence 
-                trigger_start = event.trigger.start_end_tups[0][0] 
+                trigger_start = event.trigger.start
                 
                 if sent_start <= trigger_start < sent_end:
                     
                     formatted_event = []
                     # Format trigger 
-                    ## TODO: Change if disjoint entities not valid 
                     ## TODO: Check if triggers can be more than one token for not ACE
-                    trigger_end = event.trigger.start_end_tups[0][1]
-                    if trigger_start != trigger_end or len(event.trigger.start_end_tups) > 1:
+                    trigger_end = event.trigger.end
+                    if trigger_start != trigger_end:
 
                         print(f'Warning! Trigger "{event.trigger.text}" (ID: '
-                                f'{event.trigger.ID}) is disjoint or has '
-                                'multiple tokens. Only the first token will be '
-                                'used.')
+                                f'{event.trigger.ID}) has multiple tokens. Only '
+                                'the first token will be used.')
                         
                         trigger = [trigger_start, event.trigger_type]
                         formatted_event.append(trigger)
@@ -475,22 +435,11 @@ class Event:
                     # Format args
                     for arg_obj, role in event.args:
                         
-                        if len(arg_obj.start_end_tups) > 1:
+                        arg_start = arg_obj.start
+                        arg_end = arg_obj.end
 
-                            print(f'Warning! Event arg "{arg_obj.text}" (ID: '
-                                    f'{arg_obj.text} is disjoint, and will be '
-                                    'dropped.')
-
-                        else:
-                            arg_start = arg_obj.start_end_tups[0][0]
-                            arg_end = arg_obj.start_end_tups[0][1]
-
-                            # Turns out I don't actually need the "role" at all 
-                            ## TODO: decide whether to just totally disregard
-                            # that from the start 
-
-                            arg = [arg_start, arg_end, arg.label]
-                            formatted_event.append(arg)
+                        arg = [arg_start, arg_end, arg.label]
+                        formatted_event.append(arg)
 
                 sent_events.append(formatted_events)
 
