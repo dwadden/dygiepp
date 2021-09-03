@@ -110,67 +110,10 @@ class AnnotatedDoc:
 
     def char_to_token(self):
         """
-        Does the heavy lifting for converting brat format to dygiepp format.
-        Replaces the start and end attributes for entities with their corresponding 
-        token indices. Raises a warning if no alignment can be found for an entity,
-        as the entity will be dropped.
-        
-        I would appreciate feedback on this alignment approach! 
-
-        My initial thought was to do a cumulative sum of the lengths of the
-        tokens in the list in order to convert char indices to token indices.
-        However, because there usually aren't spaces before punctuation like 
-        periods and commas, but there can be before hyphens, I wasn't sure how 
-        to make sure that I didn't make an asusmption about where to insert
-        spaces when doing the cumulative sum, because even one mismatch (e.g.
-        if I assumed there shouldn't be a space between a hyphen and the 
-        last token, but then a text uses a hypen as an en dash) would cause
-        all of the rest of the entities in the doc to be thrown away. 
-
-        So the approach I settled on was to order the entities by their 
-        character indices, and then go through the entities, using the text 
-        attribute that comes from the .ann file to find the corresponding
-        token using the index function. To account for the fact that many 
-        entities can occur multiple times in an annotation, having the entities
-        in start-to-finish order means that I can start searching for the next
-        entity at the start index of the previous one (which allows for 
-        overlapping annotations). 
+        Calls the static method of the Ent class that does the heavy lifting
+        converting character indices to tokens. 
         """
-        # Get sentences as one tokenized list
-        # Because dygiepp token indices are with respect to the doc
-        tokenized_doc = [tok for sent in sents for tok in sent]
-
-        # Order the entities by their start indices 
-        sorted_ents = sorted(x, key=operator.attrgetter('start'))
-
-        # Get alignment for each entity
-        last_tok = 0  # Index of the first token of the last entity 
-        for ent in sorted_ents:
-            
-            # Search for the text of the entity 
-            try:
-               
-                # Get character indices
-                start_char = ent.start
-                end_char = ent.end 
-
-                # Start seach at the start token index of the last entity 
-                start_tok = tokenized_doc.index(ent.text, last_tok)
-                last_tok = start_tok
-
-                # Start search for end tok at the start token
-                words = ent.text.split()
-                end_tok = tokenized_doc.index(words[-1], start_tok)
-                
-                # Update this entity's index list with token indices 
-                ent.set_start_end(start_tok, end_tok)
-
-            except ValueError:
-                
-                # If the entity can't be found because there isn't an exact 
-                # match in the list, warn that it will be dropped
-                print(f'Warning! The entity {ent.text} (ID: {ent.ID}) cannot '
-                        'be aligned to the tokenization, and will be dropped.')    
+        Ent.char_to_token(self.ents, self.sents)
 
 
     def format_dygiepp(self):
@@ -189,11 +132,11 @@ class AnnotatedDoc:
             sent_idx_tups.append((start_tok, last_end_tok_plus_one))
 
         # Format data 
-        ner = Ent.format_ner_dygiepp(self, sent_idx_tups)
-        bin_rels = BinRel.format_bin_rels_dygiepp(self, sent_idx_tups)
+        ner = Ent.format_ner_dygiepp(self.ents, sent_idx_tups)
+        bin_rels = BinRel.format_bin_rels_dygiepp(self.bin_rels, sent_idx_tups)
         ## TODO: EquivRels?
         if len(self.events) > 0: # Some datasets don't have events, TODO probably want a better way to deal with this 
-            events = Event.format_events_dygiepp(self, sent_idx_tups)
+            events = Event.format_events_dygiepp(self.events, sent_idx_tups)
 
             # Make dict
             res = {"doc_key": self.doc_key,
@@ -247,14 +190,92 @@ class Ent:
         
 
     @staticmethod
-    def format_ner_dygiepp(annotated_doc, sent_idx_tups):
+    def char_to_token(ent_list, sentences):
+        """
+        Does the heavy lifting for converting brat format to dygiepp format.
+        Replaces the start and end attributes for entities with their corresponding 
+        token indices. Raises a warning if no alignment can be found for an entity,
+        as the entity will be dropped.
+        
+        I would appreciate feedback on this alignment approach! 
+
+        My initial thought was to do a cumulative sum of the lengths of the
+        tokens in the list in order to convert char indices to token indices.
+        However, because there usually aren't spaces before punctuation like 
+        periods and commas, but there can be before hyphens, I wasn't sure how 
+        to make sure that I didn't make an asusmption about where to insert
+        spaces when doing the cumulative sum, because even one mismatch (e.g.
+        if I assumed there shouldn't be a space between a hyphen and the 
+        last token, but then a text uses a hypen as an en dash) would cause
+        all of the rest of the entities in the doc to be thrown away. 
+
+        So the approach I settled on was to order the entities by their 
+        character indices, and then go through the entities, using the text 
+        attribute that comes from the .ann file to find the corresponding
+        token using the index function. To account for the fact that many 
+        entities can occur multiple times in an annotation, having the entities
+        in start-to-finish order means that I can start searching for the next
+        entity at the start index of the previous one (which allows for 
+        overlapping annotations). 
+        
+        I would also love feedback on where this method is placed; I had originally
+        placed it in the AnnotatedDoc class, but while writing unittests realized
+        that seemed sort of wrong, since it only operates on the Ent class, so 
+        I put it here and changed the one in AnnotatedDoc to just call this one 
+        -- but neither approach seems ideal to me. 
+
+        parameters:
+            ent_list, list of Ent objects: entities to convert 
+            sentences, list of tokens: sentences in the doc 
+
+        returns: None
+        """
+        # Get sentences as one tokenized list
+        # Because dygiepp token indices are with respect to the doc
+        tokenized_doc = [tok for sent in sentences for tok in sent]
+
+        # Order the entities by their start indices 
+        sorted_ents = sorted(ent_list, key=operator.attrgetter('start'))
+
+        # Get alignment for each entity
+        last_tok = 0  # Index of the first token of the last entity 
+        for ent in sorted_ents:
+            
+            # Search for the text of the entity 
+            try:
+               
+                # Get character indices
+                start_char = ent.start
+                end_char = ent.end 
+
+                # Start seach at the start token index of the last entity 
+                start_tok = tokenized_doc.index(ent.text, last_tok)
+                last_tok = start_tok
+
+                # Start search for end tok at the start token
+                words = ent.text.split()
+                end_tok = tokenized_doc.index(words[-1], start_tok)
+                
+                # Update this entity's index list with token indices 
+                ent.set_start_end(start_tok, end_tok)
+
+            except ValueError:
+                
+                # If the entity can't be found because there isn't an exact 
+                # match in the list, warn that it will be dropped
+                print(f'Warning! The entity {ent.text} (ID: {ent.ID}) cannot '
+                        'be aligned to the tokenization, and will be dropped.')    
+
+
+    @staticmethod
+    def format_ner_dygiepp(ent_list, sent_idx_tups):
         """
         Take a list of start and end tokens for entities and format them for 
         dygiepp. Assumes all entities are annotated within sentence boundaries
         and that entity indices have been converted to tokens.
 
         parameters:
-            annotated_doc, AnnotatedDoc instance: the doc to be formatted 
+            ent_list, list of Ent obj: list of entities to format
             sent_idx_tups, list of tuple: start and end indices for each sentence 
 
         returns:
@@ -266,7 +287,7 @@ class Ent:
             
             # Check all entities to see if they're in this sentence 
             sent_ents = []
-            for ent in annotated_doc.ents:
+            for ent in ent_list:
 
                 if sent_start <= ent.start < sent_end: # Because the end idx is non-inclusive 
                     sent_ents.append([ent.start, ent.end, ent.label])
@@ -306,14 +327,15 @@ class BinRel:
                 self.arg2 = ent
 
 
-    def format_bin_rels_dygiepp(annotated_doc, sent_idx_tups):
+    @staticmethod
+    def format_bin_rels_dygiepp(rel_list, sent_idx_tups):
         """
         Take a list of relations and format them for dygiepp. Assumes all 
         realtions are annotated within sentence boundaries and that entity
         indices have been converted to tokens.
 
         parameters:
-            annotated_doc, AnnotataedDoc instance: the doc to be formatted 
+            rel_list, list of BinRel objects: list of relations to format
             sent_idx_tups, list of tuple: start and end indices for each sentence 
 
         returns:
@@ -325,7 +347,7 @@ class BinRel:
             
             # Check first entity to see if relation is in this sentence 
             sent_rels = []
-            for rel in annotated_doc.bin_rels:
+            for rel in rel_list:
                 rel_start = rel.arg1.start
                 if sent_start <= rel_start < sent_end:
                     sent_rels.append([rel.arg1.start, 
@@ -383,8 +405,9 @@ class Event:
         
         self.args = arg_objs
         
-
-    def format_events_dygiepp(annotated_doc, sent_idx_tups):
+    
+    @staticmethod
+    def format_events_dygiepp(event_list, sent_idx_tups):
         """
         Take a list of events and format them for dygiepp. Assumes all 
         events are annotated within sentence boundaries and that entity
@@ -396,7 +419,7 @@ class Event:
         are multiple-token triggers in the dataset.
 
         parameters:
-            annotated_doc, AnnotatedDoc instance: the doc to be formatted 
+            event_list, list of Event objects: events to format
             sent_idx_tups, list of tuple: start and end indices for each sentence 
 
         returns:
@@ -408,7 +431,7 @@ class Event:
             
             # Check trigger to see if event is in this sentence and format
             sent_events = []
-            for event in annotated_doc.events:
+            for event in event_list:
                 
                 # Check if event is in sentence 
                 trigger_start = event.trigger.start
