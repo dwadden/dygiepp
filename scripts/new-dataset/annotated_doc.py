@@ -9,10 +9,10 @@ import operator
 
 class AnnotatedDoc:
 
-    def __init__(self, text, sents, ents, bin_rels, events, doc_key, 
-            dataset):
+    def __init__(self, text, sents, ents, bin_rels, events, equiv_rels, doc_key, 
+            dataset, coref, nlp):
         """
-        Provides dual functionality for class construction. If this funciton is
+        Provides dual functionality for class construction. If this function is
         used, be sure that the ents, bin_rels, events, and equiv_rels are 
         objects of the corresponding classes.
         """
@@ -21,13 +21,14 @@ class AnnotatedDoc:
         self.ents = ents 
         self.bin_rels = bin_rels
         self.events = events
-        # self.equiv_rels = equiv_rels # Put back arg if needed 
+        self.equiv_rels = equiv_rels 
         self.doc_key = doc_key
         self.dataset = dataset
-
+        self.coref = coref # True if EquivRels should be treated as coreference clusters 
+        self.nlp = nlp
 
     @classmethod
-    def parse_ann(cls, txt, ann, nlp, dataset):
+    def parse_ann(cls, txt, ann, nlp, dataset, coref):
         """
         Parses .ann file and creates a new AnnotatedDoc instance.
         
@@ -36,6 +37,7 @@ class AnnotatedDoc:
             ann, str: path to .ann file to parse
             nlp, spacy nlp object: nlp object to use for tokenization
             dataset, str: name of the dataset that will be used in prediction
+            coref, bool: whether or not to treat equivalence rels as corefs 
 
         return:
             annotated_doc, instance of AnnotatedDoc for this .ann file
@@ -59,9 +61,10 @@ class AnnotatedDoc:
         for line in lines:
             if line[0] == 'E':
                 second_tab = line.rfind('\t')
-                if ';' in line[:second_tab]: 
+                if ';' in line[:second_tab]:
+                    idx = line[:line.index("\t")]
                     print(f'Warning! Entity "{line[second_tab:]}" (ID: '
-                            f'{line[:line.index("\t")]}) is disjoint, and '
+                            f'{idx}) is disjoint, and '
                             'will be dropped.')
                 else: lines_continuous.append(line)
             else: lines_continuous.append(line)
@@ -73,7 +76,7 @@ class AnnotatedDoc:
         ents = []
         bin_rels = []
         events = []
-        # equiv_rels = []
+        equiv_rels = []
         for line in split_lines:
             
             # The first character of the first element in the annotation
@@ -88,11 +91,11 @@ class AnnotatedDoc:
             elif line[0][0] == 'E':
                 events.append(Event(line))
 
-          #  elif line[0][0] == '*':
-          #      equiv_rels.append(EquivRel(line))
+            elif line[0][0] == '*':
+                equiv_rels.append(EquivRel(line, coref))
 
         annotated_doc = AnnotatedDoc(text, sents, ents, bin_rels, events, 
-                doc_key, dataset)
+                doc_key, dataset, coref, nlp)
         annotated_doc.set_annotation_objects()
         
         return annotated_doc
@@ -105,7 +108,7 @@ class AnnotatedDoc:
         """
         self.bin_rels = [bin_rel.set_arg_objects(self.ents) for bin_rel in self.bin_rels]
         self.events = [event.set_arg_objects(self.ents) for event in self.events]
-        # self.equiv_rels = [equiv_rel.set_arg_objs(self.ents) for equiv_rel in self.equiv_rels]
+        self.equiv_rels = [equiv_rel.set_arg_objs(self.ents) for equiv_rel in self.equiv_rels]
 
 
     def char_to_token(self):
@@ -113,7 +116,7 @@ class AnnotatedDoc:
         Calls the static method of the Ent class that does the heavy lifting
         converting character indices to tokens. 
         """
-        Ent.char_to_token(self.ents, self.sents)
+        self.ents = Ent.char_to_token(self.ents, self.sents, self.nlp)
 
 
     def format_dygiepp(self):
@@ -134,32 +137,29 @@ class AnnotatedDoc:
         # Format data 
         ner = Ent.format_ner_dygiepp(self.ents, sent_idx_tups)
         bin_rels = BinRel.format_bin_rels_dygiepp(self.bin_rels, sent_idx_tups)
-        ## TODO: EquivRels?
-        if len(self.events) > 0: # Some datasets don't have events, TODO probably want a better way to deal with this 
+        if len(self.equiv_rels) > 0 and coref: # Some datasets don't have coreferences
+            corefs = EquivRel.format_coreferences_dygiepp(self.equiv_rels)
+        if len(self.events) > 0: # Some datasets don't have events 
             events = Event.format_events_dygiepp(self.events, sent_idx_tups)
 
-            # Make dict
-            res = {"doc_key": self.doc_key,
-                   "dataset": self.dataset,
-                   "sentences": self.sents,
-                   "ner": ner,
-                   "relations": bin_rels,
-                   "events": events}
-        else:
+        # Make dict
+        res = {"doc_key": self.doc_key,
+               "dataset": self.dataset,
+               "sentences": self.sents,
+               "ner": ner,
+               "relations": bin_rels}
 
-            # Make dict
-            res = {"doc_key": self.doc_key,
-                   "dataset": self.dataset,
-                   "sentences": self.sents,
-                   "ner": ner,
-                   "relations": bin_rels}
+        if len(self.equiv_rels) > 0 and coref: # Some datasets don't have coreferences
+            res["clusters"] = corefs
+        if len(self.events) > 0: # Some datasets don't have events 
+            res["events"] = events
 
         return res 
 
 
 class Ent:
 
-    __init__(self, line):
+    def __init__(self, line):
         """
         Does not account for discontinuous annotations, these should have
         been removed before creating entity objects.
@@ -170,8 +170,8 @@ class Ent:
         # Since disjoint entities have been dropped, start and end indices will
         # always be at the same indices in the list 
 
-        self.start = line[2]
-        self.end = line[3]
+        self.start = int(line[2])
+        self.end = int(line[3])
         self.text = " ".join(line[4:])
 
 
@@ -190,7 +190,7 @@ class Ent:
         
 
     @staticmethod
-    def char_to_token(ent_list, sentences):
+    def char_to_token(ent_list, sentences, nlp):
         """
         Does the heavy lifting for converting brat format to dygiepp format.
         Replaces the start and end attributes for entities with their corresponding 
@@ -216,7 +216,9 @@ class Ent:
         entities can occur multiple times in an annotation, having the entities
         in start-to-finish order means that I can start searching for the next
         entity at the start index of the previous one (which allows for 
-        overlapping annotations). 
+        overlapping annotations). To account for the fact that entities can 
+        have multiple tokens, I use the original tokenizer on the entity text
+        from the .ann file and search for the first token.
         
         I would also love feedback on where this method is placed; I had originally
         placed it in the AnnotatedDoc class, but while writing unittests realized
@@ -227,45 +229,51 @@ class Ent:
         parameters:
             ent_list, list of Ent objects: entities to convert 
             sentences, list of tokens: sentences in the doc 
+            nlp, spacy NLP object: tokenizer to use
 
-        returns: None
+        returns: ent_list_toks, list of Ent objects with token indices 
         """
+        ent_list_toks = []
+
         # Get sentences as one tokenized list
         # Because dygiepp token indices are with respect to the doc
         tokenized_doc = [tok for sent in sentences for tok in sent]
 
         # Order the entities by their start indices 
         sorted_ents = sorted(ent_list, key=operator.attrgetter('start'))
-
+        
         # Get alignment for each entity
         last_tok = 0  # Index of the first token of the last entity 
         for ent in sorted_ents:
+           
+            # Tokenize the entity text 
+            ent_tokens_text = [tok.text for tok in nlp(ent.text)]
             
             # Search for the text of the entity 
             try:
                
-                # Get character indices
-                start_char = ent.start
-                end_char = ent.end 
-
                 # Start seach at the start token index of the last entity 
-                start_tok = tokenized_doc.index(ent.text, last_tok)
+                start_tok = tokenized_doc.index(ent_tokens_text[0], last_tok)
                 last_tok = start_tok
 
-                # Start search for end tok at the start token
-                words = ent.text.split()
-                end_tok = tokenized_doc.index(words[-1], start_tok)
+                # Since entities have to be continuous, add len(ent) to get end
+                # Subtract 1 because end index is inclusive
+                end_tok = start_tok + len(ent_tokens_text) - 1  
                 
                 # Update this entity's index list with token indices 
                 ent.set_start_end(start_tok, end_tok)
 
+                # Add entity to list to keep 
+                ent_list_toks.append(ent)
+
             except ValueError:
-                
+        
                 # If the entity can't be found because there isn't an exact 
                 # match in the list, warn that it will be dropped
                 print(f'Warning! The entity {ent.text} (ID: {ent.ID}) cannot '
                         'be aligned to the tokenization, and will be dropped.')    
-
+        
+        return ent_list_toks
 
     @staticmethod
     def format_ner_dygiepp(ent_list, sent_idx_tups):
@@ -299,7 +307,7 @@ class Ent:
 
 class BinRel:
 
-    __init__(self, line):
+    def __init__(self, line):
 
         self.ID = line[0]
         self.label = line[1]
@@ -363,7 +371,7 @@ class BinRel:
 
 class Event:
 
-    __init__(self, line):
+    def __init__(self, line):
 
         self.ID = line[0]
         self.trigger = line[1][line[1].index(':')+1:] # ID of arg is after semicolon
@@ -371,8 +379,9 @@ class Event:
         
         self.args = [] 
         for arg in line[2:]:
-            arg_ID = arg[:arg.index(':')]
-            self.args.append(arg_ID)
+            arg_ID = arg[arg.index(':')+1:]
+            arg_label = arg[:arg.index(':')]
+            self.args.append((arg_ID, arg_label))
 
 
     def set_arg_objects(self, arg_list):
@@ -389,13 +398,13 @@ class Event:
         # Format a dict with arg ID as key, Ent obj as value
         # for more efficient lookup
         ent_dict = {ent.ID : ent for ent in arg_list}
-
+        
         # Replace trigger 
         self.trigger = ent_dict[self.trigger]
         
         # Replace args 
         arg_objs = []
-        for arg_ID in self.args:
+        for arg_ID, arg_label in self.args:
 
             # Get the arg from the ent list by ID 
             arg_obj = ent_dict[arg_ID]
@@ -456,15 +465,16 @@ class Event:
                         formatted_event.append(trigger)
 
                     # Format args
-                    for arg_obj, role in event.args:
+                    for arg_obj in event.args:
                         
                         arg_start = arg_obj.start
                         arg_end = arg_obj.end
+                        arg_label = arg_obj.label
 
-                        arg = [arg_start, arg_end, arg.label]
+                        arg = [arg_start, arg_end, arg_label]
                         formatted_event.append(arg)
 
-                sent_events.append(formatted_events)
+                    sent_events.append(formatted_event)
 
             events.append(sent_events)
 
@@ -472,28 +482,48 @@ class Event:
             
 
 
-## TODO: check if you need this, may not 
-#class EquivRel:
-#    
-#    __init__(self, line):
-#
-#        self.label = line[1]
-#        self.equivalent_ents = line[2:]
-#
-#
-#    def set_arg_objects(self, arg_list):
-#        """
-#        Given a list of entity objects, replaces the string ID for all args 
-#        taken from the original annotation with the Ent object 
-#        instance that represents that entity.
-#
-#        parameters:
-#            arg_list, list of Ent instances: entities from the same .ann file
-#
-#        returns: None
-#        """
-#        ent_objs = []
-#        for ent in arg_list:
-#            if ent.ID in self.equivalent_ents:
-#                ent_objs.append(ent)
-#
+class EquivRel:
+    
+    def __init__(self, line):
+
+        self.label = line[1]
+        self.args = line[2:]
+
+    def set_arg_objects(self, arg_list):
+        """
+        Given a list of entity objects, replaces the string ID for all args 
+        taken from the original annotation with the Ent object 
+        instance that represents that entity.
+
+        parameters:
+            arg_list, list of Ent instances: entities from the same .ann file
+
+        returns: None
+        """
+        ent_objs = []
+        for ent in arg_list:
+            if ent.ID in self.args:
+                ent_objs.append(ent)
+    
+        self.args = ent_objs
+
+    
+    @staticmethod
+    def format_corefs_dygiepp(equiv_rels_list):
+        """
+        Format coreferences for dygiepp. Assumes that entity indices have been 
+        converted to tokens. Coreferences can be annotated across sentence 
+        boundaries.
+
+        parameters:
+            equiv_rels_list, list of EquivRel objects: coref clusters to format
+
+        returns:
+            corefs, list of list: dygiepp formatted coreference clusters 
+        """
+        corefs = []
+        for equiv_rel in equiv_rels_list:
+            cluster = [[arg.start, arg.end] for arg in equiv_rel.args]
+            corefs.append(cluster)
+
+        return corefs 

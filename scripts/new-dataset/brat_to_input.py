@@ -18,7 +18,7 @@ from glob import glob
 import spacy 
 
 
-def format_annotated_document(fname_pair, dataset_name, nlp):
+def format_annotated_document(fname_pair, dataset_name, nlp, coref):
     """
     Align the character indices with tokens to get a dygiepp formatted json.
 
@@ -26,12 +26,14 @@ def format_annotated_document(fname_pair, dataset_name, nlp):
         fname_pair, tuple of str: names of .ann and .txt files to use
         dataset_name, str: name of dataset used for prediction downstream
         nlp, spacy nlp object: model to use for tokenization
+        coref, bool: whether or not to treat equivalence relations as corefs
 
     returns:
         res, json dict: formatted data
     """
     # Make annotated doc object
-    annotated_doc = AnnotatedDoc.parse_ann(fname_pair[0], fname_pair[1], nlp, dataset_name)
+    annotated_doc = AnnotatedDoc.parse_ann(fname_pair[0], fname_pair[1], nlp, 
+            dataset_name, coref)
 
     # Do the character to token conversion
     annotated_doc.char_to_token() 
@@ -79,7 +81,8 @@ def get_paired_files(all_files):
     return paired_files
 
 
-def format_labeled_dataset(data_directory, output_file, dataset_name, use_scispacy):
+def format_labeled_dataset(data_directory, output_file, dataset_name, 
+        use_scispacy, coref):
     
     # Get model to use for tokenization
     nlp_name = "en_core_sci_sm" if use_scispacy else "en_core_web_sm"
@@ -90,7 +93,7 @@ def format_labeled_dataset(data_directory, output_file, dataset_name, use_scispa
     paired_files = get_paired_files(all_files) 
 
     # Format doc file pairs
-    res = [format_annotated_document(fname_pair, dataset_name, nlp) 
+    res = [format_annotated_document(fname_pair, dataset_name, nlp, coref) 
             for fname_pair in paired_files]
     
     # Write out doc dictionaries
@@ -113,6 +116,9 @@ def get_args():
                         "of the model you'll use for prediction.")
     parser.add_argument("--use-scispacy", action="store_true",
                         help="If provided, use scispacy to do the tokenization.")
+    parser.add_argument("--coref", action="store_true",
+                        help="If provided, treat equivalence relations as "
+                        "coreference clusters.")
 
     args = parser.parse_args()
 
