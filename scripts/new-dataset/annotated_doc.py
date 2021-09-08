@@ -43,7 +43,7 @@ class AnnotatedDoc:
             annotated_doc, instance of AnnotatedDoc for this .ann file
         """
         # Get doc_id
-        doc_id = splitext(basename(ann))[0] 
+        doc_key = splitext(basename(ann))[0] 
 
         # Get text as one string and tokenized sents 
         with open(txt) as myf:
@@ -59,7 +59,7 @@ class AnnotatedDoc:
         # Drop discontinuous entities by looking for semicolons before second \t
         lines_continuous = []
         for line in lines:
-            if line[0] == 'E':
+            if line[0] == 'T':
                 second_tab = line.rfind('\t')
                 if ';' in line[:second_tab]:
                     idx = line[:line.index("\t")]
@@ -95,7 +95,7 @@ class AnnotatedDoc:
                 equiv_rels.append(EquivRel(line, coref))
 
         annotated_doc = AnnotatedDoc(text, sents, ents, bin_rels, events, 
-                doc_key, dataset, coref, nlp)
+                equiv_rels, doc_key, dataset, coref, nlp)
         annotated_doc.set_annotation_objects()
         
         return annotated_doc

@@ -15,8 +15,9 @@ import argparse
 from os.path import abspath, splitext, isfile  
 from os import listdir
 from glob import glob
+import json
 import spacy 
-
+from annotated_doc import AnnotatedDoc
 
 def format_annotated_document(fname_pair, dataset_name, nlp, coref):
     """
@@ -48,7 +49,8 @@ def get_paired_files(all_files):
     """
     Check that there is both a .txt and .ann file for each filename, and return
     a list of tuples of the form ("myfile.txt", "myfile.ann"). Triggers an 
-    excpetion if one of the two files is missing.
+    excpetion if one of the two files is missing, ignores any files that don't have
+    either a .txt or .ann extension.
 
     parameters:
         all_files, list of str: list of all filenames in directory
@@ -73,11 +75,14 @@ def get_paired_files(all_files):
 
         # Put in list or raise exception
         if txt_present and ann_present:
-            paired_files.append(f"{name}.txt", f"{name}.ann")
-        else:
-            raise ValueError("One or both of the .txt or .ann files is missing "
+            paired_files.append((f"{name}.txt", f"{name}.ann"))
+        elif txt_present and not ann_present :
+            raise ValueError("The .ann file is missing "
                             f"for the basename {name}. Please fix or delete.")
-
+        elif ann_present and not txt_present :
+            raise ValueError("The .txt file is missing "
+                            f"for the basename {name}. Please fix or delete.")
+    
     return paired_files
 
 
@@ -89,7 +94,7 @@ def format_labeled_dataset(data_directory, output_file, dataset_name,
     nlp = spacy.load(nlp_name)
 
     # Get .txt/.ann file pairs
-    all_files = [f"{data_directory}/{name}" for name in os.listdir(data_directory)]
+    all_files = [f"{data_directory}/{name}" for name in listdir(data_directory)]
     paired_files = get_paired_files(all_files) 
 
     # Format doc file pairs
@@ -99,7 +104,7 @@ def format_labeled_dataset(data_directory, output_file, dataset_name,
     # Write out doc dictionaries
     with open(output_file, "w") as f:
         for doc in res:
-        print(json.dumps(doc), file=f)
+            print(json.dumps(doc), file=f)
 
 
 def get_args():
@@ -109,7 +114,7 @@ def get_args():
     parser.add_argument("data_directory", type=str,
                         help="A directory with input .txt and .ann files, "
                         "one .txt and one .ann for each file name.")
-    parser.add_agrument("output_file", type=str,
+    parser.add_argument("output_file", type=str,
                         help="The output file, .jsonl extension reccomended.")
     parser.add_argument("dataset_name", type=str,
                         help="The name of the dataset. Should match the name "
