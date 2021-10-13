@@ -1,23 +1,24 @@
 """
 Script to convert the .txt and .ann files from a brat (https://brat.nlplab.org)
-annotation to the input format for dygiepp. 
+annotation to the input format for dygiepp.
 
-Assumes the input .ann files correspond to the format described in 
+Assumes the input .ann files correspond to the format described in
 https://brat.nlplab.org/standoff.html
 
-Supports conversion of .ann files including entities, binary relations, 
+Supports conversion of .ann files including entities, binary relations,
 equivalence relations, and events. Does NOT support formatting attribute
 and modification annotations, normalization annotations, or note annotations.
 
-Author: Serena G. Lotreck 
+Author: Serena G. Lotreck
 """
-import argparse 
-from os.path import abspath, splitext, isfile  
+import argparse
+from os.path import abspath, splitext, isfile
 from os import listdir
 from glob import glob
 import json
-import spacy 
+import spacy
 from annotated_doc import AnnotatedDoc
+
 
 def format_annotated_document(fname_pair, dataset_name, nlp, coref):
     """
@@ -33,22 +34,22 @@ def format_annotated_document(fname_pair, dataset_name, nlp, coref):
         res, json dict: formatted data
     """
     # Make annotated doc object
-    annotated_doc = AnnotatedDoc.parse_ann(fname_pair[0], fname_pair[1], nlp, 
+    annotated_doc = AnnotatedDoc.parse_ann(fname_pair[0], fname_pair[1], nlp,
             dataset_name, coref)
 
     # Do the character to token conversion
-    annotated_doc.char_to_token() 
-    
-    # Do the dygiepp conversion 
+    annotated_doc.char_to_token()
+
+    # Do the dygiepp conversion
     res = annotated_doc.format_dygiepp()
 
-    return res 
+    return res
 
 
 def get_paired_files(all_files):
     """
     Check that there is both a .txt and .ann file for each filename, and return
-    a list of tuples of the form ("myfile.txt", "myfile.ann"). Triggers an 
+    a list of tuples of the form ("myfile.txt", "myfile.ann"). Triggers an
     excpetion if one of the two files is missing, ignores any files that don't have
     either a .txt or .ann extension.
 
@@ -56,7 +57,7 @@ def get_paired_files(all_files):
         all_files, list of str: list of all filenames in directory
 
     returns:
-        paired_files, list of tuple: list of file pairs 
+        paired_files, list of tuple: list of file pairs
     """
     paired_files = []
 
@@ -65,12 +66,12 @@ def get_paired_files(all_files):
 
     # Check that there are two files with the proper extenstions and put in list
     for name in basenames:
-        
+
         # Get files with the same name
         matching_filenames = glob(f"{name}.*")
-        
-        # Check that both .txt and .ann are present 
-        txt_present = True if f"{name}.txt" in matching_filenames else False 
+
+        # Check that both .txt and .ann are present
+        txt_present = True if f"{name}.txt" in matching_filenames else False
         ann_present = True if f"{name}.ann" in matching_filenames else False
 
         # Put in list or raise exception
@@ -82,25 +83,25 @@ def get_paired_files(all_files):
         elif ann_present and not txt_present :
             raise ValueError("The .txt file is missing "
                             f"for the basename {name}. Please fix or delete.")
-    
+
     return paired_files
 
 
-def format_labeled_dataset(data_directory, output_file, dataset_name, 
+def format_labeled_dataset(data_directory, output_file, dataset_name,
         use_scispacy, coref):
-    
+
     # Get model to use for tokenization
     nlp_name = "en_core_sci_sm" if use_scispacy else "en_core_web_sm"
     nlp = spacy.load(nlp_name)
 
     # Get .txt/.ann file pairs
     all_files = [f"{data_directory}/{name}" for name in listdir(data_directory)]
-    paired_files = get_paired_files(all_files) 
+    paired_files = get_paired_files(all_files)
 
     # Format doc file pairs
-    res = [format_annotated_document(fname_pair, dataset_name, nlp, coref) 
+    res = [format_annotated_document(fname_pair, dataset_name, nlp, coref)
             for fname_pair in paired_files]
-    
+
     # Write out doc dictionaries
     with open(output_file, "w") as f:
         for doc in res:
@@ -130,7 +131,7 @@ def get_args():
     args.data_directory = abspath(args.data_directory)
     args.output_file = abspath(args.output_file)
 
-    return args 
+    return args
 
 
 def main():
@@ -140,4 +141,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+
