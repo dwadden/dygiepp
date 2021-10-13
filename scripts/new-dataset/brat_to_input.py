@@ -12,7 +12,7 @@ and modification annotations, normalization annotations, or note annotations.
 Author: Serena G. Lotreck
 """
 import argparse
-from os.path import abspath, splitext, isfile
+from os.path import abspath, splitext
 from os import listdir
 from glob import glob
 import json
@@ -35,7 +35,7 @@ def format_annotated_document(fname_pair, dataset_name, nlp, coref):
     """
     # Make annotated doc object
     annotated_doc = AnnotatedDoc.parse_ann(fname_pair[0], fname_pair[1], nlp,
-            dataset_name, coref)
+                                           dataset_name, coref)
 
     # Do the character to token conversion
     annotated_doc.char_to_token()
@@ -50,8 +50,8 @@ def get_paired_files(all_files):
     """
     Check that there is both a .txt and .ann file for each filename, and return
     a list of tuples of the form ("myfile.txt", "myfile.ann"). Triggers an
-    excpetion if one of the two files is missing, ignores any files that don't have
-    either a .txt or .ann extension.
+    excpetion if one of the two files is missing, ignores any files that don't
+    have either a .txt or .ann extension.
 
     parameters:
         all_files, list of str: list of all filenames in directory
@@ -64,7 +64,7 @@ def get_paired_files(all_files):
     # Get a set of all filenames without extensions
     basenames = set([splitext(name)[0] for name in all_files])
 
-    # Check that there are two files with the proper extenstions and put in list
+    # Check that there are two files with the right extenstions and put in list
     for name in basenames:
 
         # Get files with the same name
@@ -77,30 +77,34 @@ def get_paired_files(all_files):
         # Put in list or raise exception
         if txt_present and ann_present:
             paired_files.append((f"{name}.txt", f"{name}.ann"))
-        elif txt_present and not ann_present :
+        elif txt_present and not ann_present:
             raise ValueError("The .ann file is missing "
-                            f"for the basename {name}. Please fix or delete.")
-        elif ann_present and not txt_present :
+                             f"for the basename {name}. Please fix or delete.")
+        elif ann_present and not txt_present:
             raise ValueError("The .txt file is missing "
-                            f"for the basename {name}. Please fix or delete.")
+                             f"for the basename {name}. Please fix or delete.")
 
     return paired_files
 
 
 def format_labeled_dataset(data_directory, output_file, dataset_name,
-        use_scispacy, coref):
+                           use_scispacy, coref):
 
     # Get model to use for tokenization
     nlp_name = "en_core_sci_sm" if use_scispacy else "en_core_web_sm"
     nlp = spacy.load(nlp_name)
 
     # Get .txt/.ann file pairs
-    all_files = [f"{data_directory}/{name}" for name in listdir(data_directory)]
+    all_files = [
+        f"{data_directory}/{name}" for name in listdir(data_directory)
+    ]
     paired_files = get_paired_files(all_files)
 
     # Format doc file pairs
-    res = [format_annotated_document(fname_pair, dataset_name, nlp, coref)
-            for fname_pair in paired_files]
+    res = [
+        format_annotated_document(fname_pair, dataset_name, nlp, coref)
+        for fname_pair in paired_files
+    ]
 
     # Write out doc dictionaries
     with open(output_file, "w") as f:
@@ -112,17 +116,23 @@ def get_args():
     description = "Format labeled dataset from brat standoff"
     parser = argparse.ArgumentParser(description=description)
 
-    parser.add_argument("data_directory", type=str,
+    parser.add_argument("data_directory",
+                        type=str,
                         help="A directory with input .txt and .ann files, "
                         "one .txt and one .ann for each file name.")
-    parser.add_argument("output_file", type=str,
+    parser.add_argument("output_file",
+                        type=str,
                         help="The output file, .jsonl extension reccomended.")
-    parser.add_argument("dataset_name", type=str,
+    parser.add_argument("dataset_name",
+                        type=str,
                         help="The name of the dataset. Should match the name "
                         "of the model you'll use for prediction.")
-    parser.add_argument("--use-scispacy", action="store_true",
-                        help="If provided, use scispacy to do the tokenization.")
-    parser.add_argument("--coref", action="store_true",
+    parser.add_argument(
+        "--use-scispacy",
+        action="store_true",
+        help="If provided, use scispacy to do the tokenization.")
+    parser.add_argument("--coref",
+                        action="store_true",
                         help="If provided, treat equivalence relations as "
                         "coreference clusters.")
 
@@ -141,4 +151,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

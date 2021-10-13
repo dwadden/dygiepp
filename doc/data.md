@@ -144,6 +144,18 @@ Getting a dataset like this into the DyGIE format requires tokenizing the text, 
 
 If you're stuck on preprocessing a dataset, post an issue. Or, if you come up with a nice, general preprocessing script for labeled data, submit a PR!
 
+#### Converting data labeled with brat 
+The script [brat_to_input.py](https://github.com/dwadden/dygiepp/tree/master/scripts/new-dataset/brat_to_input.py) is a general preprocessing script for data that was annotated with the [brat rapid annotation tool](https://brat.nlplab.org/). This script performs the tokenization and alignment of the  text in which character indices are converted to document-level token indices, and relations and events are mapped to these tokens. The output of this script is a file containing one json-formatted dict per document, with the required fields for input to DyGIE. Entities that can't be aligned using the spacy tokenization of the text are thrown out with a warning, and `coref` and `event` fields will only be included if those data types are present. You can use the script like this:
+```
+python brat_to_input.py \
+  path/to/my/data/ \
+  output_file.jsonl \
+  scierc \
+  --use-scispacy \
+  --coref \
+```  
+The `--use-scispacy` flag indicates that scispacy will be used as the tokenizer. The --coref flag indicates whether or not to treat brat's equivalence relation type (with the type `*` in the `.ann` file) as coreference clusters. This is currently the only way to include coreferences. NOTE: This code was added by a contributor, and is not "officially supported". 
+
 ### Dealing with long sentences
 
 Most transformer-based encoders have a 512-token limit. Sentences longer than this will cause an error. Unfortunately, you can't just check that each of your `sentences` fields is at most 512 tokens. These tokens are converted to BERT's byte pair encoding, and a single "word token" may be split into multiple "BERT tokens". We have provided a script `scripts/data/shared/check_sentence_length.py`, which you can run on an input file. It will identify sentences whose byte pair encodings exceed the limit of the encoder you're using.

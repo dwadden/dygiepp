@@ -4,13 +4,11 @@ Defines the classes used in brat_to_input.py.
 Author: Serena G. Lotreck
 """
 from os.path import basename, splitext
-import operator
 
 
 class AnnotatedDoc:
-
     def __init__(self, text, sents, ents, bin_rels, events, equiv_rels,
-            doc_key, dataset, coref, nlp):
+                 doc_key, dataset, coref, nlp):
         """
         Provides dual functionality for class construction. If this function is
         used, be sure that the ents, bin_rels, events, and equiv_rels are
@@ -24,9 +22,8 @@ class AnnotatedDoc:
         self.equiv_rels = equiv_rels
         self.doc_key = doc_key
         self.dataset = dataset
-        self.coref = coref # True if EquivRels should be treated as corefs
+        self.coref = coref  # True if EquivRels should be treated as corefs
         self.nlp = nlp
-
 
     @classmethod
     def parse_ann(cls, txt, ann, nlp, dataset, coref):
@@ -65,9 +62,11 @@ class AnnotatedDoc:
                 if ';' in line[:second_tab]:
                     idx = line[:line.index("\t")]
                     print(f'Warning! Entity "{line[second_tab:]}" (ID: '
-                            f'{idx}) is disjoint, and will be dropped.')
-                else: lines_continuous.append(line)
-            else: lines_continuous.append(line)
+                          f'{idx}) is disjoint, and will be dropped.')
+                else:
+                    lines_continuous.append(line)
+            else:
+                lines_continuous.append(line)
 
         # Split on whitespace to get the separate elements of the annotation
         split_lines = [line.split() for line in lines_continuous]
@@ -95,11 +94,10 @@ class AnnotatedDoc:
                 equiv_rels.append(EquivRel(line))
 
         annotated_doc = AnnotatedDoc(text, sents, ents, bin_rels, events,
-                equiv_rels, doc_key, dataset, coref, nlp)
+                                     equiv_rels, doc_key, dataset, coref, nlp)
         annotated_doc.set_annotation_objects()
 
         return annotated_doc
-
 
     def set_annotation_objects(self):
         """
@@ -109,7 +107,6 @@ class AnnotatedDoc:
         [bin_rel.set_arg_objects(self.ents) for bin_rel in self.bin_rels]
         [event.set_arg_objects(self.ents) for event in self.events]
         [equiv_rel.set_arg_objects(self.ents) for equiv_rel in self.equiv_rels]
-
 
     def format_dygiepp(self):
         """
@@ -122,32 +119,36 @@ class AnnotatedDoc:
         for sent in self.sents:
 
             start_tok = last_end_tok_plus_one
-            last_end_tok_plus_one = start_tok + len(sent) # End index of sentence is non-inclusive
+            last_end_tok_plus_one = start_tok + len(
+                sent)  # End index of sentence is non-inclusive
 
             sent_idx_tups.append((start_tok, last_end_tok_plus_one))
 
         # Format data
         ner = Ent.format_ner_dygiepp(self.ents, sent_idx_tups)
         bin_rels = BinRel.format_bin_rels_dygiepp(self.bin_rels, sent_idx_tups)
-        if len(self.equiv_rels) > 0 and self.coref: # Some datasets don't have coreferences
+        if len(self.equiv_rels
+               ) > 0 and self.coref:  # Some datasets don't have coreferences
             corefs = EquivRel.format_corefs_dygiepp(self.equiv_rels)
-        if len(self.events) > 0: # Some datasets don't have events
+        if len(self.events) > 0:  # Some datasets don't have events
             events = Event.format_events_dygiepp(self.events, sent_idx_tups)
 
         # Make dict
-        res = {"doc_key": self.doc_key,
-               "dataset": self.dataset,
-               "sentences": self.sents,
-               "ner": ner,
-               "relations": bin_rels}
+        res = {
+            "doc_key": self.doc_key,
+            "dataset": self.dataset,
+            "sentences": self.sents,
+            "ner": ner,
+            "relations": bin_rels
+        }
 
-        if len(self.equiv_rels) > 0 and self.coref: # Some datasets don't have coreferences
+        if len(self.equiv_rels
+               ) > 0 and self.coref:  # Some datasets don't have coreferences
             res["clusters"] = corefs
-        if len(self.events) > 0: # Some datasets don't have events
+        if len(self.events) > 0:  # Some datasets don't have events
             res["events"] = events
 
         return res
-
 
     def char_to_token(self):
         """
@@ -163,7 +164,7 @@ class AnnotatedDoc:
         # Tokenize the text with spacy
         tok_text = self.nlp(self.text)
 
-        # Get the alignment for each entity 
+        # Get the alignment for each entity
         ent_list_tokens = []
         for ent in self.ents:
 
@@ -175,24 +176,24 @@ class AnnotatedDoc:
                 # If the entity can't be found because there isn't an exact
                 # match in the list, warn that it will be dropped
                 print(f'Warning! The entity {ent.text} (ID: {ent.ID}) cannot '
-                        'be aligned to the tokenization, and will be dropped.')
+                      'be aligned to the tokenization, and will be dropped.')
 
             else:
 
-                # Get token start index 
+                # Get token start index
                 ent_tok_start = start_tok[0].i
 
-                # Get the number of tokens in ent 
+                # Get the number of tokens in ent
                 num_tok = len(self.nlp(ent.text))
                 if num_tok > 1:
-                    ent_tok_end = ent_tok_start + num_tok-1
+                    ent_tok_end = ent_tok_start + num_tok - 1
                 else:
                     ent_tok_end = ent_tok_start
 
                 # Set the token start and end chars
                 ent.set_tok_start_end(ent_tok_start, ent_tok_end)
 
-                # Append to list to keep 
+                # Append to list to keep
                 ent_list_tokens.append(ent)
 
         # Set the list of entities that had token matches as ents for doc
@@ -200,7 +201,6 @@ class AnnotatedDoc:
 
 
 class Ent:
-
     def __init__(self, line):
         """
         Does not account for discontinuous annotations, these should have
@@ -213,11 +213,10 @@ class Ent:
         # always be at the same indices in the list
 
         self.char_start = int(line[2])
-        self.char_end   = int(line[3])
-        self.tok_start  = None
-        self.tok_end    = None
-        self.text       = " ".join(line[4:])
-
+        self.char_end = int(line[3])
+        self.tok_start = None
+        self.tok_end = None
+        self.text = " ".join(line[4:])
 
     def set_tok_start_end(self, tok_start, tok_end):
         """
@@ -230,8 +229,7 @@ class Ent:
         returns: None
         """
         self.tok_start = tok_start
-        self.tok_end   = tok_end
-
+        self.tok_end = tok_end
 
     @staticmethod
     def format_ner_dygiepp(ent_list, sent_idx_tups):
@@ -242,20 +240,21 @@ class Ent:
 
         parameters:
             ent_list, list of Ent obj: list of entities to format
-            sent_idx_tups, list of tuple: start and end indices for each sentence
+            sent_idx_tups, list of tuple: start, end indices for each sentence.
+                End indices are non-inclusive.
 
         returns:
             ner, list of list: dygiepp formatted ner
         """
         ner = []
-        # Go through each sentence to get the entities belonging to that sentence
+        # Go through each sentence to get the entities in that sentence
         for sent_start, sent_end in sent_idx_tups:
 
             # Check all entities to see if they're in this sentence
             sent_ents = []
             for ent in ent_list:
 
-                if sent_start <= ent.tok_start < sent_end: # Because the end idx is non-inclusive
+                if sent_start <= ent.tok_start < sent_end:
                     sent_ents.append([ent.tok_start, ent.tok_end, ent.label])
 
             ner.append(sent_ents)
@@ -264,18 +263,17 @@ class Ent:
 
 
 class BinRel:
-
     def __init__(self, line):
 
         self.ID = line[0]
         self.label = line[1]
-        self.arg1 = line[2][line[2].index(':')+1:] # ID of arg is after semicolon
-        self.arg2 = line[3][line[3].index(':')+1:]
-
+        self.arg1 = line[2][line[2].index(':') +
+                            1:]  # ID of arg is after semicolon
+        self.arg2 = line[3][line[3].index(':') + 1:]
 
     def set_arg_objects(self, arg_list):
         """
-        Given a list of entity objects, replaces the string ID for arg1 and arg2
+        Given a list of Ent objects, replaces the string ID for arg1 and arg2
         taken from the original annotation with the Ent object instance that
         represents that entity.
 
@@ -292,7 +290,6 @@ class BinRel:
             elif ent.ID == self.arg2:
                 self.arg2 = ent
 
-
     @staticmethod
     def format_bin_rels_dygiepp(rel_list, sent_idx_tups):
         """
@@ -302,13 +299,14 @@ class BinRel:
 
         parameters:
             rel_list, list of BinRel objects: list of relations to format
-            sent_idx_tups, list of tuple: start and end indices for each sentence
+            sent_idx_tups, list of tuple: start, end indices for each sentence.
+                End indices are non-inclusive.
 
         returns:
             bin_rels, list of list: dygiepp formatted relations
         """
         bin_rels = []
-        # Go through each sentence to get the relations belonging to that sentence
+        # Go through each sentence to get the relations in that sentence
         for sent_start, sent_end in sent_idx_tups:
 
             # Check first entity to see if relation is in this sentence
@@ -316,11 +314,10 @@ class BinRel:
             for rel in rel_list:
                 rel_start = rel.arg1.tok_start
                 if sent_start <= rel_start < sent_end:
-                    sent_rels.append([rel.arg1.tok_start,
-                                        rel.arg1.tok_end,
-                                        rel.arg2.tok_start,
-                                        rel.arg2.tok_end,
-                                        rel.label])
+                    sent_rels.append([
+                        rel.arg1.tok_start, rel.arg1.tok_end,
+                        rel.arg2.tok_start, rel.arg2.tok_end, rel.label
+                    ])
 
             bin_rels.append(sent_rels)
 
@@ -328,20 +325,18 @@ class BinRel:
 
 
 class Event:
-
     def __init__(self, line):
 
         self.ID = line[0]
         # ID of arg is after semicolon
-        self.trigger = line[1][line[1].index(':')+1:]
+        self.trigger = line[1][line[1].index(':') + 1:]
         # Type of trigger is before semicolon
         self.trigger_type = line[1][:line[1].index(':')]
         self.args = []
         for arg in line[2:]:
-            arg_ID = arg[arg.index(':')+1:]
+            arg_ID = arg[arg.index(':') + 1:]
             arg_label = arg[:arg.index(':')]
             self.args.append((arg_ID, arg_label))
-
 
     def set_arg_objects(self, arg_list):
         """
@@ -356,7 +351,7 @@ class Event:
         """
         # Format a dict with arg ID as key, Ent obj as value
         # for more efficient lookup
-        ent_dict = {ent.ID : ent for ent in arg_list}
+        ent_dict = {ent.ID: ent for ent in arg_list}
 
         # Replace trigger
         self.trigger = ent_dict[self.trigger]
@@ -373,7 +368,6 @@ class Event:
 
         self.args = arg_objs
 
-
     @staticmethod
     def format_events_dygiepp(event_list, sent_idx_tups):
         """
@@ -388,13 +382,14 @@ class Event:
 
         parameters:
             event_list, list of Event objects: events to format
-            sent_idx_tups, list of tuple: start and end indices for each sentence
+            sent_idx_tups, list of tuple: start, end indices for each sentence.
+                End indices are non-inclusive.
 
         returns:
             events, list of list: dygiepp formatted events
         """
         events = []
-        # Go through each sentence to get the relations belonging to that sentence
+        # Go through each sentence to get the relations in that sentence
         for sent_start, sent_end in sent_idx_tups:
 
             # Check trigger to see if event is in this sentence and format
@@ -408,13 +403,13 @@ class Event:
 
                     formatted_event = []
                     # Format trigger
-                    ## TODO: Check if triggers can be more than one token for not ACE
+                    # TODO: Check if triggers can be more than one token for not ACE
                     trigger_end = event.trigger.tok_end
                     if trigger_start != trigger_end:
 
                         print(f'Warning! Trigger "{event.trigger.text}" (ID: '
-                                f'{event.trigger.ID}) has multiple tokens. Only '
-                                'the first token will be used.')
+                              f'{event.trigger.ID}) has multiple tokens. Only '
+                              'the first token will be used.')
 
                         trigger = [trigger_start, event.trigger_type]
                         formatted_event.append(trigger)
@@ -440,9 +435,7 @@ class Event:
         return events
 
 
-
 class EquivRel:
-
     def __init__(self, line):
 
         self.label = line[1]
@@ -465,7 +458,6 @@ class EquivRel:
                 ent_objs.append(ent)
 
         self.args = ent_objs
-
 
     @staticmethod
     def format_corefs_dygiepp(equiv_rels_list):
