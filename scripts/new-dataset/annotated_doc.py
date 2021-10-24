@@ -6,6 +6,13 @@ Author: Serena G. Lotreck
 from os.path import basename, splitext
 
 
+class AnnotatedDocError(Exception):
+    """
+    General class for errors arising during document preprocessing.
+    """
+    pass
+
+
 class AnnotatedDoc:
     def __init__(self, text, sents, ents, bin_rels, events, equiv_rels,
                  doc_key, dataset, coref, nlp):
@@ -184,11 +191,22 @@ class AnnotatedDoc:
                 ent_tok_start = start_tok[0].i
 
                 # Get the number of tokens in ent
-                num_tok = len(self.nlp(ent.text))
+                processed_ent = self.nlp(ent.text)
+                num_tok = len(processed_ent)
                 if num_tok > 1:
                     ent_tok_end = ent_tok_start + num_tok - 1
                 else:
                     ent_tok_end = ent_tok_start
+
+                # Double-check that the tokens from the annotation file match up
+                # with the tokens in the source text.
+                ent_tok_text = [tok.text for tok in processed_ent]
+                doc_tok_text = [tok.text for i, tok in enumerate(tok_text)
+                                if i >= ent_tok_start and i <= ent_tok_end]
+                if ent_tok_text != doc_tok_text:
+                    msg = ('The annotation file and source document disagree '
+                           f'on the tokens for entity {ent.ID}')
+                    raise AnnotatedDocError(msg)
 
                 # Set the token start and end chars
                 ent.set_tok_start_end(ent_tok_start, ent_tok_end)
