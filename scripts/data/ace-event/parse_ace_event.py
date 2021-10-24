@@ -342,7 +342,7 @@ class Document:
                         after.sent_start = False
             return doc
 
-        nlp = spacy.load('en')
+        nlp = spacy.load('en_core_web_sm')
         nlp.add_pipe(custom_seg, before='parser')
 
         single_tokens = ['sgt.',

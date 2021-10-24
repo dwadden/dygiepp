@@ -189,7 +189,7 @@ conda deactivate
 conda create --name ace-event-preprocess python=3.7
 conda activate ace-event-preprocess
 pip install -r scripts/data/ace-event/requirements.txt
-python -m spacy download en
+python -m spacy download en_core_web_sm
 ```
 Then, collect the relevant files from the ACE data distribution with
 ```
