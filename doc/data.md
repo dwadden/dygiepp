@@ -154,7 +154,7 @@ python brat_to_input.py \
   --use-scispacy \
   --coref \
 ```  
-The `--use-scispacy` flag indicates that scispacy will be used as the tokenizer. The --coref flag indicates whether or not to treat brat's equivalence relation type (with the type `*` in the `.ann` file) as coreference clusters. This is currently the only way to include coreferences. NOTE: This code was added by a contributor, and is not "officially supported". 
+The `--use-scispacy` flag indicates that scispacy will be used as the tokenizer. The --coref flag indicates whether or not to treat brat's equivalence relation type (with the type `*` in the `.ann` file) as coreference clusters. This is currently the only way to include coreferences. NOTE: This code was added by a contributor, and is not "officially supported". If you run into problems, create an issue and tag @serenalotreck. 
 
 ### Dealing with long sentences
 
