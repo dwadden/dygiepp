@@ -203,10 +203,13 @@ class AnnotatedDoc:
                 ent_tok_text = [tok.text for tok in processed_ent]
                 doc_tok_text = [tok.text for i, tok in enumerate(tok_text)
                                 if i >= ent_tok_start and i <= ent_tok_end]
-                if ent_tok_text != doc_tok_text:
-                    msg = ('The annotation file and source document disagree '
-                           f'on the tokens for entity {ent.ID}')
-                    raise AnnotatedDocError(msg)
+                try:
+                    if ent_tok_text != doc_tok_text:
+                        msg = ('The annotation file and source document disagree '
+                               f'on the tokens for entity {ent.ID}')
+                        raise AnnotatedDocError(msg)
+                except AnnotatedDocError as err:
+                    print(f'{err}: This entity will be dropped.')
 
                 # Set the token start and end chars
                 ent.set_tok_start_end(ent_tok_start, ent_tok_end)
