@@ -206,7 +206,8 @@ class AnnotatedDoc:
                 try:
                     if ent_tok_text != doc_tok_text:
                         msg = ('The annotation file and source document disagree '
-                               f'on the tokens for entity {ent.ID}')
+                                f'on the tokens for entity {ent.ID} (text: '
+                               f'{ent.text})')
                         raise AnnotatedDocError(msg)
                 except AnnotatedDocError as err:
                     print(f'{err}: This entity will be dropped.')
