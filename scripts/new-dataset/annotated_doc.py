@@ -211,6 +211,7 @@ class AnnotatedDoc:
                         raise AnnotatedDocError(msg)
                 except AnnotatedDocError as err:
                     print(f'{err}: This entity will be dropped.')
+                    continue
 
                 # Set the token start and end chars
                 ent.set_tok_start_end(ent_tok_start, ent_tok_end)
