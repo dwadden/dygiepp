@@ -4,6 +4,7 @@ Defines the classes used in brat_to_input.py.
 Author: Serena G. Lotreck
 """
 from os.path import basename, splitext
+import warnings
 
 
 class AnnotatedDocError(Exception):
@@ -15,7 +16,7 @@ class AnnotatedDocError(Exception):
 
 class AnnotatedDoc:
     def __init__(self, text, sents, ents, bin_rels, events, equiv_rels,
-                 doc_key, dataset, coref, nlp):
+                 doc_key, dataset, coref, nlp, total_original_ents):
         """
         Provides dual functionality for class construction. If this function is
         used, be sure that the ents, bin_rels, events, and equiv_rels are
@@ -31,6 +32,9 @@ class AnnotatedDoc:
         self.dataset = dataset
         self.coref = coref  # True if EquivRels should be treated as corefs
         self.nlp = nlp
+        self.dropped_ents = 0
+        self.total_original_ents = 0
+
 
     @classmethod
     def parse_ann(cls, txt, ann, nlp, dataset, coref):
@@ -68,7 +72,7 @@ class AnnotatedDoc:
                 second_tab = line.rfind('\t')
                 if ';' in line[:second_tab]:
                     idx = line[:line.index("\t")]
-                    print(f'Warning! Entity "{line[second_tab:]}" (ID: '
+                    warnings.warn(f'Entity "{line[second_tab:]}" (ID: '
                           f'{idx}) is disjoint, and will be dropped.')
                 else:
                     lines_continuous.append(line)
@@ -83,6 +87,7 @@ class AnnotatedDoc:
         bin_rels = []
         events = []
         equiv_rels = []
+        total_original_ents = 0
         for line in split_lines:
 
             # The first character of the first element in the annotation
@@ -90,6 +95,7 @@ class AnnotatedDoc:
             # * = equivalence relation
             if line[0][0] == 'T':
                 ents.append(Ent(line))
+                total_original_ents += 1
 
             elif line[0][0] == 'R':
                 bin_rels.append(BinRel(line))
@@ -101,10 +107,12 @@ class AnnotatedDoc:
                 equiv_rels.append(EquivRel(line))
 
         annotated_doc = AnnotatedDoc(text, sents, ents, bin_rels, events,
-                                     equiv_rels, doc_key, dataset, coref, nlp)
+                                     equiv_rels, doc_key, dataset, coref, nlp,
+                                     total_original_ents)
         annotated_doc.set_annotation_objects()
 
         return annotated_doc
+
 
     def set_annotation_objects(self):
         """
@@ -114,6 +122,7 @@ class AnnotatedDoc:
         [bin_rel.set_arg_objects(self.ents) for bin_rel in self.bin_rels]
         [event.set_arg_objects(self.ents) for event in self.events]
         [equiv_rel.set_arg_objects(self.ents) for equiv_rel in self.equiv_rels]
+
 
     def format_dygiepp(self):
         """
@@ -157,6 +166,7 @@ class AnnotatedDoc:
 
         return res
 
+
     def char_to_token(self):
         """
         Does the heavy lifting for converting brat format to dygiepp format.
@@ -182,8 +192,9 @@ class AnnotatedDoc:
 
                 # If the entity can't be found because there isn't an exact
                 # match in the list, warn that it will be dropped
-                print(f'Warning! The entity {ent.text} (ID: {ent.ID}) cannot '
+                warnings.warn(f'The entity {ent.text} (ID: {ent.ID}) cannot '
                       'be aligned to the tokenization, and will be dropped.')
+                self.dropped_ents += 1
 
             else:
 
@@ -205,8 +216,11 @@ class AnnotatedDoc:
                                 if i >= ent_tok_start and i <= ent_tok_end]
                 if ent_tok_text != doc_tok_text:
                     msg = ('The annotation file and source document disagree '
-                           f'on the tokens for entity {ent.ID}')
-                    raise AnnotatedDocError(msg)
+                            f'on the tokens for entity {ent.text} (ID: '
+                           f'{ent.ID}). This entity will be dropped.')
+                    warnings.warn(msg)
+                    self.dropped_ents += 1
+                    continue
 
                 # Set the token start and end chars
                 ent.set_tok_start_end(ent_tok_start, ent_tok_end)
@@ -216,6 +230,10 @@ class AnnotatedDoc:
 
         # Set the list of entities that had token matches as ents for doc
         self.ents = ent_list_tokens
+
+        print(f'Completed doc {self.doc_key}. {self.dropped_ents} of '
+                f'{self.total_original_ents} entities '
+                'were dropped due to tokenization mismatches.')
 
 
 class Ent:
