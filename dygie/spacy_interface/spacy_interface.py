@@ -12,11 +12,11 @@ Doc.set_extension("rels", default=[], force=True)
 Span.set_extension("rels", default=[], force=True)
 
 
-@Language.factory("dygiepp")
+
 class DygieppPipe:
+    name = 'dygiepp'
     def __init__(self,
         nlp: Language,
-        name: str = "dygiepp",
         pretrained_filepath: str = "./pretrained/scierc-lightweight.tar.gz"
     ) -> None:
         """spacy factory class for adding information to spacy document. For now just entities and relations.
