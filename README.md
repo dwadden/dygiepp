@@ -19,6 +19,11 @@ See the `doc` folder for documentation with more details on the [data](doc/data.
 
 ## Updates
 
+**December 2021**: A couple nice additions thanks to PR's from contributors:
+
+- There is now a script to convert [BRAT-formatted](https://github.com/nlplab/brat) annotations to DyGIE. See [here](https://github.com/dwadden/dygiepp/blob/master/doc/data.md#converting-data-labeled-with-brat) for more details. Thanks to @serenalotreck for this feature.
+- There are Spacy bindings for DyGIE entity and relation extraction; see the section on  [Spacy bindings](#spacy-bindings). Thanks to @e3oroush for this feature.
+
 **April 2021**: We've added data and models for the MECHANIC dataset, presented in the NAACL 2021 paper [Extracting a Knowledge Base of Mechanisms from COVID-19 Papers](https://www.semanticscholar.org/paper/c4ce6aca9aed41d57d588674484932e0c2cd3547).
 
 - [Download the dataset](https://ai2-s2-mechanic.s3-us-west-2.amazonaws.com/data/data.zip)
@@ -329,6 +334,12 @@ Below are links to the available models, followed by the name of the `dataset` t
 - [ACE05 event](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/ace05-event.tar.gz): `ace-event`
 - [MECHANIC "coarse"](https://ai2-s2-mechanic.s3-us-west-2.amazonaws.com/models/mechanic-coarse.tar.gz) `None`
 - [MECHANIC "granular"](https://ai2-s2-mechanic.s3-us-west-2.amazonaws.com/models/mechanic-granular.tar.gz) `covid-event`
+
+
+### Spacy bindings
+
+DyGIE can now be called from Spacy! For example usage, see the [demo notebook](notebooks/spacy-interface-example.ipynb). This feature was added by a contributor; please tag @e3oroush on related issues.
+
 
 ### Performance of pretrained models
 
