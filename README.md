@@ -5,6 +5,7 @@ Implements the model described in the paper [Entity, Relation, and Event Extract
 ## Table of Contents
 - [Updates](#updates)
 - [Project status](#project-status)
+- [Issues](#issues)
 - [Dependencies](#dependencies)
 - [Model training](#training-a-model)
 - [Model evaluation](#evaluating-a-model)
@@ -17,6 +18,11 @@ See the `doc` folder for documentation with more details on the [data](doc/data.
 
 
 ## Updates
+
+**December 2021**: A couple nice additions thanks to PR's from contributors:
+
+- There is now a script to convert [BRAT-formatted](https://github.com/nlplab/brat) annotations to DyGIE. See [here](https://github.com/dwadden/dygiepp/blob/master/doc/data.md#converting-data-labeled-with-brat) for more details. Thanks to @serenalotreck for this feature.
+- There are Spacy bindings for DyGIE entity and relation extraction; see the section on  [Spacy bindings](#spacy-bindings). Thanks to @e3oroush for this feature.
 
 **April 2021**: We've added data and models for the MECHANIC dataset, presented in the NAACL 2021 paper [Extracting a Knowledge Base of Mechanisms from COVID-19 Papers](https://www.semanticscholar.org/paper/c4ce6aca9aed41d57d588674484932e0c2cd3547).
 
@@ -50,11 +56,34 @@ Unfortunately, I don't have the bandwidth at this point to add additional featur
 - Making predictions on a new dataset using pre-trained models.
 - Training your own model on a new dataset.
 
+See [below](#issues) for guidelines on creating an issue.
+
 There are a number of ways this code could be improved, and I'd definitely welcome pull requests. If you're interested, see [contributions.md](doc/contributions.md) for a list of ieas.
 
 ### Submit a model!
 
 If you have a DyGIE model that you've trained on a new dataset, feel free to upload it [here](https://docs.google.com/forms/d/e/1FAIpQLSdwws7zVAqF15-kBqkKBupymWe0ASkXhODH8yomYkRDy5DvCw/viewform?usp=sf_link) and I'll add it to the collection of pre-trained models.
+
+## Issues
+
+If you're unable to run the code, feel free to create an issue. Please do the following:
+
+- Confirm that you've set up a Conda environement exactly as in the [Dependencies](#dependencies) section below. I can only offer support if you're running code within this environment.
+- Specify any commands you used to download pretrained models or to download / preprocess data. Please enclose the code in code blocks, for instance:
+  ```bash
+  # Download pretrained models.
+
+  bash scripts/pretrained/get_dygiepp_pretrained.sh
+  ```
+- Share the command that you ran to cause the issue, for instance:
+  ```
+  allennlp evaluate \
+  pretrained/scierc.tar.gz \
+  data/scierc/normalized_data/json/test.json \
+  --cuda-device 2 \
+  --include-package dygie
+  ```
+- Include the full error message that you're getting.
 
 
 ## Dependencies
@@ -83,7 +112,6 @@ This takes a long time and produces a large image, so you will want to comment o
 - Run the container interactively, mount this project dir to /dygiepp/: `docker run --gpus all -it --ipc=host -v <dygiepp-repo-dirpath>:/dygiepp/ --name dygiepp dygiep:dev`
 
 **NOTE**: This Dockerfile was added in a PR from a contributor. I haven't tested it, so it's not "officially supported". More PR's are welcome, though.
-
 
 ## Training a model
 
@@ -306,6 +334,12 @@ Below are links to the available models, followed by the name of the `dataset` t
 - [ACE05 event](https://ai2-s2-research.s3-us-west-2.amazonaws.com/dygiepp/master/ace05-event.tar.gz): `ace-event`
 - [MECHANIC "coarse"](https://ai2-s2-mechanic.s3-us-west-2.amazonaws.com/models/mechanic-coarse.tar.gz) `None`
 - [MECHANIC "granular"](https://ai2-s2-mechanic.s3-us-west-2.amazonaws.com/models/mechanic-granular.tar.gz) `covid-event`
+
+
+### Spacy bindings
+
+DyGIE can now be called from Spacy! For example usage, see the [demo notebook](notebooks/spacy-interface-example.ipynb). This feature was added by a contributor; please tag @e3oroush on related issues.
+
 
 ### Performance of pretrained models
 
