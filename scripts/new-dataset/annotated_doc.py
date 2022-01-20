@@ -33,7 +33,7 @@ class AnnotatedDoc:
         self.coref = coref  # True if EquivRels should be treated as corefs
         self.nlp = nlp
         self.dropped_ents = 0
-        self.total_original_ents = 0
+        self.total_original_ents = total_original_ents
 
 
     @classmethod
