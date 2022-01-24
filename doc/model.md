@@ -99,7 +99,7 @@ For each task, it will also compute average performance by averaging over the na
 
 When making predictions, the `dataset` field of the inputs to be predicted must match the `dataset` field of one of the input datasets the model was trained on.
 
-For an example training a model on 4 different datasets, see [multi_dataset_test.sh](./dygie/tests/models/multi_dataset_test.sh).
+For an example training a model on 4 different datasets, see [multi_dataset_test.sh](dygie/tests/models/multi_dataset_test.sh).
 
 
 ## Hyperparameter optimization
