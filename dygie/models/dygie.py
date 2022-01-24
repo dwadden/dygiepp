@@ -182,7 +182,7 @@ class DyGIE(Model):
         # TODO(dwadden) Multi-document minibatching isn't supported yet. For now, get rid of the
         # extra dimension in the input tensors. Will return to this once the model runs.
         if len(metadata) > 1:
-            raise NotImplementedError("Multi-document minibatching not yet supported.")
+            raise NotImplementedError("Multi-document minibatching not supported.")
 
         metadata = metadata[0]
         spans = self._debatch(spans)  # (n_sents, max_n_spans, 2)

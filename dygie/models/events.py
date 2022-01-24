@@ -132,6 +132,9 @@ class EventExtractor(Model):
         self._active_namespaces = {"trigger": f"{self._active_dataset}__trigger_labels",
                                    "argument": f"{self._active_dataset}__argument_labels"}
 
+        if self._active_namespaces["trigger"] not in self._trigger_scorers:
+            return {"loss": 0}
+
         # Compute trigger scores.
         trigger_scores = self._compute_trigger_scores(
             trigger_embeddings, trigger_mask)

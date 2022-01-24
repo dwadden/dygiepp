@@ -87,6 +87,9 @@ class NERTagger(Model):
         # span_embeddings
 
         self._active_namespace = f"{metadata.dataset}__ner_labels"
+        if self._active_namespace not in self._ner_scorers:
+            return {"loss": 0}
+
         scorer = self._ner_scorers[self._active_namespace]
 
         ner_scores = scorer(span_embeddings)
