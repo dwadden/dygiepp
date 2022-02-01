@@ -63,7 +63,7 @@ class EventExtractor(Model):
             self._trigger_pruners[trigger_namespace] = make_pruner(trigger_candidate_feedforward)
             # The trigger scorer.
             trigger_feedforward = make_feedforward(input_dim=token_emb_dim)
-            self._trigger_scorers[namespace] = torch.nn.Sequential(
+            self._trigger_scorers[trigger_namespace] = torch.nn.Sequential(
                 TimeDistributed(trigger_feedforward),
                 TimeDistributed(torch.nn.Linear(trigger_feedforward.get_output_dim(),
                                                 self._n_trigger_labels[trigger_namespace] - 1)))
