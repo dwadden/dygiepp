@@ -83,6 +83,7 @@ If you're unable to run the code, feel free to create an issue. Please do the fo
   --cuda-device 2 \
   --include-package dygie
   ```
+- If you're using your own dataset, attach a minimal example of the data which, when given as input, causes the error you're seeing. This could be, for instance, a single line form a `.jsonl` file.
 - Include the full error message that you're getting.
 
 

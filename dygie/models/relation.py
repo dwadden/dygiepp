@@ -78,6 +78,9 @@ class RelationExtractor(Model):
         """
         self._active_namespace = f"{metadata.dataset}__relation_labels"
 
+        if self._active_namespace not in self._relation_scorers:
+            return {"loss": 0}
+
         (top_span_embeddings, top_span_mention_scores,
          num_spans_to_keep, top_span_mask,
          top_span_indices, top_spans) = self._prune_spans(
