@@ -101,6 +101,7 @@ class DygieppPipe:
         # TODO add events and cluster information to spacy doc too
         archive = load_archive(pretrained_filepath)
         self._model = archive.model
+        self._model.eval()
         archive.config["dataset_reader"].pop("type")  # it's stupid but was necessary!
         self._dataset_reader = DyGIEReader.from_params(archive.config["dataset_reader"])
 
