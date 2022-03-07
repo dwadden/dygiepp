@@ -211,8 +211,8 @@ class AnnotatedDoc:
 
                 # Double-check that the tokens from the annotation file match up
                 # with the tokens in the source text.
-                ent_tok_text = [tok.text for tok in processed_ent]
-                doc_tok_text = [tok.text for i, tok in enumerate(tok_text)
+                ent_tok_text = [tok.text.lower() for tok in processed_ent]
+                doc_tok_text = [tok.text.lower() for i, tok in enumerate(tok_text)
                                 if i >= ent_tok_start and i <= ent_tok_end]
                 if ent_tok_text != doc_tok_text:
                     msg = ('The annotation file and source document disagree '
