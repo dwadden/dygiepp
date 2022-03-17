@@ -18,7 +18,7 @@ Span.set_extension("label_", default=[], force=True)
 def prepare_spacy_doc(doc: Doc, prediction: Dict) -> Doc:
     doc_rels = []
     # store the relations to doc._.rels of spacy extension
-    for rels, ds in zip(prediction["predicted_relations"], doc.sents):
+    for rels, ds in zip(prediction.get("predicted_relations", []), doc.sents):
         sent_rels = []
         for rel in rels:
             e1 = doc[rel[0] : rel[1] + 1]
@@ -29,7 +29,7 @@ def prepare_spacy_doc(doc: Doc, prediction: Dict) -> Doc:
         ds._.rels = sent_rels
     doc._.rels = doc_rels
 
-    preds = [p for r in prediction["predicted_ner"] for p in r]
+    preds = [p for r in prediction.get("predicted_ner", []) for p in r]
     # storing all span based entitis to doc._.span_ents
     span_ents = []
     for sent in prediction["predicted_ner"]:
@@ -88,6 +88,7 @@ class DygieppPipe:
         self,
         nlp: Language,
         pretrained_filepath: str = "./pretrained/scierc-lightweight.tar.gz",
+        dataset_name: str = "scierc",
     ) -> None:
         """spacy factory class for adding information to spacy document. For now just entities and relations.
         It adds entities to doc.ents and relations to doc._.rels: List[List[Token,Token,str]] which is a list of relations
@@ -97,6 +98,7 @@ class DygieppPipe:
             nlp (Language): Spacy Language instance
             name (str, optional): Pipe name. Defaults to "dygiepp".
             pretrained_filepath (str, optional): Address of pre-trained model to extract information. Defaults to "./pretrained/scierc-lightweight.tar.gz".
+            dataset_name (str, optional): Dataset name used for model. Defaults to "scierc".
         """
         # TODO add events and cluster information to spacy doc too
         archive = load_archive(pretrained_filepath)
@@ -104,12 +106,13 @@ class DygieppPipe:
         self._model.eval()
         archive.config["dataset_reader"].pop("type")  # it's stupid but was necessary!
         self._dataset_reader = DyGIEReader.from_params(archive.config["dataset_reader"])
+        self.dataset_name = dataset_name
 
     def __call__(self, doc: Doc) -> Doc:
         cuda_device = self._model._get_prediction_device()
         sentences = [[tok.text for tok in sent] for sent in doc.sents]
         ins = self._dataset_reader.text_to_instance(
-            {"sentences": sentences, "doc_key": "test", "dataset": "scierc"}
+            {"sentences": sentences, "doc_key": "test", "dataset": self.dataset_name}
         )
         dataset = Batch([ins])
         dataset.index_instances(self._model.vocab)
