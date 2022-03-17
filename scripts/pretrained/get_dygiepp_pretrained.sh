@@ -16,7 +16,7 @@ done
 
 
 # Grab the MECHANIC models as well; they're in a different bucket.
-for name in mechanic-coarse mechanic-granular
+for name in coarse granular
 do
     if [ ! -f pretrained/mechanic-${name}.tar.gz ]
     then
