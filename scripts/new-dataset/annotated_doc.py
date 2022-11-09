@@ -16,7 +16,8 @@ class AnnotatedDocError(Exception):
 
 class AnnotatedDoc:
     def __init__(self, text, sents, ents, bin_rels, events, equiv_rels,
-                 doc_key, dataset, coref, nlp, total_original_ents):
+                 doc_key, dataset, coref, nlp, total_original_ents,
+                 total_original_rels):
         """
         Provides dual functionality for class construction. If this function is
         used, be sure that the ents, bin_rels, events, and equiv_rels are
@@ -33,8 +34,9 @@ class AnnotatedDoc:
         self.coref = coref  # True if EquivRels should be treated as corefs
         self.nlp = nlp
         self.dropped_ents = 0
+        self.dropped_rels = 0
         self.total_original_ents = total_original_ents
-
+        self.total_original_rels = total_original_rels
 
     @classmethod
     def parse_ann(cls, txt, ann, nlp, dataset, coref):
@@ -88,6 +90,7 @@ class AnnotatedDoc:
         events = []
         equiv_rels = []
         total_original_ents = 0
+        total_original_rels = 0
         for line in split_lines:
 
             # The first character of the first element in the annotation
@@ -99,6 +102,7 @@ class AnnotatedDoc:
 
             elif line[0][0] == 'R':
                 bin_rels.append(BinRel(line))
+                total_original_rels += 1
 
             elif line[0][0] == 'E':
                 events.append(Event(line))
@@ -108,7 +112,7 @@ class AnnotatedDoc:
 
         annotated_doc = AnnotatedDoc(text, sents, ents, bin_rels, events,
                                      equiv_rels, doc_key, dataset, coref, nlp,
-                                     total_original_ents)
+                                     total_original_ents, total_original_rels)
         annotated_doc.set_annotation_objects()
 
         return annotated_doc
@@ -142,7 +146,10 @@ class AnnotatedDoc:
 
         # Format data
         ner = Ent.format_ner_dygiepp(self.ents, sent_idx_tups)
-        bin_rels = BinRel.format_bin_rels_dygiepp(self.bin_rels, sent_idx_tups)
+        bin_rels, self.dropped_rels = BinRel.format_bin_rels_dygiepp(self.bin_rels,
+                sent_idx_tups)
+        print(f'Completed relation formatting for {self.doc_key}. {self.dropped_rels} of '
+            f'{self.total_original_rels} entities were dropped due to tokenization mismatches.')
         if len(self.equiv_rels
                ) > 0 and self.coref:  # Some datasets don't have coreferences
             corefs = EquivRel.format_corefs_dygiepp(self.equiv_rels)
@@ -231,8 +238,8 @@ class AnnotatedDoc:
         # Set the list of entities that had token matches as ents for doc
         self.ents = ent_list_tokens
 
-        print(f'Completed doc {self.doc_key}. {self.dropped_ents} of '
-                f'{self.total_original_ents} entities '
+        print(f'Completed character to token conversion for doc {self.doc_key}. '
+                f'{self.dropped_ents} of {self.total_original_ents} entities '
                 'were dropped due to tokenization mismatches.')
 
 
@@ -340,14 +347,26 @@ class BinRel:
 
         returns:
             bin_rels, list of list: dygiepp formatted relations
+            dropped_rels, int: number of relations that were dropped due to
+                entity token mismatches
         """
         bin_rels = []
+        dropped_rels = 0
         # Go through each sentence to get the relations in that sentence
         for sent_start, sent_end in sent_idx_tups:
 
             # Check first entity to see if relation is in this sentence
             sent_rels = []
             for rel in rel_list:
+                # Check to make sure both entities actually have token starts
+                if rel.arg1.tok_start == None or rel.arg2.tok_start == None:
+                    warnings.warn('Either the start or end token for relation '
+                            f'{rel.arg1.text} -- {rel.label} -- {rel.arg2.text} '
+                            f'(ID: {rel.ID}) was dropped due to tokenization '
+                            'mismatches. This relation will also be dropped '
+                            'as a result.')
+                    dropped_rels += 1
+                    continue
                 rel_start = rel.arg1.tok_start
                 if sent_start <= rel_start < sent_end:
                     sent_rels.append([
@@ -357,7 +376,7 @@ class BinRel:
 
             bin_rels.append(sent_rels)
 
-        return bin_rels
+        return bin_rels, dropped_rels
 
 
 class Event:
