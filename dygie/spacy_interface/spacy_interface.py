@@ -13,12 +13,36 @@ Doc.set_extension("rels", default=[], force=True)
 Span.set_extension("rels", default=[], force=True)
 Doc.set_extension("span_ents", default=[], force=True)
 Span.set_extension("label_", default=[], force=True)
+Doc.set_extension("events", default=[], force=True)
+Span.set_extension("events", default=[], force=True)
 
 
 def prepare_spacy_doc(doc: Doc, prediction: Dict) -> Doc:
     doc_rels = []
-    # store the relations to doc._.rels of spacy extension
-    for rels, ds in zip(prediction["predicted_relations"], doc.sents):
+    doc_evs = []
+    # store events as relations. include confidence scores in the relation tuple (TODO: add relation property)
+    for evs, ds in zip(prediction.get("predicted_events", []), doc.sents):
+        sent_evs = []
+        for ev in evs:
+            if len(ev)>=3:
+                trig = [r for r in ev if r[1]=="TRIGGER"]
+                arg0s = [r for r in ev if r[2]=="ARG0"]
+                #example arg0s: [[40, 43, 'ARG0', 12.1145, 1.0], [45, 45, 'ARG0', 11.3498, 1.0]]
+                arg1s = [r for r in ev if r[2]=="ARG1"]
+                e_trig = doc[trig[0][0]:trig[0][0]+1]
+                for arg0 in arg0s:
+                    e_arg0 = doc[arg0[0] : arg0[1] + 1]
+                    for arg1 in arg1s:
+                        e_arg1 = doc[arg1[0] : arg1[1] + 1]
+                        #here confidence is set as the minimum among {trigger,args}, as a conservative measure.
+                        sent_evs.append({"ARG0":e_arg0,"ARG1":e_arg1,"RELATION_TRIGGER":e_trig,"CONF":min([arg0[4],arg1[4],trig[0][3]])})
+                        
+        doc_evs.append(sent_evs)
+        ds._.events = sent_evs
+    doc._.events = doc_evs
+    #TODO add doc._.span_ents too. 
+
+    for rels, ds in zip(prediction.get("predicted_relations", []), doc.sents):
         sent_rels = []
         for rel in rels:
             e1 = doc[rel[0] : rel[1] + 1]
@@ -28,8 +52,9 @@ def prepare_spacy_doc(doc: Doc, prediction: Dict) -> Doc:
         doc_rels.append(sent_rels)
         ds._.rels = sent_rels
     doc._.rels = doc_rels
-
-    preds = [p for r in prediction["predicted_ner"] for p in r]
+    if "predicted_ner" not in prediction:
+        return doc
+    preds = [p for r in prediction.get("predicted_ner", []) for p in r]
     # storing all span based entitis to doc._.span_ents
     span_ents = []
     for sent in prediction["predicted_ner"]:
@@ -88,6 +113,7 @@ class DygieppPipe:
         self,
         nlp: Language,
         pretrained_filepath: str = "./pretrained/scierc-lightweight.tar.gz",
+        dataset_name: str = "scierc",
     ) -> None:
         """spacy factory class for adding information to spacy document. For now just entities and relations.
         It adds entities to doc.ents and relations to doc._.rels: List[List[Token,Token,str]] which is a list of relations
@@ -97,18 +123,21 @@ class DygieppPipe:
             nlp (Language): Spacy Language instance
             name (str, optional): Pipe name. Defaults to "dygiepp".
             pretrained_filepath (str, optional): Address of pre-trained model to extract information. Defaults to "./pretrained/scierc-lightweight.tar.gz".
+            dataset_name (str, optional): Dataset name used for model. Defaults to "scierc".
         """
         # TODO add events and cluster information to spacy doc too
         archive = load_archive(pretrained_filepath)
         self._model = archive.model
+        self._model.eval()
         archive.config["dataset_reader"].pop("type")  # it's stupid but was necessary!
         self._dataset_reader = DyGIEReader.from_params(archive.config["dataset_reader"])
+        self.dataset_name = dataset_name
 
     def __call__(self, doc: Doc) -> Doc:
         cuda_device = self._model._get_prediction_device()
         sentences = [[tok.text for tok in sent] for sent in doc.sents]
         ins = self._dataset_reader.text_to_instance(
-            {"sentences": sentences, "doc_key": "test", "dataset": "scierc"}
+            {"sentences": sentences, "doc_key": "test", "dataset": self.dataset_name}
         )
         dataset = Batch([ins])
         dataset.index_instances(self._model.vocab)
