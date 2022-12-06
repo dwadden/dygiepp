@@ -132,7 +132,7 @@ class TestBinRel(unittest.TestCase):
     def test_format_bin_rels_dygiepp(self):
 
         self.rel1.set_arg_objects(self.annotated_doc.ents)
-        relations = ad.BinRel.format_bin_rels_dygiepp([self.rel1],
+        relations, dropped_rels = ad.BinRel.format_bin_rels_dygiepp([self.rel1],
                                                       self.sent_idx_tups)
 
         self.assertEqual(relations, self.relations)
@@ -202,7 +202,7 @@ class TestEvent(unittest.TestCase):
     def test_format_events_dygiepp(self):
 
         self.event1.set_arg_objects(self.annotated_doc.ents)
-        events = ad.Event.format_events_dygiepp([self.event1],
+        events, dropped_events = ad.Event.format_events_dygiepp([self.event1],
                                                 self.sent_idx_tups)
 
         self.assertEqual(events, self.events)
@@ -272,7 +272,7 @@ class TestEquivRel(unittest.TestCase):
 
         self.equivrel1.set_arg_objects(self.annotated_doc.ents)
         self.equivrel2.set_arg_objects(self.annotated_doc.ents)
-        corefs = ad.EquivRel.format_corefs_dygiepp(
+        corefs, dropped_equiv_rels = ad.EquivRel.format_corefs_dygiepp(
             [self.equivrel1, self.equivrel2])
 
         self.assertEqual(corefs, self.corefs)
