@@ -16,7 +16,9 @@ class AnnotatedDocError(Exception):
 
 class AnnotatedDoc:
     def __init__(self, text, sents, ents, bin_rels, events, equiv_rels,
-                 doc_key, dataset, coref, nlp, total_original_ents):
+                 doc_key, dataset, coref, nlp, total_original_ents,
+                 total_original_rels, total_original_equiv_rels,
+                 total_original_events):
         """
         Provides dual functionality for class construction. If this function is
         used, be sure that the ents, bin_rels, events, and equiv_rels are
@@ -33,8 +35,13 @@ class AnnotatedDoc:
         self.coref = coref  # True if EquivRels should be treated as corefs
         self.nlp = nlp
         self.dropped_ents = 0
+        self.dropped_rels = 0
+        self.dropped_equiv_rels = 0
+        self.dropped_events = 0
         self.total_original_ents = total_original_ents
-
+        self.total_original_rels = total_original_rels
+        self.total_original_equiv_rels = total_original_equiv_rels
+        self.total_original_events = total_original_events
 
     @classmethod
     def parse_ann(cls, txt, ann, nlp, dataset, coref):
@@ -73,7 +80,7 @@ class AnnotatedDoc:
                 if ';' in line[:second_tab]:
                     idx = line[:line.index("\t")]
                     warnings.warn(f'Entity "{line[second_tab:]}" (ID: '
-                          f'{idx}) is disjoint, and will be dropped.')
+                                  f'{idx}) is disjoint, and will be dropped.')
                 else:
                     lines_continuous.append(line)
             else:
@@ -88,6 +95,9 @@ class AnnotatedDoc:
         events = []
         equiv_rels = []
         total_original_ents = 0
+        total_original_rels = 0
+        total_original_equiv_rels = 0
+        total_original_events = 0
         for line in split_lines:
 
             # The first character of the first element in the annotation
@@ -99,20 +109,24 @@ class AnnotatedDoc:
 
             elif line[0][0] == 'R':
                 bin_rels.append(BinRel(line))
+                total_original_rels += 1
 
             elif line[0][0] == 'E':
                 events.append(Event(line))
+                total_original_events += 1
 
             elif line[0][0] == '*' and coref:
                 equiv_rels.append(EquivRel(line))
+                total_original_equiv_rels += 1
 
         annotated_doc = AnnotatedDoc(text, sents, ents, bin_rels, events,
                                      equiv_rels, doc_key, dataset, coref, nlp,
-                                     total_original_ents)
+                                     total_original_ents, total_original_rels,
+                                     total_original_equiv_rels,
+                                     total_original_events)
         annotated_doc.set_annotation_objects()
 
         return annotated_doc
-
 
     def set_annotation_objects(self):
         """
@@ -122,7 +136,6 @@ class AnnotatedDoc:
         [bin_rel.set_arg_objects(self.ents) for bin_rel in self.bin_rels]
         [event.set_arg_objects(self.ents) for event in self.events]
         [equiv_rel.set_arg_objects(self.ents) for equiv_rel in self.equiv_rels]
-
 
     def format_dygiepp(self):
         """
@@ -142,12 +155,27 @@ class AnnotatedDoc:
 
         # Format data
         ner = Ent.format_ner_dygiepp(self.ents, sent_idx_tups)
-        bin_rels = BinRel.format_bin_rels_dygiepp(self.bin_rels, sent_idx_tups)
+        bin_rels, self.dropped_rels = BinRel.format_bin_rels_dygiepp(
+            self.bin_rels, sent_idx_tups)
+        print(
+            f'Completed relation formatting for {self.doc_key}. {self.dropped_rels} of '
+            f'{self.total_original_rels} relations were dropped due to tokenization mismatches.'
+        )
         if len(self.equiv_rels
                ) > 0 and self.coref:  # Some datasets don't have coreferences
-            corefs = EquivRel.format_corefs_dygiepp(self.equiv_rels)
+            corefs, self.dropped_equiv_rels = EquivRel.format_corefs_dygiepp(
+                self.equiv_rels)
+            print(f'Completed coreference formatting for {self.doc_key}. '
+                  f'{self.dropped_equiv_rels} of '
+                  f'{self.total_original_equiv_rels} were dropped due to '
+                  'tokenization mismatches.')
         if len(self.events) > 0:  # Some datasets don't have events
-            events = Event.format_events_dygiepp(self.events, sent_idx_tups)
+            events, self.dropped_events = Event.format_events_dygiepp(
+                self.events, sent_idx_tups)
+            print(f'Completed event formatting for {self.doc_key}. '
+                  f'{self.dropped_events} of '
+                  f'{self.total_original_events} were dropped due to '
+                  'tokenization mismatches.')
 
         # Make dict
         res = {
@@ -165,7 +193,6 @@ class AnnotatedDoc:
             res["events"] = events
 
         return res
-
 
     def char_to_token(self):
         """
@@ -192,8 +219,9 @@ class AnnotatedDoc:
 
                 # If the entity can't be found because there isn't an exact
                 # match in the list, warn that it will be dropped
-                warnings.warn(f'The entity {ent.text} (ID: {ent.ID}) cannot '
-                      'be aligned to the tokenization, and will be dropped.')
+                warnings.warn(
+                    f'The entity {ent.text} (ID: {ent.ID}) cannot '
+                    'be aligned to the tokenization, and will be dropped.')
                 self.dropped_ents += 1
 
             else:
@@ -212,11 +240,13 @@ class AnnotatedDoc:
                 # Double-check that the tokens from the annotation file match up
                 # with the tokens in the source text.
                 ent_tok_text = [tok.text.lower() for tok in processed_ent]
-                doc_tok_text = [tok.text.lower() for i, tok in enumerate(tok_text)
-                                if i >= ent_tok_start and i <= ent_tok_end]
+                doc_tok_text = [
+                    tok.text.lower() for i, tok in enumerate(tok_text)
+                    if i >= ent_tok_start and i <= ent_tok_end
+                ]
                 if ent_tok_text != doc_tok_text:
                     msg = ('The annotation file and source document disagree '
-                            f'on the tokens for entity {ent.text} (ID: '
+                           f'on the tokens for entity {ent.text} (ID: '
                            f'{ent.ID}). This entity will be dropped.')
                     warnings.warn(msg)
                     self.dropped_ents += 1
@@ -231,9 +261,10 @@ class AnnotatedDoc:
         # Set the list of entities that had token matches as ents for doc
         self.ents = ent_list_tokens
 
-        print(f'Completed doc {self.doc_key}. {self.dropped_ents} of '
-                f'{self.total_original_ents} entities '
-                'were dropped due to tokenization mismatches.')
+        print(
+            f'Completed character to token conversion for doc {self.doc_key}. '
+            f'{self.dropped_ents} of {self.total_original_ents} entities '
+            'were dropped due to tokenization mismatches.')
 
 
 class Ent:
@@ -340,14 +371,27 @@ class BinRel:
 
         returns:
             bin_rels, list of list: dygiepp formatted relations
+            dropped_rels, int: number of relations that were dropped due to
+                entity token mismatches
         """
         bin_rels = []
+        dropped_rels = 0
         # Go through each sentence to get the relations in that sentence
         for sent_start, sent_end in sent_idx_tups:
 
             # Check first entity to see if relation is in this sentence
             sent_rels = []
             for rel in rel_list:
+                # Check to make sure both entities actually have token starts
+                if rel.arg1.tok_start == None or rel.arg2.tok_start == None:
+                    warnings.warn(
+                        'Either the start or end token for relation '
+                        f'{rel.arg1.text} -- {rel.label} -- {rel.arg2.text} '
+                        f'(ID: {rel.ID}) was dropped due to tokenization '
+                        'mismatches. This relation will also be dropped '
+                        'as a result.')
+                    dropped_rels += 1
+                    continue
                 rel_start = rel.arg1.tok_start
                 if sent_start <= rel_start < sent_end:
                     sent_rels.append([
@@ -357,7 +401,7 @@ class BinRel:
 
             bin_rels.append(sent_rels)
 
-        return bin_rels
+        return bin_rels, dropped_rels
 
 
 class Event:
@@ -423,14 +467,41 @@ class Event:
 
         returns:
             events, list of list: dygiepp formatted events
+            dropped_ents, int: number of events dropped due to entity token
+                mismatches
         """
         events = []
+        dropped_events = 0
         # Go through each sentence to get the relations in that sentence
         for sent_start, sent_end in sent_idx_tups:
 
             # Check trigger to see if event is in this sentence and format
             sent_events = []
             for event in event_list:
+
+                # Check to make sure the entities involved in the event all
+                # have token starts
+                # First, check the trigger
+                if event.trigger.tok_start == None or event.trigger.tok_end == None:
+                    warnings.warn(
+                        f'The trigger for event ID: {event.ID} '
+                        f'(trigger: {event.trigger.text} was dropped due '
+                        'to tokenization mismatches. This event will be '
+                        'dropped as a result.')
+                    dropped_events += 1
+                    continue
+                # Then check all the arguments in the event
+                any_missing_arg = False
+                for arg_obj in event.args:
+                    if arg_obj.tok_start == None or arg_obj.tok_end == None:
+                        any_missing_arg = True
+                if any_missing_arg:
+                    warnings.warn(
+                        f'One or more arguments for event ID: '
+                        f'{event.ID} were dropped due to tokenization mismatches. '
+                        'This event will be dropped as a result.')
+                    dropped_events += 1
+                    continue
 
                 # Check if event is in sentence
                 trigger_start = event.trigger.tok_start
@@ -468,7 +539,7 @@ class Event:
 
             events.append(sent_events)
 
-        return events
+        return events, dropped_events
 
 
 class EquivRel:
@@ -507,10 +578,29 @@ class EquivRel:
 
         returns:
             corefs, list of list: dygiepp formatted coreference clusters
+            dropped_equiv_rels, int: number of equivalence relations dropped
+                due to entity tokenization mistmatches
         """
         corefs = []
+        dropped_equiv_rels = 0
         for equiv_rel in equiv_rels_list:
+
+            # Check that both entities exist
+            any_missing_args = False
+            for arg in equiv_rel.args:
+                if arg.tok_start == None or arg.tok_end == None:
+                    any_missing_args = True
+            if any_missing_args:
+                arg_texts = [arg.text for arg in equiv_rel.args]
+                warnings.warn(
+                    'One or more arguments in the coreference '
+                    f'cluster {equiv_rel.label, arg_texts} was dropped '
+                    'Due to entity tokenization mismatches. This '
+                    'coreference will also be dropped as a reult.')
+                dropped_equiv_rels += 1
+                continue
+
             cluster = [[arg.tok_start, arg.tok_end] for arg in equiv_rel.args]
             corefs.append(cluster)
 
-        return corefs
+        return corefs, dropped_equiv_rels

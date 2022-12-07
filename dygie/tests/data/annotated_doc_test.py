@@ -110,7 +110,6 @@ class TestBinRel(unittest.TestCase):
                                                        nlp,
                                                        dataset,
                                                        coref=True)
-        self.annotated_doc.char_to_token()
 
         # Set up relation
         self.rel1 = ad.BinRel("R1\tMayor-Of Arg1:T2 Arg2:T3".split())
@@ -118,10 +117,36 @@ class TestBinRel(unittest.TestCase):
         # Right answer
         self.relations = [[], [[6, 7, 9, 11, "Mayor-Of"]], []]
 
+        # Missing entity annotations
+        missing_ann = ("T1\tCity 0 7\tSeattle\n"
+                       "T2\tPerson 22 37\tJenny Durkan\n"
+                       "T3\tCity 41 51\tthe city's\n"
+                       "T4\tPerson 59 62\tShe\n"
+                       "T5\tPersonnel.Election 67 74\telected\n"
+                       "T6\tYear 78 82\t2017\n"
+                       "R1\tMayor-Of Arg1:T2 Arg2:T3\n"
+                       "E1\tPersonnel.Election:T5 Person:T4 Year:T6\n"
+                       "*\tEQUIV T1 T3\n"
+                       "*\tEQUIV T2 T4\n")
+        missing_ann_path = f'{self.tmpdir}/missing_myfile.ann'
+        with open(missing_ann_path, 'w') as f:
+            f.write(missing_ann)
+
+        # Set up annotated_doc object
+        self.missing_annotated_doc = ad.AnnotatedDoc.parse_ann(
+            text_path, missing_ann_path, nlp, dataset, coref=True)
+
+        # Right answer
+        self.missing_relations = [[], [], []]
+
     def tearDown(self):
 
         shutil.rmtree(self.tmpdir)
 
+    # set_arg_objects is always called *before* char_to_token
+    # They will fail if run in the opposite order with entities that get
+    # dropped, but if they are only used with brat_to_input.py, the order is
+    # baked in and therefore safe
     def test_set_arg_objects(self):
 
         self.rel1.set_arg_objects(self.annotated_doc.ents)
@@ -129,13 +154,30 @@ class TestBinRel(unittest.TestCase):
         self.assertEqual(self.rel1.arg1, self.annotated_doc.ents[1])
         self.assertEqual(self.rel1.arg2, self.annotated_doc.ents[2])
 
+    def test_set_arg_objects_missing_arg(self):
+
+        self.rel1.set_arg_objects(self.missing_annotated_doc.ents)
+
+        self.assertEqual(self.rel1.arg1, self.missing_annotated_doc.ents[1])
+        self.assertEqual(self.rel1.arg2, self.missing_annotated_doc.ents[2])
+
     def test_format_bin_rels_dygiepp(self):
 
         self.rel1.set_arg_objects(self.annotated_doc.ents)
-        relations = ad.BinRel.format_bin_rels_dygiepp([self.rel1],
-                                                      self.sent_idx_tups)
+        self.annotated_doc.char_to_token()
+        relations, dropped_rels = ad.BinRel.format_bin_rels_dygiepp(
+            [self.rel1], self.sent_idx_tups)
 
         self.assertEqual(relations, self.relations)
+
+    def test_format_bin_rels_dygiepp_missing_arg(self):
+
+        self.rel1.set_arg_objects(self.missing_annotated_doc.ents)
+        self.missing_annotated_doc.char_to_token()
+        relations, dropped_rels = ad.BinRel.format_bin_rels_dygiepp(
+            [self.rel1], self.sent_idx_tups)
+
+        self.assertEqual(relations, self.missing_relations)
 
 
 class TestEvent(unittest.TestCase):
@@ -175,7 +217,6 @@ class TestEvent(unittest.TestCase):
                                                        nlp,
                                                        dataset,
                                                        coref=True)
-        self.annotated_doc.char_to_token()
 
         # Set up events
         self.event1 = ad.Event(
@@ -185,6 +226,28 @@ class TestEvent(unittest.TestCase):
         self.events = [[], [],
                        [[[16, "Personnel.Election"], [14, 14, "Person"],
                          [18, 18, "Year"]]]]
+
+        # Missing entity annotations
+        missing_ann = ("T1\tCity 0 7\tSeattle\n"
+                       "T2\tPerson 22 37\tJenny Durkan\n"
+                       "T3\tCity 41 51\tthe city's\n"
+                       "T4\tPerson 59 62\tShe\n"
+                       "T5\tPersonnel.Election 63 74\telected\n"
+                       "T6\tYear 78 82\t2017\n"
+                       "R1\tMayor-Of Arg1:T2 Arg2:T3\n"
+                       "E1\tPersonnel.Election:T5 Person:T4 Year:T6\n"
+                       "*\tEQUIV T1 T3\n"
+                       "*\tEQUIV T2 T4\n")
+        missing_ann_path = f'{self.tmpdir}/missing_myfile.ann'
+        with open(missing_ann_path, 'w') as f:
+            f.write(missing_ann)
+
+        # Set up annotated_doc object
+        self.missing_annotated_doc = ad.AnnotatedDoc.parse_ann(
+            text_path, missing_ann_path, nlp, dataset, coref=True)
+
+        # Right answer
+        self.missing_events = [[], [], []]
 
     def tearDown(self):
 
@@ -202,10 +265,31 @@ class TestEvent(unittest.TestCase):
     def test_format_events_dygiepp(self):
 
         self.event1.set_arg_objects(self.annotated_doc.ents)
-        events = ad.Event.format_events_dygiepp([self.event1],
-                                                self.sent_idx_tups)
+        self.annotated_doc.char_to_token()
+        events, dropped_events = ad.Event.format_events_dygiepp(
+            [self.event1], self.sent_idx_tups)
 
         self.assertEqual(events, self.events)
+
+    def test_set_arg_objects_missing_ann(self):
+
+        self.event1.set_arg_objects(self.missing_annotated_doc.ents)
+
+        self.assertEqual(self.event1.trigger,
+                         self.missing_annotated_doc.ents[4])
+        self.assertEqual(self.event1.args, [
+            self.missing_annotated_doc.ents[3],
+            self.missing_annotated_doc.ents[5]
+        ])
+
+    def test_format_events_dygiepp_missing_ann(self):
+
+        self.event1.set_arg_objects(self.missing_annotated_doc.ents)
+        self.missing_annotated_doc.char_to_token()
+        events, dropped_events = ad.Event.format_events_dygiepp(
+            [self.event1], self.sent_idx_tups)
+
+        self.assertEqual(events, self.missing_events)
 
 
 class TestEquivRel(unittest.TestCase):
@@ -243,7 +327,6 @@ class TestEquivRel(unittest.TestCase):
                                                        nlp,
                                                        dataset,
                                                        coref=True)
-        self.annotated_doc.char_to_token()
 
         # Set up equivalence relations
         self.equivrel1 = ad.EquivRel("*\tEQUIV T1 T3".split())
@@ -251,6 +334,28 @@ class TestEquivRel(unittest.TestCase):
 
         # The dygiepp-formatted correct answer
         self.corefs = [[[0, 0], [9, 11]], [[6, 7], [14, 14]]]
+
+        # Missing entity annotations
+        missing_ann = ("T1\tCity 0 7\tSeattle\n"
+                       "T2\tPerson 22 37\tJenny Durkan\n"
+                       "T3\tCity 41 51\tthe city's\n"
+                       "T4\tPerson 59 62\tShe\n"
+                       "T5\tPersonnel.Election 67 74\telected\n"
+                       "T6\tYear 78 82\t2017\n"
+                       "R1\tMayor-Of Arg1:T2 Arg2:T3\n"
+                       "E1\tPersonnel.Election:T5 Person:T4 Year:T6\n"
+                       "*\tEQUIV T1 T3\n"
+                       "*\tEQUIV T2 T4\n")
+        missing_ann_path = f'{self.tmpdir}/missing_myfile.ann'
+        with open(missing_ann_path, 'w') as f:
+            f.write(missing_ann)
+
+        # Set up annotated_doc object
+        self.missing_annotated_doc = ad.AnnotatedDoc.parse_ann(
+            text_path, missing_ann_path, nlp, dataset, coref=True)
+
+        # The dygiepp-formatted correct answer
+        self.missing_corefs = [[[0, 0], [9, 11]]]
 
     def tearDown(self):
 
@@ -272,10 +377,35 @@ class TestEquivRel(unittest.TestCase):
 
         self.equivrel1.set_arg_objects(self.annotated_doc.ents)
         self.equivrel2.set_arg_objects(self.annotated_doc.ents)
-        corefs = ad.EquivRel.format_corefs_dygiepp(
+        self.annotated_doc.char_to_token()
+        corefs, dropped_equiv_rels = ad.EquivRel.format_corefs_dygiepp(
             [self.equivrel1, self.equivrel2])
 
         self.assertEqual(corefs, self.corefs)
+
+    def test_set_arg_objects_missing_ann(self):
+
+        self.equivrel1.set_arg_objects(self.missing_annotated_doc.ents)
+        self.equivrel2.set_arg_objects(self.missing_annotated_doc.ents)
+
+        self.assertEqual(self.equivrel1.args, [
+            self.missing_annotated_doc.ents[0],
+            self.missing_annotated_doc.ents[2]
+        ])
+        self.assertEqual(self.equivrel2.args, [
+            self.missing_annotated_doc.ents[1],
+            self.missing_annotated_doc.ents[3]
+        ])
+
+    def test_format_corefs_dygiepp_missing_ann(self):
+
+        self.equivrel1.set_arg_objects(self.missing_annotated_doc.ents)
+        self.equivrel2.set_arg_objects(self.missing_annotated_doc.ents)
+        self.missing_annotated_doc.char_to_token()
+        corefs, dropped_equiv_rels = ad.EquivRel.format_corefs_dygiepp(
+            [self.equivrel1, self.equivrel2])
+
+        self.assertEqual(corefs, self.missing_corefs)
 
 
 class TestAnnotatedDoc(unittest.TestCase):
@@ -362,7 +492,6 @@ class TestAnnotatedDoc(unittest.TestCase):
                                                   coref=True)
         annotated_doc.char_to_token()
         res = annotated_doc.format_dygiepp()
-
         self.assertEqual(res, self.dygiepp_dict)
 
 
