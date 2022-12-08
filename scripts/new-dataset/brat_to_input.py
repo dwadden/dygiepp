@@ -32,6 +32,8 @@ def format_annotated_document(fname_pair, dataset_name, nlp, coref):
 
     returns:
         res, json dict: formatted data
+        dropped_totals, dict: numbers of original and dropped entities,
+            binary and equivalence relations, and events for the document
     """
     # Make annotated doc object
     annotated_doc = AnnotatedDoc.parse_ann(fname_pair[0], fname_pair[1], nlp,
@@ -43,7 +45,19 @@ def format_annotated_document(fname_pair, dataset_name, nlp, coref):
     # Do the dygiepp conversion
     res = annotated_doc.format_dygiepp()
 
-    return res
+    # Get the numbers of dropped entities and relations for this document
+    dropped_totals = {
+        'dropped_ents': annotated_doc.dropped_ents,
+        'total_original_ents': annotated_doc.total_original_ents,
+        'dropped_rels': annotated_doc.dropped_rels,
+        'total_original_rels': annotated_doc.total_original_rels,
+        'dropped_equiv_rels': annotated_doc.dropped_equiv_rels,
+        'total_original_equiv_rels': annotated_doc.total_original_equiv_rels,
+        'dropped_events': annotated_doc.dropped_events,
+        'total_original_events': annotated_doc.total_original_events
+    }
+
+    return res, dropped_totals
 
 
 def get_paired_files(all_files):
@@ -101,10 +115,38 @@ def format_labeled_dataset(data_directory, output_file, dataset_name,
     paired_files = get_paired_files(all_files)
 
     # Format doc file pairs
-    res = [
-        format_annotated_document(fname_pair, dataset_name, nlp, coref)
-        for fname_pair in paired_files
-    ]
+    overall_dropped_totals = {
+        'dropped_ents': 0,
+        'total_original_ents': 0,
+        'dropped_rels': 0,
+        'total_original_rels': 0,
+        'dropped_equiv_rels': 0,
+        'total_original_equiv_rels': 0,
+        'dropped_events': 0,
+        'total_original_events': 0
+    }
+    res = []
+    for fname_pair in paired_files:
+        r, dropped_totals = format_annotated_document(fname_pair, dataset_name,
+                                                      nlp, coref)
+        res.append(r)
+        overall_dropped_totals = {
+            k: v + dropped_totals[k]
+            for k, v in overall_dropped_totals.items()
+        }
+
+    print(
+        '\n\nCompleted conversion for entire dataset! '
+        f'{overall_dropped_totals["dropped_ents"]} of '
+        f'{overall_dropped_totals["total_original_ents"]} original entities '
+        'were dropped due to tokenization mismatches. As a result, '
+        f'{overall_dropped_totals["dropped_rels"]} of '
+        f'{overall_dropped_totals["total_original_rels"]} original relations, '
+        f'{overall_dropped_totals["dropped_equiv_rels"]} of '
+        f'{overall_dropped_totals["total_original_equiv_rels"]} coreference '
+        f'clusters, and {overall_dropped_totals["dropped_events"]} of '
+        f'{overall_dropped_totals["total_original_events"]} events '
+        'were dropped.')
 
     # Write out doc dictionaries
     with open(output_file, "w") as f:
