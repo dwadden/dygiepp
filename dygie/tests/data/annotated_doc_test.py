@@ -94,7 +94,9 @@ class TestBinRel(unittest.TestCase):
                "T4\tPerson 59 62\tShe\n"
                "T5\tPersonnel.Election 67 74\telected\n"
                "T6\tYear 78 82\t2017\n"
+               "T7\tCity 0 7;19 23\tSeattle city\n"
                "R1\tMayor-Of Arg1:T2 Arg2:T3\n"
+               "R2\tis Arg1:T7 Arg2:T1\n"
                "E1\tPersonnel.Election:T5 Person:T4 Year:T6\n"
                "*\tEQUIV T1 T3\n"
                "*\tEQUIV T2 T4\n")
@@ -113,6 +115,7 @@ class TestBinRel(unittest.TestCase):
 
         # Set up relation
         self.rel1 = ad.BinRel("R1\tMayor-Of Arg1:T2 Arg2:T3".split())
+        self.rel2 = ad.BinRel("R2\tis Arg1:T7 Arg2:T1".split())
 
         # Right answer
         self.relations = [[], [[6, 7, 9, 11, "Mayor-Of"]], []]
@@ -154,6 +157,13 @@ class TestBinRel(unittest.TestCase):
         self.assertEqual(self.rel1.arg1, self.annotated_doc.ents[1])
         self.assertEqual(self.rel1.arg2, self.annotated_doc.ents[2])
 
+    def test_set_arg_objects_disjoint(self):
+
+        self.rel2.set_arg_objects(self.annotated_doc.ents)
+
+        self.assertEqual(self.rel2.arg1, None)
+        self.assertEqual(self.rel2.arg2, self.annotated_doc.ents[0])
+
     def test_set_arg_objects_missing_arg(self):
 
         self.rel1.set_arg_objects(self.missing_annotated_doc.ents)
@@ -164,9 +174,10 @@ class TestBinRel(unittest.TestCase):
     def test_format_bin_rels_dygiepp(self):
 
         self.rel1.set_arg_objects(self.annotated_doc.ents)
+        self.rel2.set_arg_objects(self.annotated_doc.ents)
         self.annotated_doc.char_to_token()
         relations, dropped_rels = ad.BinRel.format_bin_rels_dygiepp(
-            [self.rel1], self.sent_idx_tups)
+            [self.rel1, self.rel2], self.sent_idx_tups)
 
         self.assertEqual(relations, self.relations)
 

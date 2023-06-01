@@ -5,9 +5,11 @@ annotation to the input format for dygiepp.
 Assumes the input .ann files correspond to the format described in
 https://brat.nlplab.org/standoff.html
 
-Supports conversion of .ann files including entities, binary relations,
-equivalence relations, and events. Does NOT support formatting attribute
-and modification annotations, normalization annotations, or note annotations.
+Supports conversion of .ann files including continuous entities, binary
+relations, equivalence relations, and events. Does NOT support formatting
+attribute and modification annotations, normalization annotations, or note
+annotations. Disjoint entities will also be dropped, as they are not supported
+by DyGIE++.
 
 Author: Serena G. Lotreck
 """

@@ -342,20 +342,31 @@ class BinRel:
         """
         Given a list of Ent objects, replaces the string ID for arg1 and arg2
         taken from the original annotation with the Ent object instance that
-        represents that entity.
+        represents that entity. Replaces the string with None if no argument is
+        found.
 
         parameters:
             arg_list, list of Ent instances: entities from the same .ann file
 
         returns: None
         """
+        found_arg1 = False
+        found_arg2 = False
         for ent in arg_list:
 
             if ent.ID == self.arg1:
                 self.arg1 = ent
+                found_arg1 = True
 
             elif ent.ID == self.arg2:
                 self.arg2 = ent
+                found_arg2 = True
+
+        # Replace any args that weren't found with None
+        if not found_arg1:
+            self.arg1 = None
+        if not found_arg2:
+            self.arg2 = None
 
     @staticmethod
     def format_bin_rels_dygiepp(rel_list, sent_idx_tups):
@@ -382,6 +393,15 @@ class BinRel:
             # Check first entity to see if relation is in this sentence
             sent_rels = []
             for rel in rel_list:
+                # Check to see if either entity as dropped because disjoint
+                if rel.arg1 is None or rel.arg2 is None:
+                    warnings.warn(
+                            'One or more of the argument entities for '
+                            f'relation {rel.ID} was dropped because it was '
+                            'disjoint. This relation will also be dropped as '
+                            'a result.')
+                    dropped_rels += 1
+                    continue
                 # Check to make sure both entities actually have token starts
                 if rel.arg1.tok_start == None or rel.arg2.tok_start == None:
                     warnings.warn(
