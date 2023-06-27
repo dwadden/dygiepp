@@ -505,6 +505,173 @@ class TestAnnotatedDoc(unittest.TestCase):
         res = annotated_doc.format_dygiepp()
         self.assertEqual(res, self.dygiepp_dict)
 
+class TestDropCounters(unittest.TestCase):
+    """
+    Tests the functionality of the entity and relation counters in the
+    AnnotatedDoc class..
+    """
+    def setUp(self):
+
+        # Set up temp dir and test docs
+        self.tmpdir = "tmp"
+        os.makedirs(self.tmpdir, exist_ok=True)
+
+        simple_txt = ("Seattle is a rainy city. Jenny Durkan is the city's mayor. "
+               "She was elected in 2017.")
+
+        self.simple_txt = f'{self.tmpdir}/mysimplefile.txt'
+        with open(self.simple_txt, 'w') as f:
+            f.write(simple_txt)
+
+        simple_ann = ("T1\tCity 0 7;13 23\tSeattle\n"
+               "T2\tPerson 25 37\tJenny Durkan\n"
+               "T3\tCity 41 51\tthe city's\n"
+               "T4\tPerson 59 62\tShe\n"
+               "T5\tPersonnel.Election 67 74\telected\n"
+               "T6\tYear 78 82\t2017\n"
+               "T7\tCity 13 23\trainy city\n"
+               "R1\tIs-A Arg1:T1 Arg2:T7\n"
+               "R2\tMayor-Of Arg1:T2 Arg2:T3\n"
+               "E1\tPersonnel.Election:T5 Person:T4 Year:T6\n"
+               "*\tEQUIV T1 T3\n"
+               "*\tEQUIV T2 T4\n")
+
+        self.simple_ann = f'{self.tmpdir}/mysimplefile.ann'
+        with open(self.simple_ann, 'w') as f:
+            f.write(simple_ann)
+
+        complex_txt = ("Global target profile of the kinase inhibitor bosutinib "
+            "in primary chronic myeloid leukemia cells.\n"
+            "The detailed molecular mechanism of action of second-generation "
+            "BCR-ABL tyrosine kinase inhibitors, including perturbed targets and "
+            "pathways, should contribute to rationalized therapy in chronic "
+            "myeloid leukemia (CML) or in other affected diseases. Here, we "
+            "characterized the target profile of the dual SRC/ABL inhibitor "
+            "bosutinib employing a two-tiered approach using chemical proteomics "
+            "to identify natural binders in whole cell lysates of primary CML "
+            "and K562 cells in parallel to in vitro kinase assays against a large "
+            "recombinant kinase panel. The combined strategy resulted in a global "
+            "survey of bosutinib targets comprised of over 45 novel tyrosine "
+            "and serine/threonine kinases. We have found clear differences in the "
+            "target patterns of bosutinib in primary CML cells versus the K562 "
+            "cell line. A comparison of bosutinib with dasatinib across the "
+            "whole kinase panel revealed overlapping, but distinct, inhibition "
+            "profiles. Common among those were the SRC, ABL and TEC family "
+            "kinases. Bosutinib did not inhibit KIT or platelet-derived growth "
+            "factor receptor, but prominently targeted the apoptosis-linked "
+            "STE20 kinases. Although in vivo bosutinib is inactive against ABL "
+            "T315I, we found this clinically important mutant to be "
+            "enzymatically inhibited in the mid-nanomolar range. Finally, "
+            "bosutinib is the first kinase inhibitor shown to target CAMK2G, "
+            "recently implicated in myeloid leukemia cell proliferation.")
+
+        self.complex_txt = f'{self.tmpdir}/mycomplexfile.txt'
+        with open(self.complex_txt, 'w') as f:
+            f.write(complex_txt)
+
+        complex_ann = ("T10\tCHEMICAL 932 941\tdasatinib\n"
+                "T11\tCHEMICAL 1090 1099\tBosutinib\n"
+                "T12\tCHEMICAL 46 55\tbosutinib\n"
+                "T13\tGENE-Y 1116 1119\tKIT\n"
+                "T14\tGENE-N 1123 1162\tplatelet-derived growth factor receptor\n"
+                "T15\tGENE-N 1210 1223\tSTE20 kinases\n"
+                "T16\tGENE-Y 1272 1275\tABL\n"
+                "T17\tGENE-N 1276 1281\tT315I\n"
+                "T18\tGENE-N 1415 1421\tkinase\n"
+                "T19\tGENE-Y 1448 1454\tCAMK2G\n"
+                "T1\tCHEMICAL 1242 1251\tbosutinib\n"
+                "T20\tGENE-Y 402 405\tSRC\n"
+                "T21\tGENE-Y 406 409\tABL\n"
+                "T22\tGENE-N 592 598\tkinase\n"
+                "T23\tGENE-N 634 640\tkinase\n"
+                "T24\tGENE-Y 163 166\tBCR\n"
+                "T25\tGENE-N 746 783\ttyrosine and serine/threonine kinases\n"
+                "T26\tGENE-Y 167 170\tABL\n"
+                "T27\tGENE-N 171 186\ttyrosine kinase\n"
+                "T28\tGENE-N 959 965\tkinase\n"
+                "T29\tGENE-Y 1057 1060\tSRC\n"
+                "T2\tCHEMICAL 1392 1401\tbosutinib\n"
+                "T30\tGENE-Y 1062 1065\tABL\n"
+                "T31\tGENE-Y 1070 1073\tTEC\n"
+                "T32\tGENE-N 1081 1088\tkinases\n"
+                "T33\tGENE-N 29 35\tkinase\n"
+                "T3\tCHEMICAL 420 429\tbosutinib\n"
+                "T4\tCHEMICAL 701 710\tbosutinib\n"
+                "T5\tCHEMICAL 746 754\ttyrosine\n"
+                "T6\tCHEMICAL 759 765\tserine\n"
+                "T7\tCHEMICAL 766 775\tthreonine\n"
+                "T8\tCHEMICAL 843 852\tbosutinib\n"
+                "T9\tCHEMICAL 917 926\tbosutinib\n"
+                "R0\tCPR:10 Arg1:T11 Arg2:T13\n"
+                "R1\tCPR:10 Arg1:T11 Arg2:T14\n"
+                "R2\tCPR:10 Arg1:T1 Arg2:T16\n"
+                "R3\tCPR:10 Arg1:T1 Arg2:T17\n"
+                "R4\tCPR:2 Arg1:T11 Arg2:T15\n"
+                "R5\tCPR:4 Arg1:T10 Arg2:T28\n"
+                "R6\tCPR:4 Arg1:T12 Arg2:T33\n"
+                "R7\tCPR:4 Arg1:T2 Arg2:T18\n"
+                "R8\tCPR:4 Arg1:T2 Arg2:T19\n"
+                "R9\tCPR:4 Arg1:T3 Arg2:T20\n"
+                "R10\tCPR:4 Arg1:T3 Arg2:T21\n"
+                "R11\tCPR:4 Arg1:T9 Arg2:T28\n")
+
+        self.complex_ann = f'{self.tmpdir}/mycomplexfile.ann'
+        with open(self.complex_ann, 'w') as f:
+            f.write(complex_ann)
+
+        # Define other attributes
+        self.nlp = spacy.load("en_core_web_sm")
+        self.scinlp = spacy.load("en_core_sci_sm")
+        self.dataset = 'scierc'
+
+    def test_entity_counters_simple(self):
+
+        annotated_doc = ad.AnnotatedDoc.parse_ann(self.simple_txt,
+                                                  self.simple_ann,
+                                                  self.nlp,
+                                                  self.dataset,
+                                                  coref=True)
+        annotated_doc.char_to_token()
+        res = annotated_doc.format_dygiepp()
+        self.assertEqual(annotated_doc.total_original_ents, 7)
+        self.assertEqual(annotated_doc.dropped_ents, 1)
+
+    def test_relation_counters_simple(self):
+
+        annotated_doc = ad.AnnotatedDoc.parse_ann(self.simple_txt,
+                                                  self.simple_ann,
+                                                  self.nlp,
+                                                  self.dataset,
+                                                  coref=True)
+        annotated_doc.char_to_token()
+        res = annotated_doc.format_dygiepp()
+        self.assertEqual(annotated_doc.total_original_rels, 2)
+        self.assertEqual(annotated_doc.dropped_rels, 1)
+
+    def test_entity_counters_complex(self):
+
+        annotated_doc = ad.AnnotatedDoc.parse_ann(self.complex_txt,
+                                                  self.complex_ann,
+                                                  self.scinlp,
+                                                  self.dataset,
+                                                  coref=True)
+        annotated_doc.char_to_token()
+        res = annotated_doc.format_dygiepp()
+        self.assertEqual(annotated_doc.total_original_ents, 33)
+        self.assertEqual(annotated_doc.dropped_ents, 6)
+
+    def test_relation_counters_complex(self):
+
+        annotated_doc = ad.AnnotatedDoc.parse_ann(self.complex_txt,
+                                                  self.complex_ann,
+                                                  self.scinlp,
+                                                  self.dataset,
+                                                  coref=True)
+        annotated_doc.char_to_token()
+        res = annotated_doc.format_dygiepp()
+        self.assertEqual(annotated_doc.total_original_rels, 12)
+        self.assertEqual(annotated_doc.dropped_rels, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

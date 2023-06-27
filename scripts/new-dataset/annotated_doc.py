@@ -16,7 +16,7 @@ class AnnotatedDocError(Exception):
 
 class AnnotatedDoc:
     def __init__(self, text, sents, ents, bin_rels, events, equiv_rels,
-                 doc_key, dataset, coref, nlp, total_original_ents,
+                 doc_key, dataset, coref, nlp, dropped_ents, total_original_ents,
                  total_original_rels, total_original_equiv_rels,
                  total_original_events):
         """
@@ -34,7 +34,7 @@ class AnnotatedDoc:
         self.dataset = dataset
         self.coref = coref  # True if EquivRels should be treated as corefs
         self.nlp = nlp
-        self.dropped_ents = 0
+        self.dropped_ents = dropped_ents
         self.dropped_rels = 0
         self.dropped_equiv_rels = 0
         self.dropped_events = 0
@@ -74,11 +74,13 @@ class AnnotatedDoc:
 
         # Drop discontinuous ents by looking for semicolons before second \t
         lines_continuous = []
+        discont_dropped = 0
         for line in lines:
             if line[0] == 'T':
                 second_tab = line.rfind('\t')
                 if ';' in line[:second_tab]:
                     idx = line[:line.index("\t")]
+                    discont_dropped += 1
                     warnings.warn(f'Entity "{line[second_tab:]}" (ID: '
                                   f'{idx}) is disjoint, and will be dropped.')
                 else:
@@ -94,7 +96,7 @@ class AnnotatedDoc:
         bin_rels = []
         events = []
         equiv_rels = []
-        total_original_ents = 0
+        total_original_ents = discont_dropped
         total_original_rels = 0
         total_original_equiv_rels = 0
         total_original_events = 0
@@ -121,8 +123,8 @@ class AnnotatedDoc:
 
         annotated_doc = AnnotatedDoc(text, sents, ents, bin_rels, events,
                                      equiv_rels, doc_key, dataset, coref, nlp,
-                                     total_original_ents, total_original_rels,
-                                     total_original_equiv_rels,
+                                     discont_dropped, total_original_ents,
+                                     total_original_rels, total_original_equiv_rels,
                                      total_original_events)
         annotated_doc.set_annotation_objects()
 
@@ -386,7 +388,10 @@ class BinRel:
                 entity token mismatches
         """
         bin_rels = []
-        dropped_rels = 0
+        dropped_rels_list = []
+        dropped_rel_warnings = []
+        num_its = 0
+
         # Go through each sentence to get the relations in that sentence
         for sent_start, sent_end in sent_idx_tups:
 
@@ -395,22 +400,22 @@ class BinRel:
             for rel in rel_list:
                 # Check to see if either entity as dropped because disjoint
                 if rel.arg1 is None or rel.arg2 is None:
-                    warnings.warn(
+                    dropped_rel_warnings.append(
                             'One or more of the argument entities for '
                             f'relation {rel.ID} was dropped because it was '
                             'disjoint. This relation will also be dropped as '
                             'a result.')
-                    dropped_rels += 1
+                    dropped_rels_list.append(rel)
                     continue
                 # Check to make sure both entities actually have token starts
                 if rel.arg1.tok_start == None or rel.arg2.tok_start == None:
-                    warnings.warn(
+                    dropped_rel_warnings.append(
                         'Either the start or end token for relation '
                         f'{rel.arg1.text} -- {rel.label} -- {rel.arg2.text} '
                         f'(ID: {rel.ID}) was dropped due to tokenization '
                         'mismatches. This relation will also be dropped '
                         'as a result.')
-                    dropped_rels += 1
+                    dropped_rels_list.append(rel)
                     continue
                 rel_start = rel.arg1.tok_start
                 if sent_start <= rel_start < sent_end:
@@ -420,6 +425,12 @@ class BinRel:
                     ])
 
             bin_rels.append(sent_rels)
+
+        dropped_rels = len(list(set(dropped_rels_list)))
+
+        unique_warnings = list(set(dropped_rel_warnings))
+        for wa in unique_warnings:
+            warnings.warn(wa)
 
         return bin_rels, dropped_rels
 
@@ -491,7 +502,8 @@ class Event:
                 mismatches
         """
         events = []
-        dropped_events = 0
+        dropped_events_list = []
+        dropped_event_warnings = []
         # Go through each sentence to get the relations in that sentence
         for sent_start, sent_end in sent_idx_tups:
 
@@ -503,12 +515,12 @@ class Event:
                 # have token starts
                 # First, check the trigger
                 if event.trigger.tok_start == None or event.trigger.tok_end == None:
-                    warnings.warn(
+                    dropped_event_warnings.append(
                         f'The trigger for event ID: {event.ID} '
                         f'(trigger: {event.trigger.text} was dropped due '
                         'to tokenization mismatches. This event will be '
                         'dropped as a result.')
-                    dropped_events += 1
+                    dropped_events_list.append(event)
                     continue
                 # Then check all the arguments in the event
                 any_missing_arg = False
@@ -516,11 +528,11 @@ class Event:
                     if arg_obj.tok_start == None or arg_obj.tok_end == None:
                         any_missing_arg = True
                 if any_missing_arg:
-                    warnings.warn(
+                    dropped_event_warnings.append(
                         f'One or more arguments for event ID: '
                         f'{event.ID} were dropped due to tokenization mismatches. '
                         'This event will be dropped as a result.')
-                    dropped_events += 1
+                    dropped_events_list.append(event)
                     continue
 
                 # Check if event is in sentence
@@ -558,6 +570,12 @@ class Event:
                     sent_events.append(formatted_event)
 
             events.append(sent_events)
+        
+        dropped_events = len(list(set(dropped_events_list)))
+
+        unique_warnings = list(set(dropped_event_warnings))
+        for wa in unique_warnings:
+            warnings.warn(wa)
 
         return events, dropped_events
 
