@@ -280,7 +280,8 @@ class AnnotatedDoc:
         relation in a dygiepp-formatted doc is a result of an incorrect sentence
         split on the part of the tokenizer, rather than intentional. If a
         cross-sentence entity or relation is found, all sentences between the
-        sentences containing the two joined entities will be combined into one.
+        sentences containing the two joined entities or entity parts will be
+        combined into one.
         
         Example: BioInfer.d70 is one sentence only, with two relations. However,
         the conversion to jsonl results in the following doc dictionary:
@@ -379,6 +380,7 @@ class AnnotatedDoc:
                     last_idx = max(pair)
                     sent_list = doc_dict[key][first_idx:last_idx+1]
                     sents_merged = [tok for sent in sent_list for tok in sent]
+                    sents_merged = [sents_merged]
                     joined.extend(sents_merged)
     
                     # If it's the last merge, add the rest
