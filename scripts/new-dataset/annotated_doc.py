@@ -397,8 +397,9 @@ class AnnotatedDoc:
                 # Add to new doc
                 doc_dict_corrected[key] = joined
 
-            print(f'{len(sents_to_join)} sentence joins were performed '
-                        f'to fix erroneous sentence splits in doc {doc_dict["doc_key"]}')
+            if len(sents_to_join) >= 1:
+                print(f'{len(sents_to_join)} sentence joins were performed '
+                            f'to fix erroneous sentence splits in doc {doc_dict["doc_key"]}')
     
             return doc_dict_corrected
 
