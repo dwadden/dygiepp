@@ -18,6 +18,7 @@ import spacy
 
 verboseprint = print
 
+
 class TestEnt(unittest.TestCase):
     def setUp(self):
 
@@ -526,6 +527,8 @@ class TestQualityCheck(unittest.TestCase):
         self.yes_merge_yes_multi_no_overlap = [(2, 5), (6, 7), (8, 9), (9, 10)]
         self.yes_merge_yes_multi_no_overlap_answer = [(2, 5), (6, 7), (8, 10)]
         self.yes_merge_yes_multi_yes_overlap = [(2, 9), (8, 9), (9, 10)]
+        self.only_one_merge_pair = [(5,6), (6,7)]
+        self.only_one_merge_pair_answer = [(5,7)]
 
         # Main func input/output
         # I'm using real instances for these, may not cover all possible instances
@@ -587,272 +590,546 @@ class TestQualityCheck(unittest.TestCase):
         }
 
         self.pickle_mult_no_overlaps_or_merges = {
-        "doc_key":
-        "PMID12825696_abstract",
-        "dataset":
-        "pickle",
-        "sentences":
-        [[
-            "Ca2", "+", "and", "calmodulin", "(", "CaM", ")", ",", "a", "key",
-            "Ca2", "+", "sensor", "in", "all", "eukaryotes", ",", "have",
-            "been", "implicated", "in", "defense", "responses", "in", "plants",
-            "."
-        ],
-         [
-             "To", "elucidate", "the", "role", "of", "Ca2", "+", "and", "CaM",
-             "in", "defense", "signaling", ",", "we", "used", "35S-labeled",
-             "CaM", "to", "screen", "expression", "libraries", "prepared",
-             "from", "tissues", "that", "were", "either", "treated", "with",
-             "an", "elicitor", "derived", "from", "Phytophthora", "megasperma",
-             "or", "infected", "with", "Pseudomonas", "syringae", "pv", "."
-         ], ["tabaci", "."],
-         [
-             "Nineteen", "cDNAs", "that", "encode", "the", "same", "protein",
-             ",", "pathogen-induced", "CaM-binding", "protein", "(", "PICBP",
-             ")", ",", "were", "isolated", "."
-         ],
-         [
-             "The", "PICBP", "fusion", "proteins", "bound", "35S-CaM", ",",
-             "horseradish", "peroxidase-labeled", "CaM", "and",
-             "CaM-Sepharose", "in", "the", "presence", "of", "Ca2", "+",
-             "whereas", "EGTA", ",", "a", "Ca2", "+", "chelator", ",",
-             "abolished", "binding", ",", "confirming", "that", "PICBP",
-             "binds", "CaM", "in", "a", "Ca2", "+", "-dependent", "manner", "."
-         ],
-         [
-             "Using", "a", "series", "of", "bacterially", "expressed",
-             "truncated", "versions", "of", "PICBP", ",", "four",
-             "CaM-binding", "domains", ",", "with", "a", "potential",
-             "CaM-binding", "consensus", "sequence", "of", "WSNLKKVILLKRFVKSL",
-             ",", "were", "identified", "."
-         ],
-         [
-             "The", "deduced", "PICBP", "protein", "sequence", "is", "rich",
-             "in", "leucine", "residues", "and", "contains", "three",
-             "classes", "of", "repeats", "."
-         ],
-         [
-             "The", "PICBP", "gene", "is", "differentially", "expressed", "in",
-             "tissues", "with", "the", "highest", "expression", "in", "stem",
-             "."
-         ],
-         [
-             "The", "expression", "of", "PICBP", "in", "Arabidopsis", "was",
-             "induced", "in", "response", "to", "avirulent", "Pseudomonas",
-             "syringae", "pv", "."
-         ], ["tomato", "carrying", "avrRpm1", "."],
-         [
-             "Furthermore", ",", "PICBP", "is", "constitutively", "expressed",
-             "in", "the", "Arabidopsis", "accelerated", "cell", "death2", "-",
-             "2", "mutant", "."
-         ],
-         [
-             "The", "expression", "of", "PICBP", "in", "bean", "leaves", "was",
-             "also", "induced", "after", "inoculation", "with", "avirulent",
-             "and", "non-pathogenic", "bacterial", "strains", "."
-         ],
-         [
-             "In", "addition", ",", "the", "hrp1", "mutant", "of",
-             "Pseudomonas", "syringae", "pv", "."
-         ],
-         [
-             "tabaci", "and", "inducers", "of", "plant", "defense", "such",
-             "as", "salicylic", "acid", ",", "hydrogen", "peroxide", "and",
-             "a", "fungal", "elicitor", "induced", "PICBP", "expression", "in",
-             "bean", "."
-         ],
-         [
-             "Our", "data", "suggest", "a", "role", "for", "PICBP", "in",
-             "Ca2", "+", "-mediated", "defense", "signaling", "and",
-             "cell-death", "."
-         ],
-         [
-             "Furthermore", ",", "PICBP", "is", "the", "first", "identified",
-             "CBP", "in", "eukaryotes", "with", "four", "Ca2", "+",
-             "-dependent", "CaM-binding", "domains", "."
-         ]],
-        "ner": [[[3, 3, "Protein"], [5, 5, "Protein"], [0, 1, "Element"],
-                 [10, 12, "Protein"]],
-                [[34, 34, "Protein"], [59, 60, "Multicellular_organism"],
-                 [31, 32, "Element"], [41, 42, "Protein"],
-                 [64, 68, "Unicellular_organism"]], [],
-                [[82, 82, "Protein"], [78, 80, "Protein"]],
-                [[107, 107, "Organic_compound_other"], [93, 93, "Protein"],
-                 [95, 97, "Protein"], [99, 99, "Protein"],
-                 [104, 105, "Element"], [119, 119, "Protein"],
-                 [121, 121, "Protein"], [89, 91, "Protein"],
-                 [110, 112, "Organic_compound_other"]],
-                [[138, 138, "Protein"], [141, 142, "Peptide"],
-                 [151, 151, "Peptide"], [147, 149, "Peptide"]],
-                [[164, 165, "Amino_acid_monomer"], [158, 159, "Protein"]],
-                [[174, 175, "DNA"]],
-                [[193, 193, "Multicellular_organism"], [191, 191, "DNA"],
-                 [199, 204, "Unicellular_organism"]], [[206, 206, "DNA"]],
-                [[210, 210, "Protein"], [216, 222, "Multicellular_organism"]],
-                [[229, 230, "Plant_region"], [227, 227, "DNA"]],
-                [[247, 248, "Unicellular_organism"],
-                 [250, 254, "Unicellular_organism"]],
-                [[265, 266, "Inorganic_compound_other"],
-                 [262, 263, "Plant_hormone"],
-                 [272, 273, "Biochemical_process"],
-                 [275, 275, "Multicellular_organism"]],
-                [[285, 291, "Biochemical_process"], [283, 283, "DNA"]],
-                [[295, 295, "Protein"], [305, 309, "Peptide"],
-                 [300, 300, "Protein"]]],
-        "relations": [[], [], [], [],
-                      [[119, 119, 121, 121, "interacts"],
-                       [89, 91, 93, 93, "interacts"],
-                       [89, 91, 95, 97, "interacts"],
-                       [89, 91, 99, 99, "interacts"],
-                       [89, 91, 104, 105, "interacts"],
-                       [107, 107, 89, 91, "inhibits"],
-                       [107, 107, 104, 105, "inhibits"]], [],
-                      [[164, 165, 158, 159, "is-in"]], [],
-                      [[191, 191, 193, 193, "is-in"],
-                       [199, 204, 191, 191, "activates"]],
-                      [[206, 206, 199, 204, "is-in"]],
-                      [[210, 210, 216, 222, "is-in"]],
-                      [[227, 227, 229, 230, "is-in"]],
-                      [[247, 248, 272, 273, "activates"]],
-                      [[262, 263, 272, 273, "activates"],
-                       [265, 266, 272, 273, "activates"],
-                       [272, 273, 275, 275, "is-in"]],
-                      [[283, 283, 285, 291, "is-in"]],
-                      [[305, 309, 295, 295, "is-in"]]]
-    }
+            "doc_key":
+            "PMID12825696_abstract",
+            "dataset":
+            "pickle",
+            "sentences":
+            [[
+                "Ca2", "+", "and", "calmodulin", "(", "CaM", ")", ",", "a",
+                "key", "Ca2", "+", "sensor", "in", "all", "eukaryotes", ",",
+                "have", "been", "implicated", "in", "defense", "responses",
+                "in", "plants", "."
+            ],
+             [
+                 "To", "elucidate", "the", "role", "of", "Ca2", "+", "and",
+                 "CaM", "in", "defense", "signaling", ",", "we", "used",
+                 "35S-labeled", "CaM", "to", "screen", "expression",
+                 "libraries", "prepared", "from", "tissues", "that", "were",
+                 "either", "treated", "with", "an", "elicitor", "derived",
+                 "from", "Phytophthora", "megasperma", "or", "infected",
+                 "with", "Pseudomonas", "syringae", "pv", "."
+             ], ["tabaci", "."],
+             [
+                 "Nineteen", "cDNAs", "that", "encode", "the", "same",
+                 "protein", ",", "pathogen-induced", "CaM-binding", "protein",
+                 "(", "PICBP", ")", ",", "were", "isolated", "."
+             ],
+             [
+                 "The", "PICBP", "fusion", "proteins", "bound", "35S-CaM", ",",
+                 "horseradish", "peroxidase-labeled", "CaM", "and",
+                 "CaM-Sepharose", "in", "the", "presence", "of", "Ca2", "+",
+                 "whereas", "EGTA", ",", "a", "Ca2", "+", "chelator", ",",
+                 "abolished", "binding", ",", "confirming", "that", "PICBP",
+                 "binds", "CaM", "in", "a", "Ca2", "+", "-dependent", "manner",
+                 "."
+             ],
+             [
+                 "Using", "a", "series", "of", "bacterially", "expressed",
+                 "truncated", "versions", "of", "PICBP", ",", "four",
+                 "CaM-binding", "domains", ",", "with", "a", "potential",
+                 "CaM-binding", "consensus", "sequence", "of",
+                 "WSNLKKVILLKRFVKSL", ",", "were", "identified", "."
+             ],
+             [
+                 "The", "deduced", "PICBP", "protein", "sequence", "is",
+                 "rich", "in", "leucine", "residues", "and", "contains",
+                 "three", "classes", "of", "repeats", "."
+             ],
+             [
+                 "The", "PICBP", "gene", "is", "differentially", "expressed",
+                 "in", "tissues", "with", "the", "highest", "expression", "in",
+                 "stem", "."
+             ],
+             [
+                 "The", "expression", "of", "PICBP", "in", "Arabidopsis",
+                 "was", "induced", "in", "response", "to", "avirulent",
+                 "Pseudomonas", "syringae", "pv", "."
+             ], ["tomato", "carrying", "avrRpm1", "."],
+             [
+                 "Furthermore", ",", "PICBP", "is", "constitutively",
+                 "expressed", "in", "the", "Arabidopsis", "accelerated",
+                 "cell", "death2", "-", "2", "mutant", "."
+             ],
+             [
+                 "The", "expression", "of", "PICBP", "in", "bean", "leaves",
+                 "was", "also", "induced", "after", "inoculation", "with",
+                 "avirulent", "and", "non-pathogenic", "bacterial", "strains",
+                 "."
+             ],
+             [
+                 "In", "addition", ",", "the", "hrp1", "mutant", "of",
+                 "Pseudomonas", "syringae", "pv", "."
+             ],
+             [
+                 "tabaci", "and", "inducers", "of", "plant", "defense", "such",
+                 "as", "salicylic", "acid", ",", "hydrogen", "peroxide", "and",
+                 "a", "fungal", "elicitor", "induced", "PICBP", "expression",
+                 "in", "bean", "."
+             ],
+             [
+                 "Our", "data", "suggest", "a", "role", "for", "PICBP", "in",
+                 "Ca2", "+", "-mediated", "defense", "signaling", "and",
+                 "cell-death", "."
+             ],
+             [
+                 "Furthermore", ",", "PICBP", "is", "the", "first",
+                 "identified", "CBP", "in", "eukaryotes", "with", "four",
+                 "Ca2", "+", "-dependent", "CaM-binding", "domains", "."
+             ]],
+            "ner": [[[3, 3, "Protein"], [5, 5, "Protein"], [0, 1, "Element"],
+                     [10, 12, "Protein"]],
+                    [[34, 34, "Protein"], [59, 60, "Multicellular_organism"],
+                     [31, 32, "Element"], [41, 42, "Protein"],
+                     [64, 68, "Unicellular_organism"]], [],
+                    [[82, 82, "Protein"], [78, 80, "Protein"]],
+                    [[107, 107, "Organic_compound_other"], [93, 93, "Protein"],
+                     [95, 97, "Protein"], [99, 99, "Protein"],
+                     [104, 105, "Element"], [119, 119, "Protein"],
+                     [121, 121, "Protein"], [89, 91, "Protein"],
+                     [110, 112, "Organic_compound_other"]],
+                    [[138, 138, "Protein"], [141, 142, "Peptide"],
+                     [151, 151, "Peptide"], [147, 149, "Peptide"]],
+                    [[164, 165, "Amino_acid_monomer"], [158, 159, "Protein"]],
+                    [[174, 175, "DNA"]],
+                    [[193, 193, "Multicellular_organism"], [191, 191, "DNA"],
+                     [199, 204, "Unicellular_organism"]], [[206, 206, "DNA"]],
+                    [[210, 210, "Protein"],
+                     [216, 222, "Multicellular_organism"]],
+                    [[229, 230, "Plant_region"], [227, 227, "DNA"]],
+                    [[247, 248, "Unicellular_organism"],
+                     [250, 254, "Unicellular_organism"]],
+                    [[265, 266, "Inorganic_compound_other"],
+                     [262, 263, "Plant_hormone"],
+                     [272, 273, "Biochemical_process"],
+                     [275, 275, "Multicellular_organism"]],
+                    [[285, 291, "Biochemical_process"], [283, 283, "DNA"]],
+                    [[295, 295, "Protein"], [305, 309, "Peptide"],
+                     [300, 300, "Protein"]]],
+            "relations": [[], [], [], [],
+                          [[119, 119, 121, 121, "interacts"],
+                           [89, 91, 93, 93, "interacts"],
+                           [89, 91, 95, 97, "interacts"],
+                           [89, 91, 99, 99, "interacts"],
+                           [89, 91, 104, 105, "interacts"],
+                           [107, 107, 89, 91, "inhibits"],
+                           [107, 107, 104, 105, "inhibits"]], [],
+                          [[164, 165, 158, 159, "is-in"]], [],
+                          [[191, 191, 193, 193, "is-in"],
+                           [199, 204, 191, 191, "activates"]],
+                          [[206, 206, 199, 204, "is-in"]],
+                          [[210, 210, 216, 222, "is-in"]],
+                          [[227, 227, 229, 230, "is-in"]],
+                          [[247, 248, 272, 273, "activates"]],
+                          [[262, 263, 272, 273, "activates"],
+                           [265, 266, 272, 273, "activates"],
+                           [272, 273, 275, 275, "is-in"]],
+                          [[283, 283, 285, 291, "is-in"]],
+                          [[305, 309, 295, 295, "is-in"]]]
+        }
 
         self.pickle_mult_no_overlaps_or_merges_answer = {
-        "doc_key":
-        "PMID12825696_abstract",
-        "dataset":
-        "pickle",
-        "sentences":
-        [[
-            "Ca2", "+", "and", "calmodulin", "(", "CaM", ")", ",", "a", "key",
-            "Ca2", "+", "sensor", "in", "all", "eukaryotes", ",", "have",
-            "been", "implicated", "in", "defense", "responses", "in", "plants",
-            "."
-        ],
-         [
-             "To", "elucidate", "the", "role", "of", "Ca2", "+", "and", "CaM",
-             "in", "defense", "signaling", ",", "we", "used", "35S-labeled",
-             "CaM", "to", "screen", "expression", "libraries", "prepared",
-             "from", "tissues", "that", "were", "either", "treated", "with",
-             "an", "elicitor", "derived", "from", "Phytophthora", "megasperma",
-             "or", "infected", "with", "Pseudomonas", "syringae", "pv", ".",
-             "tabaci", "."
-         ],
-         [
-             "Nineteen", "cDNAs", "that", "encode", "the", "same", "protein",
-             ",", "pathogen-induced", "CaM-binding", "protein", "(", "PICBP",
-             ")", ",", "were", "isolated", "."
-         ],
-         [
-             "The", "PICBP", "fusion", "proteins", "bound", "35S-CaM", ",",
-             "horseradish", "peroxidase-labeled", "CaM", "and",
-             "CaM-Sepharose", "in", "the", "presence", "of", "Ca2", "+",
-             "whereas", "EGTA", ",", "a", "Ca2", "+", "chelator", ",",
-             "abolished", "binding", ",", "confirming", "that", "PICBP",
-             "binds", "CaM", "in", "a", "Ca2", "+", "-dependent", "manner", "."
-         ],
-         [
-             "Using", "a", "series", "of", "bacterially", "expressed",
-             "truncated", "versions", "of", "PICBP", ",", "four",
-             "CaM-binding", "domains", ",", "with", "a", "potential",
-             "CaM-binding", "consensus", "sequence", "of", "WSNLKKVILLKRFVKSL",
-             ",", "were", "identified", "."
-         ],
-         [
-             "The", "deduced", "PICBP", "protein", "sequence", "is", "rich",
-             "in", "leucine", "residues", "and", "contains", "three",
-             "classes", "of", "repeats", "."
-         ],
-         [
-             "The", "PICBP", "gene", "is", "differentially", "expressed", "in",
-             "tissues", "with", "the", "highest", "expression", "in", "stem",
-             "."
-         ],
-         [
-             "The", "expression", "of", "PICBP", "in", "Arabidopsis", "was",
-             "induced", "in", "response", "to", "avirulent", "Pseudomonas",
-             "syringae", "pv", ".", "tomato", "carrying", "avrRpm1", "."
-         ],
-         [
-             "Furthermore", ",", "PICBP", "is", "constitutively", "expressed",
-             "in", "the", "Arabidopsis", "accelerated", "cell", "death2", "-",
-             "2", "mutant", "."
-         ],
-         [
-             "The", "expression", "of", "PICBP", "in", "bean", "leaves", "was",
-             "also", "induced", "after", "inoculation", "with", "avirulent",
-             "and", "non-pathogenic", "bacterial", "strains", "."
-         ],
-         [
-             "In", "addition", ",", "the", "hrp1", "mutant", "of",
-             "Pseudomonas", "syringae", "pv", ".", "tabaci", "and", "inducers",
-             "of", "plant", "defense", "such", "as", "salicylic", "acid", ",",
-             "hydrogen", "peroxide", "and", "a", "fungal", "elicitor",
-             "induced", "PICBP", "expression", "in", "bean", "."
-         ],
-         [
-             "Our", "data", "suggest", "a", "role", "for", "PICBP", "in",
-             "Ca2", "+", "-mediated", "defense", "signaling", "and",
-             "cell-death", "."
-         ],
-         [
-             "Furthermore", ",", "PICBP", "is", "the", "first", "identified",
-             "CBP", "in", "eukaryotes", "with", "four", "Ca2", "+",
-             "-dependent", "CaM-binding", "domains", "."
-         ]],
-        "ner": [[[3, 3, "Protein"], [5, 5, "Protein"], [0, 1, "Element"],
-                 [10, 12, "Protein"]],
-                [[34, 34, "Protein"], [59, 60, "Multicellular_organism"],
-                 [31, 32, "Element"], [41, 42, "Protein"],
-                 [64, 68, "Unicellular_organism"]],
-                [[82, 82, "Protein"], [78, 80, "Protein"]],
-                [[107, 107, "Organic_compound_other"], [93, 93, "Protein"],
-                 [95, 97, "Protein"], [99, 99, "Protein"],
-                 [104, 105, "Element"], [119, 119, "Protein"],
-                 [121, 121, "Protein"], [89, 91, "Protein"],
-                 [110, 112, "Organic_compound_other"]],
-                [[138, 138, "Protein"], [141, 142, "Peptide"],
-                 [151, 151, "Peptide"], [147, 149, "Peptide"]],
-                [[164, 165, "Amino_acid_monomer"], [158, 159, "Protein"]],
-                [[174, 175, "DNA"]],
-                [[193, 193, "Multicellular_organism"], [191, 191, "DNA"],
-                 [199, 204, "Unicellular_organism"], [206, 206, "DNA"]],
-                [[210, 210, "Protein"], [216, 222, "Multicellular_organism"]],
-                [[229, 230, "Plant_region"], [227, 227, "DNA"]],
-                [[247, 248, "Unicellular_organism"],
-                 [250, 254, "Unicellular_organism"],
-                 [265, 266, "Inorganic_compound_other"],
-                 [262, 263, "Plant_hormone"],
-                 [272, 273, "Biochemical_process"],
-                 [275, 275, "Multicellular_organism"]],
-                [[285, 291, "Biochemical_process"], [283, 283, "DNA"]],
-                [[295, 295, "Protein"], [305, 309, "Peptide"],
-                 [300, 300, "Protein"]]],
-        "relations": [[], [], [],
-                      [[119, 119, 121, 121, "interacts"],
-                       [89, 91, 93, 93, "interacts"],
-                       [89, 91, 95, 97, "interacts"],
-                       [89, 91, 99, 99, "interacts"],
-                       [89, 91, 104, 105, "interacts"],
-                       [107, 107, 89, 91, "inhibits"],
-                       [107, 107, 104, 105, "inhibits"]], [],
-                      [[164, 165, 158, 159, "is-in"]], [],
-                      [[191, 191, 193, 193, "is-in"],
-                       [199, 204, 191, 191, "activates"],
-                       [206, 206, 199, 204, "is-in"]],
-                      [[210, 210, 216, 222, "is-in"]],
-                      [[227, 227, 229, 230, "is-in"]],
-                      [[247, 248, 272, 273, "activates"],
-                       [262, 263, 272, 273, "activates"],
-                       [265, 266, 272, 273, "activates"],
-                       [272, 273, 275, 275, "is-in"]],
-                      [[283, 283, 285, 291, "is-in"]],
-                      [[305, 309, 295, 295, "is-in"]]]
-    }
+            "doc_key":
+            "PMID12825696_abstract",
+            "dataset":
+            "pickle",
+            "sentences":
+            [[
+                "Ca2", "+", "and", "calmodulin", "(", "CaM", ")", ",", "a",
+                "key", "Ca2", "+", "sensor", "in", "all", "eukaryotes", ",",
+                "have", "been", "implicated", "in", "defense", "responses",
+                "in", "plants", "."
+            ],
+             [
+                 "To", "elucidate", "the", "role", "of", "Ca2", "+", "and",
+                 "CaM", "in", "defense", "signaling", ",", "we", "used",
+                 "35S-labeled", "CaM", "to", "screen", "expression",
+                 "libraries", "prepared", "from", "tissues", "that", "were",
+                 "either", "treated", "with", "an", "elicitor", "derived",
+                 "from", "Phytophthora", "megasperma", "or", "infected",
+                 "with", "Pseudomonas", "syringae", "pv", ".", "tabaci", "."
+             ],
+             [
+                 "Nineteen", "cDNAs", "that", "encode", "the", "same",
+                 "protein", ",", "pathogen-induced", "CaM-binding", "protein",
+                 "(", "PICBP", ")", ",", "were", "isolated", "."
+             ],
+             [
+                 "The", "PICBP", "fusion", "proteins", "bound", "35S-CaM", ",",
+                 "horseradish", "peroxidase-labeled", "CaM", "and",
+                 "CaM-Sepharose", "in", "the", "presence", "of", "Ca2", "+",
+                 "whereas", "EGTA", ",", "a", "Ca2", "+", "chelator", ",",
+                 "abolished", "binding", ",", "confirming", "that", "PICBP",
+                 "binds", "CaM", "in", "a", "Ca2", "+", "-dependent", "manner",
+                 "."
+             ],
+             [
+                 "Using", "a", "series", "of", "bacterially", "expressed",
+                 "truncated", "versions", "of", "PICBP", ",", "four",
+                 "CaM-binding", "domains", ",", "with", "a", "potential",
+                 "CaM-binding", "consensus", "sequence", "of",
+                 "WSNLKKVILLKRFVKSL", ",", "were", "identified", "."
+             ],
+             [
+                 "The", "deduced", "PICBP", "protein", "sequence", "is",
+                 "rich", "in", "leucine", "residues", "and", "contains",
+                 "three", "classes", "of", "repeats", "."
+             ],
+             [
+                 "The", "PICBP", "gene", "is", "differentially", "expressed",
+                 "in", "tissues", "with", "the", "highest", "expression", "in",
+                 "stem", "."
+             ],
+             [
+                 "The", "expression", "of", "PICBP", "in", "Arabidopsis",
+                 "was", "induced", "in", "response", "to", "avirulent",
+                 "Pseudomonas", "syringae", "pv", ".", "tomato", "carrying",
+                 "avrRpm1", "."
+             ],
+             [
+                 "Furthermore", ",", "PICBP", "is", "constitutively",
+                 "expressed", "in", "the", "Arabidopsis", "accelerated",
+                 "cell", "death2", "-", "2", "mutant", "."
+             ],
+             [
+                 "The", "expression", "of", "PICBP", "in", "bean", "leaves",
+                 "was", "also", "induced", "after", "inoculation", "with",
+                 "avirulent", "and", "non-pathogenic", "bacterial", "strains",
+                 "."
+             ],
+             [
+                 "In", "addition", ",", "the", "hrp1", "mutant", "of",
+                 "Pseudomonas", "syringae", "pv", ".", "tabaci", "and",
+                 "inducers", "of", "plant", "defense", "such", "as",
+                 "salicylic", "acid", ",", "hydrogen", "peroxide", "and", "a",
+                 "fungal", "elicitor", "induced", "PICBP", "expression", "in",
+                 "bean", "."
+             ],
+             [
+                 "Our", "data", "suggest", "a", "role", "for", "PICBP", "in",
+                 "Ca2", "+", "-mediated", "defense", "signaling", "and",
+                 "cell-death", "."
+             ],
+             [
+                 "Furthermore", ",", "PICBP", "is", "the", "first",
+                 "identified", "CBP", "in", "eukaryotes", "with", "four",
+                 "Ca2", "+", "-dependent", "CaM-binding", "domains", "."
+             ]],
+            "ner": [[[3, 3, "Protein"], [5, 5, "Protein"], [0, 1, "Element"],
+                     [10, 12, "Protein"]],
+                    [[34, 34, "Protein"], [59, 60, "Multicellular_organism"],
+                     [31, 32, "Element"], [41, 42, "Protein"],
+                     [64, 68, "Unicellular_organism"]],
+                    [[82, 82, "Protein"], [78, 80, "Protein"]],
+                    [[107, 107, "Organic_compound_other"], [93, 93, "Protein"],
+                     [95, 97, "Protein"], [99, 99, "Protein"],
+                     [104, 105, "Element"], [119, 119, "Protein"],
+                     [121, 121, "Protein"], [89, 91, "Protein"],
+                     [110, 112, "Organic_compound_other"]],
+                    [[138, 138, "Protein"], [141, 142, "Peptide"],
+                     [151, 151, "Peptide"], [147, 149, "Peptide"]],
+                    [[164, 165, "Amino_acid_monomer"], [158, 159, "Protein"]],
+                    [[174, 175, "DNA"]],
+                    [[193, 193, "Multicellular_organism"], [191, 191, "DNA"],
+                     [199, 204, "Unicellular_organism"], [206, 206, "DNA"]],
+                    [[210, 210, "Protein"],
+                     [216, 222, "Multicellular_organism"]],
+                    [[229, 230, "Plant_region"], [227, 227, "DNA"]],
+                    [[247, 248, "Unicellular_organism"],
+                     [250, 254, "Unicellular_organism"],
+                     [265, 266, "Inorganic_compound_other"],
+                     [262, 263, "Plant_hormone"],
+                     [272, 273, "Biochemical_process"],
+                     [275, 275, "Multicellular_organism"]],
+                    [[285, 291, "Biochemical_process"], [283, 283, "DNA"]],
+                    [[295, 295, "Protein"], [305, 309, "Peptide"],
+                     [300, 300, "Protein"]]],
+            "relations": [[], [], [],
+                          [[119, 119, 121, 121, "interacts"],
+                           [89, 91, 93, 93, "interacts"],
+                           [89, 91, 95, 97, "interacts"],
+                           [89, 91, 99, 99, "interacts"],
+                           [89, 91, 104, 105, "interacts"],
+                           [107, 107, 89, 91, "inhibits"],
+                           [107, 107, 104, 105, "inhibits"]], [],
+                          [[164, 165, 158, 159, "is-in"]], [],
+                          [[191, 191, 193, 193, "is-in"],
+                           [199, 204, 191, 191, "activates"],
+                           [206, 206, 199, 204, "is-in"]],
+                          [[210, 210, 216, 222, "is-in"]],
+                          [[227, 227, 229, 230, "is-in"]],
+                          [[247, 248, 272, 273, "activates"],
+                           [262, 263, 272, 273, "activates"],
+                           [265, 266, 272, 273, "activates"],
+                           [272, 273, 275, 275, "is-in"]],
+                          [[283, 283, 285, 291, "is-in"]],
+                          [[305, 309, 295, 295, "is-in"]]]
+        }
+
+        self.pickle_mult_subsequent_merges = {
+            "doc_key":
+            "PMID28911019_abstract",
+            "dataset":
+            "pickle",
+            "sentences":
+            [[
+                "BACKGROUND", "AND", "AIMS", ":", "Selected", "beneficial",
+                "Pseudomonas", "spp", ".", "strains", "have", "the", "ability",
+                "to", "influence", "root", "architecture", "in", "Arabidopsis",
+                "thaliana", "by", "inhibiting", "primary", "root", "elongation",
+                "and", "promoting", "lateral", "root", "and", "root", "hair",
+                "formation", "."
+            ],
+             [
+                 "A", "crucial", "role", "for", "auxin", "in", "this", "long-term",
+                 "(", "1week", ")", ",", "long-distance", "plant-microbe",
+                 "interaction", "has", "been", "demonstrated", "."
+             ],
+             [
+                 "METHODS", ":", "Arabidopsis", "seedlings", "were", "cultivated",
+                 "in", "vitro", "on", "vertical", "plates", "and", "inoculated",
+                 "with", "pathogenic", "strains", "Pseudomonas", "syringae", "pv",
+                 "."
+             ],
+             ["maculicola", "(", "Psm", ")", "and", "P.", "syringae", "pv", "."],
+             [
+                 "tomato", "DC3000", "(", "Pst", ")", ",", "as", "well", "as",
+                 "Agrobacterium", "tumefaciens", "(", "Atu", ")", "and",
+                 "Escherichia", "coli", "(", "Eco", ")", "."
+             ],
+             [
+                 "Root", "hair", "lengths", "were", "measured", "after", "24",
+                 "and", "48h", "of", "direct", "exposure", "to", "each",
+                 "bacterial", "strain", "."
+             ],
+             [
+                 "Several", "Arabidopsis", "mutants", "with", "impaired",
+                 "responses", "to", "pathogens", ",", "impaired", "ethylene",
+                 "perception", "and", "defects", "in", "the", "exocyst", "vesicle",
+                 "tethering", "complex", "that", "is", "involved", "in",
+                 "secretion", "were", "also", "analysed", "."
+             ],
+             [
+                 "KEY", "RESULTS", ":", "Arabidopsis", "seedling", "roots",
+                 "infected", "with", "Psm", "or", "Pst", "responded", "similarly",
+                 "to", "when", "infected", "with", "plant", "growth-promoting",
+                 "rhizobacteria", ";", "root", "hair", "growth", "was",
+                 "stimulated", "and", "primary", "root", "growth", "was",
+                 "inhibited", "."
+             ],
+             [
+                 "Other", "plant-", "and", "soil-adapted", "bacteria", "induced",
+                 "similar", "root", "hair", "responses", "."
+             ],
+             [
+                 "The", "most", "compromised", "root", "hair", "growth",
+                 "stimulation", "response", "was", "found", "for", "the",
+                 "knockout", "mutants", "exo70A1", "and", "ein2", "."
+             ],
+             [
+                 "The", "single", "immune", "pathways", "dependent", "on",
+                 "salicylic", "acid", ",", "jasmonic", "acid", "and", "PAD4",
+                 "are", "not", "directly", "involved", "in", "root", "hair",
+                 "growth", "stimulation", ";", "however", ",", "in", "the",
+                 "mutual", "cross-talk", "with", "ethylene", ",", "they",
+                 "indirectly", "modify", "the", "extent", "of", "the",
+                 "stimulation", "of", "root", "hair", "growth", "."
+             ],
+             [
+                 "The", "Flg22", "peptide", "does", "not", "initiate", "root",
+                 "hair", "stimulation", "as", "intact", "bacteria", "do", ",",
+                 "but", "pretreatment", "with", "Flg22", "prior", "to", "Psm",
+                 "inoculation", "abolished", "root", "hair", "growth",
+                 "stimulation", "in", "an", "FLS2", "receptor", "kinase-dependent",
+                 "manner", "."
+             ],
+             [
+                 "These", "early", "response", "phenomena", "are", "not",
+                 "associated", "with", "changes", "in", "auxin", "levels", ",",
+                 "as", "monitored", "with", "the", "pDR5::GUS", "auxin",
+                 "reporter", "."
+             ],
+             [
+                 "CONCLUSIONS", ":", "Early", "stimulation", "of", "root", "hair",
+                 "growth", "is", "an", "effect", "of", "an", "unidentified",
+                 "component", "of", "living", "plant", "pathogenic", "bacteria",
+                 "."
+             ],
+             [
+                 "The", "root", "hair", "growth", "response", "is", "triggered",
+                 "in", "the", "range", "of", "hours", "after", "bacterial",
+                 "contact", "with", "roots", "and", "can", "be", "modulated", "by",
+                 "FLS2", "signalling", "."
+             ],
+             [
+                 "Bacterial", "stimulation", "of", "root", "hair", "growth",
+                 "requires", "functional", "ethylene", "signalling", "and", "an",
+                 "efficient", "exocyst-dependent", "secretory", "machinery", "."
+             ]],
+            "ner": [[[6, 9, "Unicellular_organism"],
+                     [18, 19, "Multicellular_organism"]],
+                    [[38, 38, "Plant_hormone"]],
+                    [[55, 56, "Multicellular_organism"],
+                     [69, 73, "Unicellular_organism"]],
+                    [[75, 75, "Unicellular_organism"],
+                     [78, 83, "Unicellular_organism"]],
+                    [[85, 85, "Unicellular_organism"],
+                     [91, 92, "Unicellular_organism"],
+                     [94, 94, "Unicellular_organism"],
+                     [97, 98, "Unicellular_organism"],
+                     [100, 100, "Unicellular_organism"]], [],
+                    [[121, 122, "Multicellular_organism"],
+                     [130, 131, "Biochemical_process"]],
+                    [[152, 154, "Plant_region"],
+                     [157, 157, "Unicellular_organism"],
+                     [159, 159, "Unicellular_organism"]], [],
+                    [[207, 207, "Multicellular_organism"],
+                     [209, 209, "Multicellular_organism"]],
+                    [[217, 218, "Plant_hormone"], [220, 221, "Plant_hormone"],
+                     [223, 223, "Protein"], [241, 241, "Plant_hormone"]],
+                    [[257, 258, "Peptide"], [273, 273, "Peptide"],
+                     [276, 276, "Unicellular_organism"]],
+                    [[300, 300, "Plant_hormone"], [307, 309, "DNA"]], [],
+                    [[354, 355, "Biochemical_process"]],
+                    [[365, 366, "Biochemical_process"]]],
+            "relations": [[[6, 9, 18, 19, "interacts"]], [], [], [], [], [], [],
+                          [[157, 157, 152, 154, "interacts"],
+                           [159, 159, 152, 154, "interacts"]], [], [],
+                          [[217, 218, 241, 241, "interacts"],
+                           [220, 221, 241, 241, "interacts"],
+                           [223, 223, 241, 241, "interacts"]], [], [], [], [], []]
+        }
+    
+        self.pickle_mult_subsequent_merges_answer = {
+            "doc_key":
+            "PMID28911019_abstract",
+            "dataset":
+            "pickle",
+            "sentences":
+            [[
+                "BACKGROUND", "AND", "AIMS", ":", "Selected", "beneficial",
+                "Pseudomonas", "spp", ".", "strains", "have", "the", "ability",
+                "to", "influence", "root", "architecture", "in", "Arabidopsis",
+                "thaliana", "by", "inhibiting", "primary", "root", "elongation",
+                "and", "promoting", "lateral", "root", "and", "root", "hair",
+                "formation", "."
+            ],
+             [
+                 "A", "crucial", "role", "for", "auxin", "in", "this", "long-term",
+                 "(", "1week", ")", ",", "long-distance", "plant-microbe",
+                 "interaction", "has", "been", "demonstrated", "."
+             ],
+             [
+                 "METHODS", ":", "Arabidopsis", "seedlings", "were", "cultivated",
+                 "in", "vitro", "on", "vertical", "plates", "and", "inoculated",
+                 "with", "pathogenic", "strains", "Pseudomonas", "syringae", "pv",
+                 ".", "maculicola", "(", "Psm", ")", "and", "P.", "syringae", "pv",
+                 ".", "tomato", "DC3000", "(", "Pst", ")", ",", "as", "well", "as",
+                 "Agrobacterium", "tumefaciens", "(", "Atu", ")", "and",
+                 "Escherichia", "coli", "(", "Eco", ")", "."
+             ],
+             [
+                 "Root", "hair", "lengths", "were", "measured", "after", "24",
+                 "and", "48h", "of", "direct", "exposure", "to", "each",
+                 "bacterial", "strain", "."
+             ],
+             [
+                 "Several", "Arabidopsis", "mutants", "with", "impaired",
+                 "responses", "to", "pathogens", ",", "impaired", "ethylene",
+                 "perception", "and", "defects", "in", "the", "exocyst", "vesicle",
+                 "tethering", "complex", "that", "is", "involved", "in",
+                 "secretion", "were", "also", "analysed", "."
+             ],
+             [
+                 "KEY", "RESULTS", ":", "Arabidopsis", "seedling", "roots",
+                 "infected", "with", "Psm", "or", "Pst", "responded", "similarly",
+                 "to", "when", "infected", "with", "plant", "growth-promoting",
+                 "rhizobacteria", ";", "root", "hair", "growth", "was",
+                 "stimulated", "and", "primary", "root", "growth", "was",
+                 "inhibited", "."
+             ],
+             [
+                 "Other", "plant-", "and", "soil-adapted", "bacteria", "induced",
+                 "similar", "root", "hair", "responses", "."
+             ],
+             [
+                 "The", "most", "compromised", "root", "hair", "growth",
+                 "stimulation", "response", "was", "found", "for", "the",
+                 "knockout", "mutants", "exo70A1", "and", "ein2", "."
+             ],
+             [
+                 "The", "single", "immune", "pathways", "dependent", "on",
+                 "salicylic", "acid", ",", "jasmonic", "acid", "and", "PAD4",
+                 "are", "not", "directly", "involved", "in", "root", "hair",
+                 "growth", "stimulation", ";", "however", ",", "in", "the",
+                 "mutual", "cross-talk", "with", "ethylene", ",", "they",
+                 "indirectly", "modify", "the", "extent", "of", "the",
+                 "stimulation", "of", "root", "hair", "growth", "."
+             ],
+             [
+                 "The", "Flg22", "peptide", "does", "not", "initiate", "root",
+                 "hair", "stimulation", "as", "intact", "bacteria", "do", ",",
+                 "but", "pretreatment", "with", "Flg22", "prior", "to", "Psm",
+                 "inoculation", "abolished", "root", "hair", "growth",
+                 "stimulation", "in", "an", "FLS2", "receptor", "kinase-dependent",
+                 "manner", "."
+             ],
+             [
+                 "These", "early", "response", "phenomena", "are", "not",
+                 "associated", "with", "changes", "in", "auxin", "levels", ",",
+                 "as", "monitored", "with", "the", "pDR5::GUS", "auxin",
+                 "reporter", "."
+             ],
+             [
+                 "CONCLUSIONS", ":", "Early", "stimulation", "of", "root", "hair",
+                 "growth", "is", "an", "effect", "of", "an", "unidentified",
+                 "component", "of", "living", "plant", "pathogenic", "bacteria",
+                 "."
+             ],
+             [
+                 "The", "root", "hair", "growth", "response", "is", "triggered",
+                 "in", "the", "range", "of", "hours", "after", "bacterial",
+                 "contact", "with", "roots", "and", "can", "be", "modulated", "by",
+                 "FLS2", "signalling", "."
+             ],
+             [
+                 "Bacterial", "stimulation", "of", "root", "hair", "growth",
+                 "requires", "functional", "ethylene", "signalling", "and", "an",
+                 "efficient", "exocyst-dependent", "secretory", "machinery", "."
+             ]],
+            "ner": [[[6, 9, "Unicellular_organism"],
+                     [18, 19, "Multicellular_organism"]],
+                    [[38, 38, "Plant_hormone"]],
+                    [[55, 56, "Multicellular_organism"],
+                     [69, 73, "Unicellular_organism"],
+                     [75, 75, "Unicellular_organism"],
+                     [78, 83, "Unicellular_organism"],
+                     [85, 85, "Unicellular_organism"],
+                     [91, 92, "Unicellular_organism"],
+                     [94, 94, "Unicellular_organism"],
+                     [97, 98, "Unicellular_organism"],
+                     [100, 100, "Unicellular_organism"]], [],
+                    [[121, 122, "Multicellular_organism"],
+                     [130, 131, "Biochemical_process"]],
+                    [[152, 154, "Plant_region"],
+                     [157, 157, "Unicellular_organism"],
+                     [159, 159, "Unicellular_organism"]], [],
+                    [[207, 207, "Multicellular_organism"],
+                     [209, 209, "Multicellular_organism"]],
+                    [[217, 218, "Plant_hormone"], [220, 221, "Plant_hormone"],
+                     [223, 223, "Protein"], [241, 241, "Plant_hormone"]],
+                    [[257, 258, "Peptide"], [273, 273, "Peptide"],
+                     [276, 276, "Unicellular_organism"]],
+                    [[300, 300, "Plant_hormone"], [307, 309, "DNA"]], [],
+                    [[354, 355, "Biochemical_process"]],
+                    [[365, 366, "Biochemical_process"]]],
+            "relations": [[[6, 9, 18, 19, "interacts"]], [], [], [], [],
+                          [[157, 157, 152, 154, "interacts"],
+                           [159, 159, 152, 154, "interacts"]], [], [],
+                          [[217, 218, 241, 241, "interacts"],
+                           [220, 221, 241, 241, "interacts"],
+                           [223, 223, 241, 241, "interacts"]], [], [], [], [], []]
+        }
 
     def test_merge_mult_splits_no_merge_no_multi(self):
 
@@ -884,29 +1161,32 @@ class TestQualityCheck(unittest.TestCase):
         self.assertRaises(AssertionError, ad.AnnotatedDoc.merge_mult_splits,
                           self.yes_merge_yes_multi_yes_overlap)
 
+    def test_merge_mult_splits_only_one_merge_pair(self):
+
+        result = ad.AnnotatedDoc.merge_mult_splits(self.only_one_merge_pair)
+
+        self.assertEqual(result, self.only_one_merge_pair_answer)
+
     def test_quality_check_bioinfer_single(self):
 
         result = ad.AnnotatedDoc.quality_check_sent_splits(
             self.bioinfer_single)
 
-        # print('\n\n\n')
-        # print(result)
-        # print('\n\n\n')
-        # print(self.bioinfer_single_answer)
-        # print('\n\n\n')
         self.assertEqual(result, self.bioinfer_single_answer)
 
     def test_quality_check_pickle_mult_no_overlaps_or_merges(self):
 
         result = ad.AnnotatedDoc.quality_check_sent_splits(
             self.pickle_mult_no_overlaps_or_merges)
-          
-        # print(result)
-        # print('\n\n\n')
-        # print(self.pickle_mult_no_overlaps_or_merges_answer)
-        # print('\n\n\n')
 
         self.assertEqual(result, self.pickle_mult_no_overlaps_or_merges_answer)
+
+    def test_quality_check_pickle_mult_subsequent_merges(self):
+
+        result = ad.AnnotatedDoc.quality_check_sent_splits(
+            self.pickle_mult_subsequent_merges)
+
+        self.assertEqual(result, self.pickle_mult_subsequent_merges_answer)
 
 
 class TestDropCounters(unittest.TestCase):

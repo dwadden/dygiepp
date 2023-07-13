@@ -194,7 +194,7 @@ class AnnotatedDoc:
         if len(self.events) > 0:  # Some datasets don't have events
             res["events"] = events
 
-        res = AnnotatedDoc.quality_check_sent_splits(res)
+        #res = AnnotatedDoc.quality_check_sent_splits(res)
 
         return res
 
@@ -386,7 +386,8 @@ class AnnotatedDoc:
                     # If it's the last merge, add the rest
                     if (not i == len(doc_dict[key]) - 1) and (i == len(sents_to_join) - 1):
                         add_cand = doc_dict[key][last_idx + 1:]
-                        if len(add_cand) > 0:joined.extend(add_cand)
+                        if len(add_cand) > 0:
+                            joined.extend(add_cand)
 
                     # If it's not and there's a gap before next merge, add those
                     elif (last_idx + 1 != sents_to_join[i+1][0]):
@@ -431,10 +432,10 @@ class AnnotatedDoc:
         for i in range(len(srtd)-1):
             if srtd[i][1] != srtd[i+1][0]:
                 break_idxs.append(i)
-        break_idxs = [-1] + break_idxs
+        break_idxs = [-1] + break_idxs 
 
         # If the only break is at 0, we can just return the list
-        if break_idxs == [-1]:
+        if break_idxs == [-1] and len(sents_to_join) == 1:
             final_pairings = srtd
             return final_pairings
         else:
