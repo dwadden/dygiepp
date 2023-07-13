@@ -194,7 +194,7 @@ class AnnotatedDoc:
         if len(self.events) > 0:  # Some datasets don't have events
             res["events"] = events
 
-        #res = AnnotatedDoc.quality_check_sent_splits(res)
+        res = AnnotatedDoc.quality_check_sent_splits(res)
 
         return res
 
