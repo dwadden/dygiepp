@@ -194,6 +194,8 @@ class AnnotatedDoc:
         if len(self.events) > 0:  # Some datasets don't have events
             res["events"] = events
 
+        res = AnnotatedDoc.quality_check_sent_splits(res)
+
         return res
 
     def char_to_token(self):
@@ -267,6 +269,190 @@ class AnnotatedDoc:
             f'Completed character to token conversion for doc {self.doc_key}. '
             f'{self.dropped_ents} of {self.total_original_ents} entities '
             'were dropped due to tokenization mismatches.')
+
+    @staticmethod
+    def quality_check_sent_splits(doc_dict):
+        """
+        Function to detect and correct incorrect sentence splits in a dygiepp-
+        formatted doc dictionary.
+
+        This function relies on the assumption that a cross-sentence entity or
+        relation in a dygiepp-formatted doc is a result of an incorrect sentence
+        split on the part of the tokenizer, rather than intentional. If a
+        cross-sentence entity or relation is found, all sentences between the
+        sentences containing the two joined entities or entity parts will be
+        combined into one.
+        
+        Example: BioInfer.d70 is one sentence only, with two relations. However,
+        the conversion to jsonl results in the following doc dictionary:
+        
+        {"doc_key": "BioInfer.d70",
+        "dataset": "bioinfer",
+        "sentences": [["Aprotinin", "inhibited", "platelet", "aggregation", "induced",
+                "by", "thrombin", "(", "0.25", "U.ml-1", ")", "with", "IC50", "200",
+                "kIU.ml-1", ",", "and", "inhibited", "the", "rise", "of", "cytosolic",
+                "free", "calcium", "concentration", "in", "platelets", "stimulated", "by",
+                "thrombin", "(", "0.1", "U.ml-1", ")", "in", "the", "absence", "and", "in",
+                "the", "presence", "of", "Ca2", "+", "0.5", "mmol", "."],
+            ["L-1", "(","IC50", "117", "and", "50", "kIU.ml-1", ",", "respectively",
+                ")", ",", "but", "had", "no", "effect", "on", "the", "amounts", "of",
+                "actin", "and", "myosin", "heavy", "chain", "associated", "with",
+                "cytoskeletons", "."]],
+        "ner": [[[29, 29, "Individual_protein"], [0, 0, "Individual_protein"],
+            [6, 6, "Individual_protein"]],
+            [[68, 70, "Individual_protein"], [66, 66, "Individual_protein"]]],
+        "relations": [[[29, 29, 0, 0, "PPI"], [0, 0, 66, 66, "PPI"]],
+            [[68, 70, 0, 0, "PPI"]]]}
+
+        parameters:
+            doc_dict, dict: dygiepp-formatted doc
+
+        returns:
+            doc_dict_corrected, dict: dict with sentence splits corrected
+        """
+        # Get the sentence start and end indices
+        sent_idxs = []
+        for i, sent in enumerate(doc_dict['sentences']):
+            if i == 0:
+                sent_start = 0
+            else:
+                sent_start = sent_idxs[i-1][1] + 1
+            sent_end = sent_start + len(sent)  - 1
+            sent_idxs.append((sent_start, sent_end))
+
+        # For each entity and relation, check if it crosses sentence boundaries
+        sents_to_join = []
+        for i in range(len(doc_dict['sentences'])):
+            
+            for ent in doc_dict['ner'][i]:
+                e_start = ent[0]
+                e_end = ent[1]
+                ent_sent_mems = []
+                for i, sent in enumerate(sent_idxs):
+                    if sent[0] <= e_start <= sent[1]:
+                        ent_sent_mems.append(i)
+                    if sent[0] <= e_end <= sent[1]:
+                        ent_sent_mems.append(i)
+                if ent_sent_mems[0] != ent_sent_mems[1]:
+                    ent_sent_mems = tuple(sorted(ent_sent_mems))
+                    sents_to_join.append(ent_sent_mems)
+
+            for rel in doc_dict['relations'][i]:
+                e1_start = rel[0]
+                e2_start = rel[2]
+                rel_sent_mems = []
+                for i, sent in enumerate(sent_idxs):
+                    if sent[0] <= e1_start <= sent[1]:
+                        rel_sent_mems.append(i)
+                    if sent[0] <= e2_start <= sent[1]:
+                        rel_sent_mems.append(i)
+                if rel_sent_mems[0] != rel_sent_mems[1]:
+                    rel_sent_mems = tuple(sorted(rel_sent_mems))
+                    sents_to_join.append(rel_sent_mems)
+            
+        sents_to_join = list(set([tuple(pair) for pair in sents_to_join]))
+
+    
+        # Join sentences that need it
+        if len(sents_to_join) == 0:
+            doc_dict_corrected = doc_dict
+            return doc_dict_corrected
+        else:
+            doc_dict_corrected = {'doc_key': doc_dict['doc_key'], 'dataset': doc_dict['dataset']}
+            for key in ['sentences', 'ner', 'relations']:
+
+                # If there are multiples, we need to do some extra processing
+                if len(sents_to_join) > 1:
+
+                    # Merge continuous joins
+                    sents_to_join = AnnotatedDoc.merge_mult_splits(sents_to_join)
+
+                joined = []
+                for i, pair in enumerate(sents_to_join):
+                    # Add all sentences before the first to join
+                    first_idx = min(pair)
+                    if i == 0:
+                        add_cand = doc_dict[key][:first_idx]
+                        if len(add_cand) > 0:
+                            joined.extend(add_cand)
+    
+                    # Join the group and add
+                    last_idx = max(pair)
+                    sent_list = doc_dict[key][first_idx:last_idx+1]
+                    sents_merged = [tok for sent in sent_list for tok in sent]
+                    sents_merged = [sents_merged]
+                    joined.extend(sents_merged)
+    
+                    # If it's the last merge, add the rest
+                    if (not i == len(doc_dict[key]) - 1) and (i == len(sents_to_join) - 1):
+                        add_cand = doc_dict[key][last_idx + 1:]
+                        if len(add_cand) > 0:
+                            joined.extend(add_cand)
+
+                    # If it's not and there's a gap before next merge, add those
+                    elif (last_idx + 1 != sents_to_join[i+1][0]):
+                        add_cand = doc_dict[key][last_idx + 1: sents_to_join[i+1][0]]
+                        if len(add_cand) > 0:
+                            joined.extend(add_cand)
+    
+                # Add to new doc
+                doc_dict_corrected[key] = joined
+
+            if len(sents_to_join) >= 1:
+                print(f'{len(sents_to_join)} sentence joins were performed '
+                            f'to fix erroneous sentence splits in doc {doc_dict["doc_key"]}')
+    
+            return doc_dict_corrected
+
+    @staticmethod
+    def merge_mult_splits(sents_to_join):
+        """
+        Given a list of sentence index pairs, determine if any represent multi-
+        joins (a sentence that was split into multiple fragments), and get the
+        first and last indices of the continuous split to join.
+
+        parameters:
+            sents_to_join, list of tuples: pairs of sentence indices
+
+        returns:
+            final_pairings, list of tuples: first and last indices of
+                continuous splits
+        """
+        # First sort by the first index
+        srtd = sorted(sents_to_join, key=lambda x: x[0])
+
+        # Do a common-sense check that the end indices don't overlap
+        end_overlaps = [True if srtd[i][1] > srtd[i+1][0] else False
+                            for i in range(len(srtd) - 1)]
+        assert not any(end_overlaps), ('One or more pairs of sentences to join '
+                                        'overlaps another')
+
+        # Then get the indices where continuous joins stop
+        break_idxs = []
+        for i in range(len(srtd)-1):
+            if srtd[i][1] != srtd[i+1][0]:
+                break_idxs.append(i)
+        break_idxs = [-1] + break_idxs 
+
+        # If the only break is at 0, we can just return the list
+        if break_idxs == [-1] and len(sents_to_join) == 1:
+            final_pairings = srtd
+            return final_pairings
+        else:
+            final_pairings = []
+
+        # Use break indices to get the start and end indices of continuous joins
+        for i in range(len(break_idxs)):
+            if i == len(break_idxs) - 1:
+                cont_join = srtd[break_idxs[i]+1:]
+                cont_join = (cont_join[0][0], cont_join[-1][1])
+            else:
+                cont_join = srtd[break_idxs[i]+1: break_idxs[i+1]+1]
+                cont_join = (cont_join[0][0], cont_join[-1][1])
+
+            final_pairings.append(cont_join)
+
+        return final_pairings
 
 
 class Ent:
