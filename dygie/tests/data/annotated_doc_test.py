@@ -527,8 +527,8 @@ class TestQualityCheck(unittest.TestCase):
         self.yes_merge_yes_multi_no_overlap = [(2, 5), (6, 7), (8, 9), (9, 10)]
         self.yes_merge_yes_multi_no_overlap_answer = [(2, 5), (6, 7), (8, 10)]
         self.yes_merge_yes_multi_yes_overlap = [(2, 9), (8, 9), (9, 10)]
-        self.only_one_merge_pair = [(5,6), (6,7)]
-        self.only_one_merge_pair_answer = [(5,7)]
+        self.only_one_merge_pair = [(5, 6), (6, 7)]
+        self.only_one_merge_pair_answer = [(5, 7)]
 
         # Main func input/output
         # I'm using real instances for these, may not cover all possible instances
@@ -876,22 +876,26 @@ class TestQualityCheck(unittest.TestCase):
                 "BACKGROUND", "AND", "AIMS", ":", "Selected", "beneficial",
                 "Pseudomonas", "spp", ".", "strains", "have", "the", "ability",
                 "to", "influence", "root", "architecture", "in", "Arabidopsis",
-                "thaliana", "by", "inhibiting", "primary", "root", "elongation",
-                "and", "promoting", "lateral", "root", "and", "root", "hair",
-                "formation", "."
+                "thaliana", "by", "inhibiting", "primary", "root",
+                "elongation", "and", "promoting", "lateral", "root", "and",
+                "root", "hair", "formation", "."
             ],
              [
-                 "A", "crucial", "role", "for", "auxin", "in", "this", "long-term",
-                 "(", "1week", ")", ",", "long-distance", "plant-microbe",
-                 "interaction", "has", "been", "demonstrated", "."
-             ],
-             [
-                 "METHODS", ":", "Arabidopsis", "seedlings", "were", "cultivated",
-                 "in", "vitro", "on", "vertical", "plates", "and", "inoculated",
-                 "with", "pathogenic", "strains", "Pseudomonas", "syringae", "pv",
+                 "A", "crucial", "role", "for", "auxin", "in", "this",
+                 "long-term", "(", "1week", ")", ",", "long-distance",
+                 "plant-microbe", "interaction", "has", "been", "demonstrated",
                  "."
              ],
-             ["maculicola", "(", "Psm", ")", "and", "P.", "syringae", "pv", "."],
+             [
+                 "METHODS", ":", "Arabidopsis", "seedlings", "were",
+                 "cultivated", "in", "vitro", "on", "vertical", "plates",
+                 "and", "inoculated", "with", "pathogenic", "strains",
+                 "Pseudomonas", "syringae", "pv", "."
+             ],
+             [
+                 "maculicola", "(", "Psm", ")", "and", "P.", "syringae", "pv",
+                 "."
+             ],
              [
                  "tomato", "DC3000", "(", "Pst", ")", ",", "as", "well", "as",
                  "Agrobacterium", "tumefaciens", "(", "Atu", ")", "and",
@@ -905,21 +909,21 @@ class TestQualityCheck(unittest.TestCase):
              [
                  "Several", "Arabidopsis", "mutants", "with", "impaired",
                  "responses", "to", "pathogens", ",", "impaired", "ethylene",
-                 "perception", "and", "defects", "in", "the", "exocyst", "vesicle",
-                 "tethering", "complex", "that", "is", "involved", "in",
-                 "secretion", "were", "also", "analysed", "."
+                 "perception", "and", "defects", "in", "the", "exocyst",
+                 "vesicle", "tethering", "complex", "that", "is", "involved",
+                 "in", "secretion", "were", "also", "analysed", "."
              ],
              [
                  "KEY", "RESULTS", ":", "Arabidopsis", "seedling", "roots",
-                 "infected", "with", "Psm", "or", "Pst", "responded", "similarly",
-                 "to", "when", "infected", "with", "plant", "growth-promoting",
-                 "rhizobacteria", ";", "root", "hair", "growth", "was",
-                 "stimulated", "and", "primary", "root", "growth", "was",
-                 "inhibited", "."
+                 "infected", "with", "Psm", "or", "Pst", "responded",
+                 "similarly", "to", "when", "infected", "with", "plant",
+                 "growth-promoting", "rhizobacteria", ";", "root", "hair",
+                 "growth", "was", "stimulated", "and", "primary", "root",
+                 "growth", "was", "inhibited", "."
              ],
              [
-                 "Other", "plant-", "and", "soil-adapted", "bacteria", "induced",
-                 "similar", "root", "hair", "responses", "."
+                 "Other", "plant-", "and", "soil-adapted", "bacteria",
+                 "induced", "similar", "root", "hair", "responses", "."
              ],
              [
                  "The", "most", "compromised", "root", "hair", "growth",
@@ -940,8 +944,8 @@ class TestQualityCheck(unittest.TestCase):
                  "hair", "stimulation", "as", "intact", "bacteria", "do", ",",
                  "but", "pretreatment", "with", "Flg22", "prior", "to", "Psm",
                  "inoculation", "abolished", "root", "hair", "growth",
-                 "stimulation", "in", "an", "FLS2", "receptor", "kinase-dependent",
-                 "manner", "."
+                 "stimulation", "in", "an", "FLS2", "receptor",
+                 "kinase-dependent", "manner", "."
              ],
              [
                  "These", "early", "response", "phenomena", "are", "not",
@@ -950,21 +954,22 @@ class TestQualityCheck(unittest.TestCase):
                  "reporter", "."
              ],
              [
-                 "CONCLUSIONS", ":", "Early", "stimulation", "of", "root", "hair",
-                 "growth", "is", "an", "effect", "of", "an", "unidentified",
-                 "component", "of", "living", "plant", "pathogenic", "bacteria",
-                 "."
+                 "CONCLUSIONS", ":", "Early", "stimulation", "of", "root",
+                 "hair", "growth", "is", "an", "effect", "of", "an",
+                 "unidentified", "component", "of", "living", "plant",
+                 "pathogenic", "bacteria", "."
              ],
              [
-                 "The", "root", "hair", "growth", "response", "is", "triggered",
-                 "in", "the", "range", "of", "hours", "after", "bacterial",
-                 "contact", "with", "roots", "and", "can", "be", "modulated", "by",
-                 "FLS2", "signalling", "."
+                 "The", "root", "hair", "growth", "response", "is",
+                 "triggered", "in", "the", "range", "of", "hours", "after",
+                 "bacterial", "contact", "with", "roots", "and", "can", "be",
+                 "modulated", "by", "FLS2", "signalling", "."
              ],
              [
                  "Bacterial", "stimulation", "of", "root", "hair", "growth",
-                 "requires", "functional", "ethylene", "signalling", "and", "an",
-                 "efficient", "exocyst-dependent", "secretory", "machinery", "."
+                 "requires", "functional", "ethylene", "signalling", "and",
+                 "an", "efficient", "exocyst-dependent", "secretory",
+                 "machinery", "."
              ]],
             "ner": [[[6, 9, "Unicellular_organism"],
                      [18, 19, "Multicellular_organism"]],
@@ -992,14 +997,16 @@ class TestQualityCheck(unittest.TestCase):
                     [[300, 300, "Plant_hormone"], [307, 309, "DNA"]], [],
                     [[354, 355, "Biochemical_process"]],
                     [[365, 366, "Biochemical_process"]]],
-            "relations": [[[6, 9, 18, 19, "interacts"]], [], [], [], [], [], [],
+            "relations": [[[6, 9, 18, 19, "interacts"]], [], [], [], [], [],
+                          [],
                           [[157, 157, 152, 154, "interacts"],
                            [159, 159, 152, 154, "interacts"]], [], [],
                           [[217, 218, 241, 241, "interacts"],
                            [220, 221, 241, 241, "interacts"],
-                           [223, 223, 241, 241, "interacts"]], [], [], [], [], []]
+                           [223, 223, 241, 241, "interacts"]], [], [], [], [],
+                          []]
         }
-    
+
         self.pickle_mult_subsequent_merges_answer = {
             "doc_key":
             "PMID28911019_abstract",
@@ -1010,21 +1017,23 @@ class TestQualityCheck(unittest.TestCase):
                 "BACKGROUND", "AND", "AIMS", ":", "Selected", "beneficial",
                 "Pseudomonas", "spp", ".", "strains", "have", "the", "ability",
                 "to", "influence", "root", "architecture", "in", "Arabidopsis",
-                "thaliana", "by", "inhibiting", "primary", "root", "elongation",
-                "and", "promoting", "lateral", "root", "and", "root", "hair",
-                "formation", "."
+                "thaliana", "by", "inhibiting", "primary", "root",
+                "elongation", "and", "promoting", "lateral", "root", "and",
+                "root", "hair", "formation", "."
             ],
              [
-                 "A", "crucial", "role", "for", "auxin", "in", "this", "long-term",
-                 "(", "1week", ")", ",", "long-distance", "plant-microbe",
-                 "interaction", "has", "been", "demonstrated", "."
+                 "A", "crucial", "role", "for", "auxin", "in", "this",
+                 "long-term", "(", "1week", ")", ",", "long-distance",
+                 "plant-microbe", "interaction", "has", "been", "demonstrated",
+                 "."
              ],
              [
-                 "METHODS", ":", "Arabidopsis", "seedlings", "were", "cultivated",
-                 "in", "vitro", "on", "vertical", "plates", "and", "inoculated",
-                 "with", "pathogenic", "strains", "Pseudomonas", "syringae", "pv",
-                 ".", "maculicola", "(", "Psm", ")", "and", "P.", "syringae", "pv",
-                 ".", "tomato", "DC3000", "(", "Pst", ")", ",", "as", "well", "as",
+                 "METHODS", ":", "Arabidopsis", "seedlings", "were",
+                 "cultivated", "in", "vitro", "on", "vertical", "plates",
+                 "and", "inoculated", "with", "pathogenic", "strains",
+                 "Pseudomonas", "syringae", "pv", ".", "maculicola", "(",
+                 "Psm", ")", "and", "P.", "syringae", "pv", ".", "tomato",
+                 "DC3000", "(", "Pst", ")", ",", "as", "well", "as",
                  "Agrobacterium", "tumefaciens", "(", "Atu", ")", "and",
                  "Escherichia", "coli", "(", "Eco", ")", "."
              ],
@@ -1036,21 +1045,21 @@ class TestQualityCheck(unittest.TestCase):
              [
                  "Several", "Arabidopsis", "mutants", "with", "impaired",
                  "responses", "to", "pathogens", ",", "impaired", "ethylene",
-                 "perception", "and", "defects", "in", "the", "exocyst", "vesicle",
-                 "tethering", "complex", "that", "is", "involved", "in",
-                 "secretion", "were", "also", "analysed", "."
+                 "perception", "and", "defects", "in", "the", "exocyst",
+                 "vesicle", "tethering", "complex", "that", "is", "involved",
+                 "in", "secretion", "were", "also", "analysed", "."
              ],
              [
                  "KEY", "RESULTS", ":", "Arabidopsis", "seedling", "roots",
-                 "infected", "with", "Psm", "or", "Pst", "responded", "similarly",
-                 "to", "when", "infected", "with", "plant", "growth-promoting",
-                 "rhizobacteria", ";", "root", "hair", "growth", "was",
-                 "stimulated", "and", "primary", "root", "growth", "was",
-                 "inhibited", "."
+                 "infected", "with", "Psm", "or", "Pst", "responded",
+                 "similarly", "to", "when", "infected", "with", "plant",
+                 "growth-promoting", "rhizobacteria", ";", "root", "hair",
+                 "growth", "was", "stimulated", "and", "primary", "root",
+                 "growth", "was", "inhibited", "."
              ],
              [
-                 "Other", "plant-", "and", "soil-adapted", "bacteria", "induced",
-                 "similar", "root", "hair", "responses", "."
+                 "Other", "plant-", "and", "soil-adapted", "bacteria",
+                 "induced", "similar", "root", "hair", "responses", "."
              ],
              [
                  "The", "most", "compromised", "root", "hair", "growth",
@@ -1071,8 +1080,8 @@ class TestQualityCheck(unittest.TestCase):
                  "hair", "stimulation", "as", "intact", "bacteria", "do", ",",
                  "but", "pretreatment", "with", "Flg22", "prior", "to", "Psm",
                  "inoculation", "abolished", "root", "hair", "growth",
-                 "stimulation", "in", "an", "FLS2", "receptor", "kinase-dependent",
-                 "manner", "."
+                 "stimulation", "in", "an", "FLS2", "receptor",
+                 "kinase-dependent", "manner", "."
              ],
              [
                  "These", "early", "response", "phenomena", "are", "not",
@@ -1081,21 +1090,22 @@ class TestQualityCheck(unittest.TestCase):
                  "reporter", "."
              ],
              [
-                 "CONCLUSIONS", ":", "Early", "stimulation", "of", "root", "hair",
-                 "growth", "is", "an", "effect", "of", "an", "unidentified",
-                 "component", "of", "living", "plant", "pathogenic", "bacteria",
-                 "."
+                 "CONCLUSIONS", ":", "Early", "stimulation", "of", "root",
+                 "hair", "growth", "is", "an", "effect", "of", "an",
+                 "unidentified", "component", "of", "living", "plant",
+                 "pathogenic", "bacteria", "."
              ],
              [
-                 "The", "root", "hair", "growth", "response", "is", "triggered",
-                 "in", "the", "range", "of", "hours", "after", "bacterial",
-                 "contact", "with", "roots", "and", "can", "be", "modulated", "by",
-                 "FLS2", "signalling", "."
+                 "The", "root", "hair", "growth", "response", "is",
+                 "triggered", "in", "the", "range", "of", "hours", "after",
+                 "bacterial", "contact", "with", "roots", "and", "can", "be",
+                 "modulated", "by", "FLS2", "signalling", "."
              ],
              [
                  "Bacterial", "stimulation", "of", "root", "hair", "growth",
-                 "requires", "functional", "ethylene", "signalling", "and", "an",
-                 "efficient", "exocyst-dependent", "secretory", "machinery", "."
+                 "requires", "functional", "ethylene", "signalling", "and",
+                 "an", "efficient", "exocyst-dependent", "secretory",
+                 "machinery", "."
              ]],
             "ner": [[[6, 9, "Unicellular_organism"],
                      [18, 19, "Multicellular_organism"]],
@@ -1128,8 +1138,157 @@ class TestQualityCheck(unittest.TestCase):
                            [159, 159, 152, 154, "interacts"]], [], [],
                           [[217, 218, 241, 241, "interacts"],
                            [220, 221, 241, 241, "interacts"],
-                           [223, 223, 241, 241, "interacts"]], [], [], [], [], []]
+                           [223, 223, 241, 241, "interacts"]], [], [], [], [],
+                          []]
         }
+
+        self.seedev_true_cross_sent_rel = {
+            'doc_key':
+            'SeeDev-binary-14701918-5',
+            'dataset':
+            'seedev',
+            'sentences':
+            [[
+                'Developmental', 'Regulation', 'of', 'MUM4', 'during', 'Seed',
+                'Coat', 'Secretory', 'Cell', 'Differentiation', 'by', 'AP2',
+                ',', 'TTG1', ',', 'and', 'GL2', 'MUM4', 'transcript',
+                'increases', 'in', 'differentiating', 'siliques', 'at', 'the',
+                'time', 'of', 'mucilage', 'production', '.'
+            ],
+             [
+                 'Two', 'lines', 'of', 'evidence', 'suggest', 'that', 'this',
+                 'up-regulation', 'occurs', 'in', 'the', 'seed', 'coat',
+                 'epidermis', 'to', 'support', 'mucilage', 'biosynthesis', '.'
+             ],
+             [
+                 'First', ',', 'the', 'only', 'obvious', 'phenotypic',
+                 'defect', 'in', 'mum4', 'plants', 'occurs', 'in', 'the',
+                 'seed', 'coat', 'epidermis', '.'
+             ],
+             [
+                 'Second', ',', 'MUM4', 'expression', 'is', 'severely',
+                 'attenuated', 'in', 'siliques', 'of', 'ap2', 'mutants',
+                 'that', 'fail', 'to', 'differentiate', 'the', 'outer', 'two',
+                 'layers', 'of', 'the', 'seed', 'coat', '.'
+             ],
+             [
+                 'Such', 'a', 'specific', 'up-regulation', 'of', 'a',
+                 'putative', 'NDP-l-Rha', 'synthase', 'may', 'be', 'required',
+                 'to', 'provide', 'extra', 'Rha', 'for', 'the', 'production',
+                 'of', 'the', 'large', 'quantity', 'of', 'RGI', 'required',
+                 'for', 'mucilage', 'synthesis', '.'
+             ],
+             [
+                 'If', 'so', ',', 'the', 'amount', 'of', 'this', 'enzyme',
+                 'must', 'be', 'the', 'limiting', 'factor', 'in', 'Rha',
+                 'biosynthesis', 'and', 'the', 'amount', 'of', 'Rha', 'a',
+                 'limiting', 'factor', 'in', 'RGI', 'biosynthesis', '.'
+             ]],
+            'ner':
+            [[[3, 3, 'Gene'], [5, 8, 'Tissue'], [5, 9, 'Development_Phase'],
+              [11, 11, 'Protein'], [13, 13, 'Protein'], [16, 16, 'Protein'],
+              [17, 17, 'Gene'], [17, 18, 'RNA'], [21, 22, 'Development_Phase'],
+              [22, 22, 'Tissue'], [27, 28, 'Pathway']],
+             [[41, 43, 'Tissue'], [46, 47, 'Pathway']],
+             [[57, 58, 'Genotype'], [62, 64, 'Tissue']],
+             [[68, 68, 'Gene'], [74, 74, 'Tissue'], [76, 76, 'Genotype'],
+              [81, 89, 'Regulatory_Network'], [83, 89, 'Tissue'],
+              [88, 89, 'Tissue']],
+             [[98, 99, 'Protein_Family'], [109, 115, 'Pathway'],
+              [118, 119, 'Pathway']],
+             [[135, 136, 'Pathway'], [146, 147, 'Pathway']]],
+            'relations':
+            [[[13, 13, 3, 3, 'Regulates_Expression'],
+              [11, 11, 3, 3, 'Regulates_Expression'],
+              [16, 16, 3, 3, 'Regulates_Expression'],
+              [17, 18, 21, 22, 'Exists_At_Stage'],
+              [13, 13, 5, 9, 'Exists_At_Stage'],
+              [11, 11, 5, 9, 'Exists_At_Stage'],
+              [16, 16, 5, 9, 'Exists_At_Stage'],
+              [5, 9, 3, 3, 'Regulates_Expression']],
+             [[46, 47, 41, 43, 'Is_Localized_In']], [],
+             [[74, 74, 68, 68, 'Regulates_Expression'],
+              [76, 76, 81, 89, 'Regulates_Process'],
+              [76, 76, 68, 68, 'Regulates_Expression']],
+             [[98, 99, 135, 136, 'Regulates_Process'],
+              [109, 115, 118, 119, 'Regulates_Process'],
+              [98, 99, 109, 115,
+               'Regulates_Process']],
+             [[135, 136, 146, 147, 'Regulates_Process']],
+             ]
+        }
+
+        self.seedev_true_cross_sent_rel_answer = {
+            'doc_key':
+            'SeeDev-binary-14701918-5',
+            'dataset':
+            'seedev',
+            'sentences':
+            [[
+                'Developmental', 'Regulation', 'of', 'MUM4', 'during', 'Seed',
+                'Coat', 'Secretory', 'Cell', 'Differentiation', 'by', 'AP2',
+                ',', 'TTG1', ',', 'and', 'GL2', 'MUM4', 'transcript',
+                'increases', 'in', 'differentiating', 'siliques', 'at', 'the',
+                'time', 'of', 'mucilage', 'production', '.'
+            ],
+             [
+                 'Two', 'lines', 'of', 'evidence', 'suggest', 'that', 'this',
+                 'up-regulation', 'occurs', 'in', 'the', 'seed', 'coat',
+                 'epidermis', 'to', 'support', 'mucilage', 'biosynthesis', '.'
+             ],
+             [
+                 'First', ',', 'the', 'only', 'obvious', 'phenotypic',
+                 'defect', 'in', 'mum4', 'plants', 'occurs', 'in', 'the',
+                 'seed', 'coat', 'epidermis', '.'
+             ],
+             [
+                 'Second', ',', 'MUM4', 'expression', 'is', 'severely',
+                 'attenuated', 'in', 'siliques', 'of', 'ap2', 'mutants',
+                 'that', 'fail', 'to', 'differentiate', 'the', 'outer', 'two',
+                 'layers', 'of', 'the', 'seed', 'coat', '.'
+             ],
+             [
+                 'Such', 'a', 'specific', 'up-regulation', 'of', 'a',
+                 'putative', 'NDP-l-Rha', 'synthase', 'may', 'be', 'required',
+                 'to', 'provide', 'extra', 'Rha', 'for', 'the', 'production',
+                 'of', 'the', 'large', 'quantity', 'of', 'RGI', 'required',
+                 'for', 'mucilage', 'synthesis', '.', 'If', 'so', ',', 'the', 'amount', 'of', 'this', 'enzyme',
+                 'must', 'be', 'the', 'limiting', 'factor', 'in', 'Rha',
+                 'biosynthesis', 'and', 'the', 'amount', 'of', 'Rha', 'a',
+                 'limiting', 'factor', 'in', 'RGI', 'biosynthesis', '.'
+             ]],
+            'ner':
+            [[[3, 3, 'Gene'], [5, 8, 'Tissue'], [5, 9, 'Development_Phase'],
+              [11, 11, 'Protein'], [13, 13, 'Protein'], [16, 16, 'Protein'],
+              [17, 17, 'Gene'], [17, 18, 'RNA'], [21, 22, 'Development_Phase'],
+              [22, 22, 'Tissue'], [27, 28, 'Pathway']],
+             [[41, 43, 'Tissue'], [46, 47, 'Pathway']],
+             [[57, 58, 'Genotype'], [62, 64, 'Tissue']],
+             [[68, 68, 'Gene'], [74, 74, 'Tissue'], [76, 76, 'Genotype'],
+              [81, 89, 'Regulatory_Network'], [83, 89, 'Tissue'],
+              [88, 89, 'Tissue']],
+             [[98, 99, 'Protein_Family'], [109, 115, 'Pathway'],
+              [118, 119, 'Pathway'], [135, 136, 'Pathway'], [146, 147, 'Pathway']]],
+            'relations':
+            [[[13, 13, 3, 3, 'Regulates_Expression'],
+              [11, 11, 3, 3, 'Regulates_Expression'],
+              [16, 16, 3, 3, 'Regulates_Expression'],
+              [17, 18, 21, 22, 'Exists_At_Stage'],
+              [13, 13, 5, 9, 'Exists_At_Stage'],
+              [11, 11, 5, 9, 'Exists_At_Stage'],
+              [16, 16, 5, 9, 'Exists_At_Stage'],
+              [5, 9, 3, 3, 'Regulates_Expression']],
+             [[46, 47, 41, 43, 'Is_Localized_In']], [],
+             [[74, 74, 68, 68, 'Regulates_Expression'],
+              [76, 76, 81, 89, 'Regulates_Process'],
+              [76, 76, 68, 68, 'Regulates_Expression']],
+             [[98, 99, 135, 136, 'Regulates_Process'],
+              [109, 115, 118, 119, 'Regulates_Process'],
+              [98, 99, 109, 115,
+               'Regulates_Process'], [135, 136, 146, 147, 'Regulates_Process']],
+             ]
+        }
+
 
     def test_merge_mult_splits_no_merge_no_multi(self):
 
@@ -1187,6 +1346,12 @@ class TestQualityCheck(unittest.TestCase):
             self.pickle_mult_subsequent_merges)
 
         self.assertEqual(result, self.pickle_mult_subsequent_merges_answer)
+
+    def test_quality_check_seedev_true_cross_sent_rel(self):
+
+        result = ad.AnnotatedDoc.quality_check_sent_splits(self.seedev_true_cross_sent_rel)
+
+        self.assertEqual(result, self.seedev_true_cross_sent_rel_answer)
 
 
 class TestDropCounters(unittest.TestCase):

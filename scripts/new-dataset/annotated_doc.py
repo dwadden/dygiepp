@@ -328,11 +328,11 @@ class AnnotatedDoc:
                 e_start = ent[0]
                 e_end = ent[1]
                 ent_sent_mems = []
-                for i, sent in enumerate(sent_idxs):
+                for j, sent in enumerate(sent_idxs):
                     if sent[0] <= e_start <= sent[1]:
-                        ent_sent_mems.append(i)
+                        ent_sent_mems.append(j)
                     if sent[0] <= e_end <= sent[1]:
-                        ent_sent_mems.append(i)
+                        ent_sent_mems.append(j)
                 if ent_sent_mems[0] != ent_sent_mems[1]:
                     ent_sent_mems = tuple(sorted(ent_sent_mems))
                     sents_to_join.append(ent_sent_mems)
@@ -341,11 +341,11 @@ class AnnotatedDoc:
                 e1_start = rel[0]
                 e2_start = rel[2]
                 rel_sent_mems = []
-                for i, sent in enumerate(sent_idxs):
+                for j, sent in enumerate(sent_idxs):
                     if sent[0] <= e1_start <= sent[1]:
-                        rel_sent_mems.append(i)
+                        rel_sent_mems.append(j)
                     if sent[0] <= e2_start <= sent[1]:
-                        rel_sent_mems.append(i)
+                        rel_sent_mems.append(j)
                 if rel_sent_mems[0] != rel_sent_mems[1]:
                     rel_sent_mems = tuple(sorted(rel_sent_mems))
                     sents_to_join.append(rel_sent_mems)
