@@ -19,6 +19,8 @@ See the `doc` folder for documentation with more details on the [data](doc/data.
 
 ## Updates
 
+**October 2023**: Unfortunately, AllenNLP (on which DyGIE++ is built) has been archived and is not actively maintained. Due to changes to various software packages, the unavailability of older versions, following the instructions under [dependencies](#dependencies) now raises errors when trying to install DyGIE++. I don't have bandwidth to get things updated. I'd welcome a PR to update the relevant dependencies and get things working again! See the [dependencies](#dependencies) section for more info.
+
 **December 2021**: A couple nice additions thanks to PR's from contributors:
 
 - There is now a script to convert [BRAT-formatted](https://github.com/nlplab/brat) annotations to DyGIE. See [here](https://github.com/dwadden/dygiepp/blob/master/doc/data.md#converting-data-labeled-with-brat) for more details. Thanks to @serenalotreck for this feature.
@@ -88,6 +90,8 @@ If you're unable to run the code, feel free to create an issue. Please do the fo
 
 
 ## Dependencies
+
+**Update (October 2023):** These directions no longer work. Python 3.7 is no longer available from `conda`, and AllenNLP is no longer actively maintained, causing some dependencies to break. I'd welcome a PR to get things working again.
 
 Clone this repository and navigate the the root of the repo on your system. Then execute:
 
