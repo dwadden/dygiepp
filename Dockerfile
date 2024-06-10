@@ -1,14 +1,18 @@
 # Set-up docker image for DYGIE++.
 FROM pytorch/pytorch:1.6.0-cuda10.1-cudnn7-devel
 
+# Fix GPG keys for NVIDIA as per here https://developer.nvidia.com/blog/updating-the-cuda-linux-gpg-repository-key/
+# then, install:
+# Required-base: set-up shared DYGIE++ modeling environment.
+# GCC and make needed to compile python deps. SQLite3 for Optuna hyperparameter optimization.
+RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos//ubuntu1804/x86_64/3bf863cc.pub && \
+     apt-get update && \
+    apt-get -y install wget gcc make sqlite3
+
 # Datasets will be downloaded to the /dygiepp root directory in image.
 # Please mount source code project dir at /dygiepp for using default paths.
 RUN mkdir /dygiepp
 
-# Required-base: set-up shared DYGIE++ modeling environment.
-# GCC and make needed to compile python deps. SQLite3 for Optuna hyperparameter optimization.
-RUN apt-get update && \
-    apt-get -y install gcc make sqlite3
 RUN conda create --name dygiepp python=3.7 -y
 SHELL ["conda", "run", "-n", "dygiepp", "/bin/bash", "-c"]
 # jsonnet has a conflict when installed with pip for now, install from conda.
