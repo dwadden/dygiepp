@@ -56,7 +56,7 @@ COPY scripts/data/get_chemprot.sh /tmp/get_chemprot.sh
 COPY scripts/data/chemprot /dygiepp/scripts/data/chemprot
 ENV PYTHONPATH="${PYTHONPATH}:/dygiepp"
 SHELL ["conda", "run", "-n", "dygiepp", "/bin/bash", "-c"]
-RUN pip install scispacy https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.2.5/en_core_sci_sm-0.2.5.tar.gz
+RUN pip install scispacy==0.2.3 https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.2.5/en_core_sci_sm-0.2.5.tar.gz
 RUN cd /dygiepp && bash /tmp/get_chemprot.sh
 
 # Pretrained-models-all-DYGIEPP: Download pre-trained models for all DYGIEPP tasks.
@@ -69,6 +69,7 @@ RUN rm -rf /tmp /dygiepp/{scripts,dygie}
 
 # Required-base: on run, ensure conda env is activated and /dygiepp is workdir.
 WORKDIR /dygiepp/
+COPY dygie /dygiepp/dygie/
 SHELL ["/bin/bash", "-c"]
 RUN conda init bash
 RUN echo "conda activate dygiepp" >> ~/.bashrc
