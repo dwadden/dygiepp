@@ -21,6 +21,6 @@ do
     if [ ! -f pretrained/mechanic-${name}.tar.gz ]
     then
         wget --directory-prefix=./pretrained \
-            "https://s3-us-west-2.amazonaws.com/ai2-s2-mechanic/models/${name}.tar.gz"
+            "https://ai2-s2-mechanic.s3-us-west-2.amazonaws.com/models/mechanic-${name}.tar.gz"
     fi
 done
