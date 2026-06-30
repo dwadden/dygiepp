@@ -152,7 +152,7 @@ class DyGIE(Model):
             "events": [f"MEAN__{name}" for name in
                        ["trig_class_f1", "arg_class_f1"]]}
         if target_task not in lookup:
-            raise ValueError(f"Invalied value {target_task} has been given as the target task.")
+            raise ValueError(f"Invalid value {target_task} has been given as the target task.")
         return lookup[target_task]
 
     @staticmethod
